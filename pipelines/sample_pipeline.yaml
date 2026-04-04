@@ -1,0 +1,139 @@
+pipeline_name: employee_analytics_pipeline
+description: "Complete employee data processing pipeline with validation, analytics, and reporting"
+
+file_path: data/sample_employees.csv
+
+tasks:
+  - name: load_employee_data
+    type: executor
+    plugin: duckdb
+    operation: load
+    config:
+      show_columns: true
+      show_sample: true
+    retries: 2
+
+  - name: validate_employee_data
+    type: executor
+    plugin: duckdb
+    operation: validate
+    config:
+      checks:
+        - name: "required_fields"
+          sql: "SELECT COUNT(*) FROM data WHERE id IS NULL OR name IS NULL OR email IS NULL"
+          expect: 0
+        - name: "valid_salaries"
+          sql: "SELECT COUNT(*) FROM data WHERE salary <= 0 OR salary > 500000"
+          expect: 0
+        - name: "valid_emails"
+          sql: "SELECT COUNT(*) FROM data WHERE email NOT LIKE '%@company.com'"
+          expect: 0
+        - name: "valid_dates"
+          sql: "SELECT COUNT(*) FROM data WHERE hire_date > CURRENT_DATE"
+          expect: 0
+    depends_on:
+      - load_employee_data
+    retries: 2
+
+  - name: department_analytics
+    type: executor
+    plugin: duckdb
+    operation: aggregate
+    config:
+      group_by: ["department"]
+      metrics:
+        - column: "salary"
+          function: "avg"
+          alias: "avg_salary"
+        - column: "salary"
+          function: "min"
+          alias: "min_salary"
+        - column: "salary"
+          function: "max"
+          alias: "max_salary"
+        - column: "id"
+          function: "count"
+          alias: "employee_count"
+        - column: "salary"
+          function: "sum"
+          alias: "total_salary"
+      order_by: "avg_salary DESC"
+      output_table: "department_analytics"
+    depends_on:
+      - validate_employee_data
+    retries: 2
+
+  - name: enrich_employee_data
+    type: executor
+    plugin: duckdb
+    operation: transform
+    config:
+      columns:
+        - name: "tenure_days"
+          sql: "DATEDIFF('day', hire_date, CURRENT_DATE)"
+        - name: "salary_category"
+          sql: "CASE WHEN salary >= 100000 THEN 'Senior' WHEN salary >= 80000 THEN 'Mid' ELSE 'Junior' END"
+        - name: "processed_at"
+          sql: "CURRENT_TIMESTAMP"
+        - name: "hire_year"
+          sql: "YEAR(hire_date)"
+      output_table: "enriched_employees"
+    depends_on:
+      - department_analytics
+    retries: 2
+
+  - name: generate_reports
+    type: executor
+    plugin: duckdb
+    operation: query
+    config:
+      sql: |
+        SELECT
+          department,
+          employee_count as employees,
+          ROUND(avg_salary, 2) as avg_salary,
+          total_salary as total_cost,
+          ROUND(avg_salary * 1.3, 2) as benefits_estimate
+        FROM department_analytics
+        ORDER BY total_salary DESC
+      return_data: true
+    depends_on:
+      - enrich_employee_data
+    retries: 2
+
+  - name: load_to_snowflake
+    type: executor
+    plugin: snowflake
+    operation: load_to_snowflake
+    config:
+      snowflake_config:
+        account: "your_account.snowflakecomputing.com"  # Replace with your Snowflake account
+        user: "your_user"  # Replace with your username
+        password: "your_password"  # Replace with your password
+        warehouse: "your_warehouse"  # Replace with your warehouse
+        database: "your_database"  # Replace with your database
+        schema: "your_schema"  # Replace with your schema
+      table_name: "department_analytics"
+      if_exists: "replace"
+    depends_on:
+      - generate_reports
+    retries: 2
+
+  - name: export_processed_data
+    type: executor
+    plugin: duckdb
+    operation: query
+    config:
+      sql: |
+        COPY (
+          SELECT
+            id, name, email, department,
+            salary as annual_salary,
+            hire_date, tenure_days, salary_category, hire_year,
+            processed_at
+          FROM enriched_employees
+          ORDER BY department, salary DESC
+        ) TO 'data/processed_employees.csv' (HEADER, DELIMITER ',')
+    depends_on:
+      - generate_reports
+    retries: 1

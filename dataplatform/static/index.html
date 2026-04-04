@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Platform - Pipeline Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(59, 130, 246, 0.6); }
+            100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+        }
+
+        .task-running {
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        .task-success {
+            fill: #10B981;
+            stroke: #059669;
+        }
+
+        .task-failed {
+            fill: #EF4444;
+            stroke: #DC2626;
+        }
+
+        .task-pending {
+            fill: #6B7280;
+            stroke: #4B5563;
+        }
+
+        .task-default {
+            fill: #3B82F6;
+            stroke: #2563EB;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">
+                        <i class="fas fa-cogs text-blue-600 mr-2"></i>
+                        Data Platform Dashboard
+                    </h1>
+                    <p class="text-gray-600 mt-2">Manage and monitor your data pipelines</p>
+                </div>
+                <div class="flex space-x-4 items-center">
+                    <div id="connectionStatus" class="flex items-center px-4 py-2 rounded-lg bg-gray-100">
+                        <i class="fas fa-circle text-gray-400 mr-2 animate-pulse text-sm"></i>
+                        <span class="text-sm text-gray-600">Connecting...</span>
+                    </div>
+                    <button id="refreshBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pipeline List -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-list text-green-600 mr-2"></i>
+                Available Pipelines
+            </h2>
+            <div id="pipelinesList" class="grid gap-4">
+                <!-- Pipelines will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Pipeline Status -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-chart-line text-purple-600 mr-2"></i>
+                Pipeline Status
+            </h2>
+            <div id="pipelineStatus" class="space-y-4">
+                <!-- Status will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Scheduled Pipelines -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-clock text-indigo-600 mr-2"></i>
+                Scheduled Pipelines
+            </h2>
+            <div id="scheduledPipelines" class="space-y-4">
+                <!-- Scheduled pipelines will be loaded here -->
+            </div>
+        </div>
+
+        <!-- DAG Visualization -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-project-diagram text-orange-600 mr-2"></i>
+                DAG Visualization
+                <span id="dagTitle" class="text-sm text-gray-500 ml-2">(No pipeline running)</span>
+            </h2>
+
+            <!-- DAG Legend -->
+            <div class="mb-4 flex flex-wrap gap-6 text-sm">
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-gray-500 rounded mr-2"></div>
+                    <span>○ Pending</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-blue-500 rounded mr-2 animate-pulse"></div>
+                    <span>⟳ Running</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-green-500 rounded mr-2"></div>
+                    <span>✓ Success</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-red-500 rounded mr-2"></div>
+                    <span>✗ Failed</span>
+                </div>
+            </div>
+
+            <div id="dagContainer" class="border-2 border-gray-200 rounded-lg p-4 min-h-96">
+                <div id="dagVisualization" class="w-full h-96 flex items-center justify-center text-gray-500">
+                    <div class="text-center">
+                        <i class="fas fa-project-diagram text-4xl mb-2"></i>
+                        <p>Run a pipeline to see the DAG visualization</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Pipeline Details -->
+    <div id="pipelineModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold" id="modalTitle">Pipeline Details</h3>
+                        <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div id="modalContent">
+                        <!-- Pipeline details will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Schedule Picker -->
+    <div id="scheduleModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold">Schedule Pipeline</h3>
+                        <button id="closeScheduleModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="scheduleContent" class="space-y-4">
+                        <!-- Minute -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-hourglass-start mr-2"></i>Minute (0-59)
+                            </label>
+                            <input type="text" id="scheduleMinute" placeholder="e.g., 0, 15, 30, 45, or *" 
+                                   value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Use * for every minute, or specific values (0-59)</p>
+                        </div>
+
+                        <!-- Hour -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-clock mr-2"></i>Hour (0-23)
+                            </label>
+                            <input type="text" id="scheduleHour" placeholder="e.g., 9, 12, 18, or *" 
+                                   value="*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Use * for every hour, or specific 24-hour values (0-23)</p>
+                        </div>
+
+                        <!-- Day of Month -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-calendar mr-2"></i>Day of Month (1-31)
+                            </label>
+                            <input type="text" id="scheduleDay" placeholder="e.g., 1, 15, or *" 
+                                   value="*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Use * for every day, or specific day (1-31)</p>
+                        </div>
+
+                        <!-- Month -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-calendar-alt mr-2"></i>Month (1-12)
+                            </label>
+                            <input type="text" id="scheduleMonth" placeholder="e.g., 1, 6, 12, or *" 
+                                   value="*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Use * for every month, or specific month (1-12)</p>
+                        </div>
+
+                        <!-- Day of Week -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-calendar-week mr-2"></i>Day of Week (0-6, 0=Monday)
+                            </label>
+                            <input type="text" id="scheduleDayOfWeek" placeholder="e.g., 0, 1, 5, or *" 
+                                   value="*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Use * for every day, or specific day (0=Mon, 1=Tue... 6=Sun)</p>
+                        </div>
+
+                        <!-- Common Presets -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+                            <p class="text-sm font-medium text-blue-900 mb-2">Quick Presets:</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" onclick="setSchedulePreset('daily', '0', '0', '*', '*', '*')" 
+                                        class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">
+                                    Daily (9 AM)
+                                </button>
+                                <button type="button" onclick="setSchedulePreset('hourly', '*', '*', '*', '*', '*')" 
+                                        class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">
+                                    Every Hour
+                                </button>
+                                <button type="button" onclick="setSchedulePreset('weekdays', '0', '9', '*', '*', '0,1,2,3,4')" 
+                                        class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">
+                                    Weekdays 9 AM
+                                </button>
+                                <button type="button" onclick="setSchedulePreset('weekends', '0', '10', '*', '*', '5,6')" 
+                                        class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">
+                                    Weekends 10 AM
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 mt-6 pt-4 border-t">
+                        <button id="cancelScheduleBtn" class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                            Cancel
+                        </button>
+                        <button id="confirmScheduleBtn" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg">
+                            Schedule Pipeline
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPipeline = null;
+        let currentScheduleConfigPath = null;  // Store config path for scheduling
+        let statusInterval = null;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            checkConnection();
+            loadPipelines();
+            loadScheduledPipelines();
+            startStatusUpdates();
+
+            // Event listeners
+            document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+            document.getElementById('closeModal').addEventListener('click', closeModal);
+            document.getElementById('closeScheduleModal').addEventListener('click', closeScheduleModal);
+            document.getElementById('cancelScheduleBtn').addEventListener('click', closeScheduleModal);
+            document.getElementById('confirmScheduleBtn').addEventListener('click', submitSchedule);
+        });
+
+        // Check API connection
+        async function checkConnection() {
+            try {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    updateConnectionStatus(true, 'Connected');
+                    retryCount = 0;
+                } else {
+                    updateConnectionStatus(false, 'API Error');
+                }
+            } catch (error) {
+                updateConnectionStatus(false, 'Disconnected');
+                console.error('Connection check failed:', error);
+                
+                // Retry connection check
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(checkConnection, 2000);
+                }
+            }
+        }
+
+        // Update connection status indicator
+        function updateConnectionStatus(connected, message) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.innerHTML = `
+                    <i class="fas fa-circle text-green-500 mr-2 text-sm"></i>
+                    <span class="text-sm text-green-600">${message}</span>
+                `;
+            } else {
+                statusEl.innerHTML = `
+                    <i class="fas fa-circle text-red-500 mr-2 text-sm animate-pulse"></i>
+                    <span class="text-sm text-red-600">${message}</span>
+                `;
+            }
+        }
+
+        // Load scheduled pipelines
+        async function loadScheduledPipelines() {
+            try {
+                const response = await fetch('/scheduled');
+                const data = await response.json();
+
+                if (response.ok) {
+                    const container = document.getElementById('scheduledPipelines');
+                    container.innerHTML = '';
+
+                    const scheduledList = Object.entries(data);
+                    if (scheduledList.length === 0) {
+                        container.innerHTML = `
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600">
+                                <p><i class="fas fa-info-circle mr-2"></i>No scheduled pipelines.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    scheduledList.forEach(([name, info]) => {
+                        const card = createScheduledPipelineCard(name, info);
+                        container.appendChild(card);
+                    });
+                } else {
+                    console.error('API Error:', data);
+                    showError(`Failed to load scheduled pipelines: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error loading scheduled pipelines:', error);
+                showError(`Failed to load scheduled pipelines: ${error.message}`);
+            }
+        }
+
+        // Create scheduled pipeline card
+        function createScheduledPipelineCard(name, info) {
+            const card = document.createElement('div');
+            card.className = 'bg-indigo-50 border border-indigo-200 rounded-lg p-4';
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <h3 class="text-lg font-semibold text-indigo-800">${name}</h3>
+                        <p class="text-indigo-600 text-sm">Config: ${info.config_path}</p>
+                        <p class="text-indigo-600 text-sm">Schedule: ${JSON.stringify(info.schedule)}</p>
+                        ${info.next_run ? `<p class="text-indigo-600 text-sm">Next run: ${new Date(info.next_run).toLocaleString()}</p>` : ''}
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="unschedule-btn bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
+                                data-name="${name}">
+                            <i class="fas fa-stop mr-1"></i>Unschedule
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Add event listener
+            card.querySelector('.unschedule-btn').addEventListener('click', () => unschedulePipeline(name));
+
+            return card;
+        }
+
+        // Unschedule pipeline
+        async function unschedulePipeline(pipelineName) {
+            try {
+                const response = await fetch(`/schedule/${pipelineName}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess(`Pipeline ${pipelineName} unscheduled successfully`);
+                    loadScheduledPipelines();
+                } else {
+                    showError(result.detail || 'Failed to unschedule pipeline');
+                }
+            } catch (error) {
+                console.error('Error unscheduling pipeline:', error);
+                showError('Failed to unschedule pipeline');
+            }
+        }
+
+        // Create pipeline card
+        function createPipelineCard(pipeline) {
+            const card = document.createElement('div');
+            card.className = 'bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <h3 class="text-lg font-semibold text-gray-800">${pipeline.display_name}</h3>
+                            <span class="inline-block px-2 py-1 text-xs font-semibold rounded-full ${
+                                pipeline.status === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                            }">
+                                ${pipeline.status === 'error' ? '✗ Error' : '✓ Ready'}
+                            </span>
+                        </div>
+                        <p class="text-gray-600 text-sm">${pipeline.description}</p>
+                        <p class="text-gray-500 text-xs mt-1">${pipeline.name} (${pipeline.task_count} tasks)</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="run-btn bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
+                                data-config="${pipeline.file_path}">
+                            <i class="fas fa-play mr-1"></i>Run
+                        </button>
+                        <button class="schedule-btn bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm"
+                                data-config="${pipeline.file_path}">
+                            <i class="fas fa-clock mr-1"></i>Schedule
+                        </button>
+                        <button class="view-dag-btn bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                                data-config="${pipeline.file_path}">
+                            <i class="fas fa-project-diagram mr-1"></i>DAG
+                        </button>
+                        <button class="history-btn bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
+                                data-name="${pipeline.display_name}">
+                            <i class="fas fa-history mr-1"></i>History
+                        </button>
+                    </div>
+                </div>
+                <div class="history-section hidden mt-4 border-t border-gray-300 pt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Recent Runs</h4>
+                    <div class="history-content space-y-2">
+                        <div class="text-sm text-gray-500">Loading...</div>
+                    </div>
+                </div>
+            `;
+
+            // Add event listeners
+            card.querySelector('.run-btn').addEventListener('click', () => runPipeline(pipeline.file_path));
+            card.querySelector('.schedule-btn').addEventListener('click', () => schedulePipeline(pipeline.file_path));
+            card.querySelector('.view-dag-btn').addEventListener('click', () => viewDAG(pipeline.file_path));
+            card.querySelector('.history-btn').addEventListener('click', () => toggleHistory(card, pipeline.display_name));
+
+            return card;
+        }
+
+        // Toggle history section
+        async function toggleHistory(card, pipelineName) {
+            const historySection = card.querySelector('.history-section');
+            const historyContent = card.querySelector('.history-content');
+
+            if (historySection.classList.contains('hidden')) {
+                // Show history
+                historySection.classList.remove('hidden');
+                await loadHistory(historyContent, pipelineName);
+            } else {
+                // Hide history
+                historySection.classList.add('hidden');
+            }
+        }
+
+        // Load pipeline history
+        async function loadHistory(container, pipelineName) {
+            try {
+                const response = await fetch(`/history/${encodeURIComponent(pipelineName)}`);
+                const data = await response.json();
+
+                if (response.ok && data.runs.length > 0) {
+                    container.innerHTML = data.runs.map(run => {
+                        let statusColor = 'gray';
+                        let statusIcon = 'fas fa-question-circle';
+
+                        switch (run.status) {
+                            case 'started':
+                            case 'running':
+                                statusColor = 'blue';
+                                statusIcon = 'fas fa-spinner fa-spin';
+                                break;
+                            case 'completed':
+                                statusColor = 'green';
+                                statusIcon = 'fas fa-check-circle';
+                                break;
+                            case 'failed':
+                                statusColor = 'red';
+                                statusIcon = 'fas fa-times-circle';
+                                break;
+                        }
+
+                        return `
+                            <div class="bg-${statusColor}-50 border border-${statusColor}-200 rounded p-2 text-sm">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <i class="${statusIcon} text-${statusColor}-600 mr-2"></i>
+                                        <span class="font-medium text-${statusColor}-800">${run.status}</span>
+                                    </div>
+                                    <span class="text-${statusColor}-600 text-xs">${new Date(run.updated_at).toLocaleString()}</span>
+                                </div>
+                                <p class="text-${statusColor}-700 mt-1">${run.message}</p>
+                                ${run.details && run.details.errors && Object.keys(run.details.errors).length > 0 ?
+                                    `<div class="mt-2 text-xs text-red-600">
+                                        <strong>Errors:</strong> ${Object.keys(run.details.errors).length} task(s) failed
+                                    </div>` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<div class="text-sm text-gray-500">No runs found</div>';
+                }
+            } catch (error) {
+                console.error('Error loading history:', error);
+                container.innerHTML = '<div class="text-sm text-red-500">Failed to load history</div>';
+            }
+        }
+
+        // Load available pipelines
+        async function loadPipelines() {
+            try {
+                const response = await fetch('/pipelines');
+                const data = await response.json();
+
+                if (response.ok) {
+                    const container = document.getElementById('pipelinesList');
+                    container.innerHTML = '';
+
+                    const hasValidPipelines = data.pipelines && data.pipelines.length > 0;
+                    const hasFailedPipelines = data.failed_pipelines && data.failed_pipelines.length > 0;
+
+                    // Show failed pipelines first with error highlighting
+                    if (hasFailedPipelines) {
+                        const failedLabel = document.createElement('div');
+                        failedLabel.className = 'col-span-full bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4';
+                        failedLabel.innerHTML = `
+                            <h3 class="text-lg font-semibold text-red-800 mb-2">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>Failed to Load Pipelines (${data.failed_pipelines.length})
+                            </h3>
+                            <div class="space-y-2">
+                                ${data.failed_pipelines.map(pipeline => `
+                                    <div class="bg-red-100 border border-red-400 rounded p-3">
+                                        <p class="font-semibold text-red-900">${pipeline.name}</p>
+                                        <p class="text-sm text-red-700 mt-1"><strong>Error:</strong> ${pipeline.error_type}</p>
+                                        <p class="text-xs text-red-600 mt-2 break-words font-mono bg-red-50 p-2 rounded">${pipeline.error}</p>
+                                        <p class="text-xs text-red-600 mt-1"><strong>Path:</strong> ${pipeline.file_path}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                        container.appendChild(failedLabel);
+                    }
+
+                    // Show valid pipelines
+                    if (hasValidPipelines) {
+                        data.pipelines.forEach(pipeline => {
+                            const card = createPipelineCard(pipeline);
+                            container.appendChild(card);
+                        });
+                    } else if (!hasFailedPipelines) {
+                        container.innerHTML = `
+                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800">
+                                <p><i class="fas fa-info-circle mr-2"></i>No pipeline configurations found.</p>
+                                <p class="text-sm mt-1">Looking in: ${data.workspace_root || 'workspace root'} and ${data.pipelines_folder || 'pipelines folder'}</p>
+                                <p class="text-sm">Create a YAML file with your pipeline configuration in the pipelines folder.</p>
+                            </div>
+                        `;
+                    }
+                } else {
+                    console.error('API Error:', data);
+                    showError(`Failed to load pipelines: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error loading pipelines:', error);
+                showError(`Failed to load pipelines: ${error.message}`);
+            }
+        }
+
+        // Run pipeline
+        async function runPipeline(configPath) {
+            try {
+                const response = await fetch('/run', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ config_path: configPath })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess(`Pipeline ${result.pipeline_name} started successfully`);
+                    currentPipeline = result.pipeline_name;
+                    loadPipelineStatus();
+                    loadCurrentPipelineDAG(); // Load initial DAG
+                    // Refresh pipelines to update any open history sections
+                    setTimeout(() => loadPipelines(), 1000);
+                } else {
+                    showError(result.detail || 'Failed to start pipeline');
+                }
+            } catch (error) {
+                console.error('Error running pipeline:', error);
+                showError('Failed to start pipeline');
+            }
+        }
+
+        // Schedule pipeline - open dialog
+        async function schedulePipeline(configPath) {
+            currentScheduleConfigPath = configPath;
+            document.getElementById('scheduleModal').classList.remove('hidden');
+            // Reset form fields to defaults
+            document.getElementById('scheduleMinute').value = '0';
+            document.getElementById('scheduleHour').value = '9';
+            document.getElementById('scheduleDay').value = '*';
+            document.getElementById('scheduleMonth').value = '*';
+            document.getElementById('scheduleDayOfWeek').value = '*';
+        }
+
+        // Set schedule preset
+        function setSchedulePreset(preset, minute, hour, day, month, dayOfWeek) {
+            document.getElementById('scheduleMinute').value = minute;
+            document.getElementById('scheduleHour').value = hour;
+            document.getElementById('scheduleDay').value = day;
+            document.getElementById('scheduleMonth').value = month;
+            document.getElementById('scheduleDayOfWeek').value = dayOfWeek;
+        }
+
+        // Close schedule modal
+        function closeScheduleModal() {
+            document.getElementById('scheduleModal').classList.add('hidden');
+            currentScheduleConfigPath = null;
+        }
+
+        // Submit schedule
+        async function submitSchedule() {
+            if (!currentScheduleConfigPath) {
+                showError('No pipeline selected for scheduling');
+                return;
+            }
+
+            const schedule = {
+                minute: document.getElementById('scheduleMinute').value || '0',
+                hour: document.getElementById('scheduleHour').value || '*',
+                day: document.getElementById('scheduleDay').value || '*',
+                month: document.getElementById('scheduleMonth').value || '*',
+                day_of_week: document.getElementById('scheduleDayOfWeek').value || '*'
+            };
+
+            try {
+                const response = await fetch('/schedule', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        config_path: currentScheduleConfigPath,
+                        schedule: schedule
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess(`Pipeline scheduled successfully (${schedule.hour}:${schedule.minute})`);
+                    closeScheduleModal();
+                    loadScheduledPipelines();  // Refresh scheduled list
+                } else {
+                    showError(result.detail || 'Failed to schedule pipeline');
+                }
+            } catch (error) {
+                console.error('Error scheduling pipeline:', error);
+                showError('Failed to schedule pipeline');
+            }
+        }
+
+        // View DAG
+        async function viewDAG(configPath) {
+            try {
+                const response = await fetch(`/dag?config_path=${encodeURIComponent(configPath)}`);
+                const dagData = await response.json();
+
+                if (response.ok) {
+                    showModal(`DAG: ${dagData.pipeline_name}`, createDAGContent(dagData));
+                    renderDAG(dagData);
+                } else {
+                    showError('Failed to load DAG');
+                }
+            } catch (error) {
+                console.error('Error loading DAG:', error);
+                showError('Failed to load DAG');
+            }
+        }
+
+        // Load and render current pipeline DAG with status
+        async function loadCurrentPipelineDAG() {
+            if (!currentPipeline) {
+                document.getElementById('dagTitle').textContent = '(No pipeline running)';
+                document.getElementById('dagVisualization').innerHTML = `
+                    <div class="w-full h-96 flex items-center justify-center text-gray-500">
+                        <div class="text-center">
+                            <i class="fas fa-project-diagram text-4xl mb-2"></i>
+                            <p>Run a pipeline to see the DAG visualization</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                // Get pipeline config path from status or find it
+                const pipelinesResponse = await fetch('/pipelines');
+                const pipelinesData = await pipelinesResponse.json();
+
+                if (pipelinesResponse.ok) {
+                    const currentPipelineData = pipelinesData.pipelines.find(p =>
+                        p.display_name === currentPipeline ||
+                        p.name.replace('.yaml', '') === currentPipeline.replace('_pipeline', '')
+                    );
+
+                    if (currentPipelineData) {
+                        document.getElementById('dagTitle').textContent = `(${currentPipeline})`;
+
+                        const dagResponse = await fetch(`/dag?config_path=${encodeURIComponent(currentPipelineData.file_path)}`);
+                        const dagData = await dagResponse.json();
+
+                        if (dagResponse.ok) {
+                            // Get current status to add task states
+                            const statusResponse = await fetch(`/status?pipeline_name=${encodeURIComponent(currentPipeline)}`);
+                            const statusData = await statusResponse.json();
+
+                            if (statusResponse.ok && statusData.details && statusData.details.results) {
+                                dagData.taskStatus = statusData.details.results;
+                                dagData.taskErrors = statusData.details.errors || {};
+                            }
+
+                            renderDAG(dagData, true); // true = show in main area
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading current pipeline DAG:', error);
+            }
+        }
+
+        // Load pipeline status
+        async function loadPipelineStatus() {
+            if (!currentPipeline) return;
+
+            try {
+                const response = await fetch(`/status?pipeline_name=${encodeURIComponent(currentPipeline)}`);
+                const status = await response.json();
+
+                if (response.ok) {
+                    updateStatusDisplay(status);
+                    // Also update DAG if pipeline is running
+                    if (status.status === 'running' || status.status === 'started') {
+                        loadCurrentPipelineDAG();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading status:', error);
+            }
+        }
+
+        // Update status display
+        function updateStatusDisplay(status) {
+            const container = document.getElementById('pipelineStatus');
+
+            let statusColor = 'gray';
+            let statusIcon = 'fas fa-question-circle';
+
+            switch (status.status) {
+                case 'started':
+                case 'running':
+                    statusColor = 'blue';
+                    statusIcon = 'fas fa-spinner fa-spin';
+                    break;
+                case 'completed':
+                    statusColor = 'green';
+                    statusIcon = 'fas fa-check-circle';
+                    break;
+                case 'failed':
+                    statusColor = 'red';
+                    statusIcon = 'fas fa-times-circle';
+                    break;
+            }
+
+            container.innerHTML = `
+                <div class="bg-${statusColor}-50 border border-${statusColor}-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="${statusIcon} text-${statusColor}-600 text-xl mr-3"></i>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-${statusColor}-800">${status.pipeline_name}</h3>
+                            <p class="text-${statusColor}-700">${status.message}</p>
+                            <p class="text-${statusColor}-600 text-sm mt-1">Updated: ${new Date(status.updated_at).toLocaleString()}</p>
+                        </div>
+                    </div>
+                    ${status.details && status.details.execution_order ?
+                        `<div class="mt-3">
+                            <p class="text-sm text-${statusColor}-700">Execution Order: ${status.details.execution_order.join(' → ')}</p>
+                        </div>` : ''}
+                    ${status.details && status.details.errors && Object.keys(status.details.errors).length > 0 ?
+                        `<div class="mt-3">
+                            <p class="text-sm font-medium text-${statusColor}-800">Task Errors:</p>
+                            <div class="mt-2 space-y-1">
+                                ${Object.entries(status.details.errors).map(([task, error]) => `
+                                    <div class="bg-red-50 border border-red-200 rounded p-2 text-sm">
+                                        <strong class="text-red-800">${task}:</strong>
+                                        <span class="text-red-700 ml-1">${error}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>` : ''}
+                </div>
+            `;
+        }
+
+        // Create DAG content for modal
+        function createDAGContent(dagData) {
+            return `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-semibold text-gray-800">Pipeline: ${dagData.pipeline_name}</h4>
+                        <p class="text-gray-600">Execution Order: ${dagData.execution_order.join(' → ')}</p>
+                    </div>
+                    <div>
+                        <h5 class="font-medium text-gray-700 mb-2">Tasks (${dagData.nodes.length})</h5>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            ${dagData.nodes.map(node => `
+                                <div class="bg-blue-50 border border-blue-200 rounded p-2 text-sm">
+                                    <i class="fas fa-cube text-blue-600 mr-1"></i>${node}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div>
+                        <h5 class="font-medium text-gray-700 mb-2">Dependencies (${dagData.edges.length})</h5>
+                        <div class="space-y-1">
+                            ${dagData.edges.map(edge => `
+                                <div class="text-sm text-gray-600">
+                                    <i class="fas fa-arrow-right text-gray-400 mr-1"></i>
+                                    ${edge.from} → ${edge.to}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render DAG visualization
+        function renderDAG(dagData, showInMain = false) {
+            const containerId = showInMain ? 'dagVisualization' : 'dagVisualizationModal';
+            let container = document.getElementById(containerId);
+
+            if (!container) {
+                // Create modal container if it doesn't exist
+                const modalContent = document.getElementById('modalContent');
+                modalContent.innerHTML += '<div id="dagVisualizationModal" class="w-full h-96 mt-4"></div>';
+                container = document.getElementById('dagVisualizationModal');
+            }
+
+            container.innerHTML = '';
+
+            // Simple D3.js DAG visualization
+            const svg = d3.select('#' + containerId)
+                .append('svg')
+                .attr('width', '100%')
+                .attr('height', '100%')
+                .attr('viewBox', '0 0 800 400');
+
+            const width = 800;
+            const height = 400;
+
+            // Create nodes with status
+            const nodes = dagData.nodes.map((name, i) => {
+                let status = 'pending';
+                if (dagData.taskStatus) {
+                    if (dagData.taskStatus[name] === true) {
+                        status = 'success';
+                    } else if (dagData.taskStatus[name] === false) {
+                        status = 'failed';
+                    } else if (dagData.taskStatus && Object.keys(dagData.taskStatus).length > 0) {
+                        // Check if task is currently running (in execution order but not completed)
+                        const executionIndex = dagData.execution_order.indexOf(name);
+                        const completedTasks = Object.keys(dagData.taskStatus).length;
+                        if (executionIndex < completedTasks) {
+                            status = dagData.taskStatus[name] ? 'success' : 'failed';
+                        } else if (executionIndex === completedTasks - 1 && !dagData.taskStatus[name]) {
+                            status = 'running';
+                        }
+                    }
+                }
+
+                return {
+                    id: name,
+                    name: name,
+                    status: status,
+                    x: (i % 3) * 250 + 100,
+                    y: Math.floor(i / 3) * 100 + 50
+                };
+            });
+
+            // Create links
+            const links = dagData.edges.map(edge => ({
+                source: nodes.find(n => n.id === edge.from),
+                target: nodes.find(n => n.id === edge.to)
+            }));
+
+            // Draw links
+            svg.selectAll('line')
+                .data(links)
+                .enter()
+                .append('line')
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y)
+                .attr('stroke', '#999')
+                .attr('stroke-width', 2)
+                .attr('marker-end', 'url(#arrowhead)');
+
+            // Draw nodes
+            const nodeGroups = svg.selectAll('g.node')
+                .data(nodes)
+                .enter()
+                .append('g')
+                .attr('class', 'node')
+                .attr('transform', d => `translate(${d.x - 45}, ${d.y - 17})`);
+
+            // Add white background rectangle for text readability
+            nodeGroups.append('rect')
+                .attr('x', -2)
+                .attr('y', 18)
+                .attr('width', 94)
+                .attr('height', 18)
+                .attr('fill', 'white')
+                .attr('fill-opacity', 0.95)
+                .attr('rx', 3)
+                .attr('stroke', '#E5E7EB')
+                .attr('stroke-width', 1);
+
+            // Main node rectangle
+            nodeGroups.append('rect')
+                .attr('width', 90)
+                .attr('height', 35)
+                .attr('rx', 5)
+                .attr('class', d => {
+                    switch(d.status) {
+                        case 'success': return 'task-success';
+                        case 'failed': return 'task-failed';
+                        case 'running': return 'task-default task-running';
+                        default: return 'task-default';
+                    }
+                })
+                .attr('stroke-width', 2);
+
+            // Task name text
+            nodeGroups.append('text')
+                .attr('x', 45)
+                .attr('y', 25)
+                .attr('text-anchor', 'middle')
+                .attr('fill', 'white')
+                .attr('font-size', '11px')
+                .attr('font-weight', 'bold')
+                .attr('font-family', 'Arial, sans-serif')
+                .text(d => d.name.length > 12 ? d.name.substring(0, 12) + '...' : d.name);
+
+            // Status text below the node
+            nodeGroups.append('text')
+                .attr('x', 45)
+                .attr('y', 42)
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#374151')
+                .attr('font-size', '9px')
+                .attr('font-weight', '600')
+                .attr('font-family', 'Arial, sans-serif')
+                .text(d => {
+                    switch(d.status) {
+                        case 'success': return '✓ Success';
+                        case 'failed': return '✗ Failed';
+                        case 'running': return '⟳ Running';
+                        default: return '○ Pending';
+                    }
+                });
+
+            // Status indicator circle
+            nodeGroups.append('circle')
+                .attr('cx', 80)
+                .attr('cy', 8)
+                .attr('r', 5)
+                .attr('fill', d => {
+                    switch(d.status) {
+                        case 'success': return '#10B981';
+                        case 'failed': return '#EF4444';
+                        case 'running': return '#F59E0B';
+                        default: return '#6B7280';
+                    }
+                })
+                .attr('stroke', 'white')
+                .attr('stroke-width', 1);
+
+            // Add arrow marker
+            svg.append('defs').append('marker')
+                .attr('id', 'arrowhead')
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 8)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', '#999');
+        }
+
+        // Modal functions
+        function showModal(title, content) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalContent').innerHTML = content;
+            document.getElementById('pipelineModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('pipelineModal').classList.add('hidden');
+        }
+
+        // Status updates
+        function startStatusUpdates() {
+            statusInterval = setInterval(loadPipelineStatus, 2000); // Update every 2 seconds
+        }
+
+        function stopStatusUpdates() {
+            if (statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+        }
+
+        // Refresh all data
+        function refreshAll() {
+            loadPipelines();
+            loadScheduledPipelines();
+            loadPipelineStatus();
+        }
+
+        // Notification functions
+        function showSuccess(message) {
+            showNotification(message, 'success');
+        }
+
+        function showError(message) {
+            showNotification(message, 'error');
+        }
+
+        function showNotification(message, type) {
+            // Create notification container if needed
+            let container = document.getElementById('notificationContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'notificationContainer';
+                container.className = 'fixed top-4 right-4 z-50 space-y-2';
+                document.body.appendChild(container);
+            }
+
+            // Create notification element
+            const notification = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            notification.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 min-w-80 animate-fadeIn`;
+            notification.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${message}</span>
+                <button class="ml-2 text-white-200 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+
+            // Add close button functionality
+            notification.querySelector('button').addEventListener('click', () => {
+                notification.remove();
+            });
+
+            container.appendChild(notification);
+
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('pipelineModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+pipeline_name: sales_analytics_pipeline
+description: "Sales transaction processing pipeline with validation, analytics, and reporting"
+
+file_path: data/input_data.csv
+
+schedule:
+  minute: "0"
+  hour: "9"
+  day: "*"
+
+tasks:
+  - name: load_sales_data
+    type: executor
+    plugin: duckdb
+    operation: load
+    config:
+      show_columns: true
+      show_sample: true
+    retries: 2
+
+  - name: validate_sales_data
+    type: executor
+    plugin: duckdb
+    operation: validate
+    config:
+      checks:
+        - name: "required_fields"
+          sql: "SELECT COUNT(*) FROM data WHERE id IS NULL OR created_at IS NULL OR amount IS NULL"
+          expect: 0
+        - name: "valid_amounts"
+          sql: "SELECT COUNT(*) FROM data WHERE amount <= 0"
+          expect: 0
+        - name: "valid_dates"
+          sql: "SELECT COUNT(*) FROM data WHERE created_at > CURRENT_DATE"
+          expect: 0
+        - name: "valid_status"
+          sql: "SELECT COUNT(*) FROM data WHERE status NOT IN ('completed', 'pending', 'cancelled')"
+          expect: 0
+    depends_on:
+      - load_sales_data
+    retries: 2
+
+  - name: category_analytics
+    type: executor
+    plugin: duckdb
+    operation: aggregate
+    config:
+      group_by: ["category"]
+      metrics:
+        - column: "amount"
+          function: "sum"
+          alias: "total_sales"
+        - column: "quantity"
+          function: "sum"
+          alias: "total_quantity"
+        - column: "id"
+          function: "count"
+          alias: "transaction_count"
+        - column: "amount"
+          function: "avg"
+          alias: "avg_transaction"
+      order_by: "total_sales DESC"
+      output_table: "category_analytics"
+    depends_on:
+      - validate_sales_data
+    retries: 2
+
+  - name: daily_sales_summary
+    type: executor
+    plugin: duckdb
+    operation: aggregate
+    config:
+      group_by: ["DATE(created_at)"]
+      metrics:
+        - column: "amount"
+          function: "sum"
+          alias: "daily_sales"
+        - column: "quantity"
+          function: "sum"
+          alias: "daily_quantity"
+        - column: "id"
+          function: "count"
+          alias: "daily_transactions"
+      order_by: "DATE(created_at) DESC"
+      output_table: "daily_sales"
+    depends_on:
+      - validate_sales_data
+    retries: 2
+
+  - name: enrich_sales_data
+    type: executor
+    plugin: duckdb
+    operation: transform
+    config:
+      columns:
+        - name: "transaction_month"
+          sql: "MONTH(created_at)"
+        - name: "transaction_year"
+          sql: "YEAR(created_at)"
+        - name: "high_value"
+          sql: "CASE WHEN amount >= 500 THEN true ELSE false END"
+        - name: "processed_at"
+          sql: "CURRENT_TIMESTAMP"
+      output_table: "enriched_sales"
+    depends_on:
+      - category_analytics
+    retries: 2
+
+  - name: generate_sales_reports
+    type: executor
+    plugin: duckdb
+    operation: query
+    config:
+      sql: |
+        SELECT
+          category,
+          transaction_count as transactions,
+          ROUND(total_sales, 2) as total_sales,
+          ROUND(avg_transaction, 2) as avg_transaction,
+          total_quantity as total_quantity
+        FROM category_analytics
+        ORDER BY total_sales DESC
+      return_data: true
+    depends_on:
+      - enrich_sales_data
+    retries: 2
+
+  - name: load_sales_to_snowflake
+    type: executor
+    plugin: snowflake
+    operation: load_to_snowflake
+    config:
+      snowflake_config:
+        account: "your_account.snowflakecomputing.com"  # Replace with your Snowflake account
+        user: "your_user"  # Replace with your username
+        password: "your_password"  # Replace with your password
+        warehouse: "your_warehouse"  # Replace with your warehouse
+        database: "your_database"  # Replace with your database
+        schema: "your_schema"  # Replace with your schema
+      table_name: "sales_analytics"
+      if_exists: "replace"
+    depends_on:
+      - generate_sales_reports
+    retries: 2
+
+  - name: export_processed_sales
+    type: executor
+    plugin: duckdb
+    operation: query
+    config:
+      sql: |
+        COPY (
+          SELECT
+            id, created_at, category, product_name,
+            amount, quantity, customer_id, status,
+            transaction_month, transaction_year, high_value,
+            processed_at
+          FROM enriched_sales
+          ORDER BY created_at DESC
+        ) TO 'data/processed_sales.csv' (HEADER, DELIMITER ',')
+    depends_on:
+      - generate_sales_reports
+    retries: 1

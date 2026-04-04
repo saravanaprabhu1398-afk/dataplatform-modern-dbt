@@ -1,0 +1,20 @@
+pipeline_name: sample_pipeline
+
+file_path: data/sample.csv
+
+tasks:
+  - name: ingest
+    type: executor
+    plugin: duckdb
+    retries: 2
+
+  - name: transform
+    type: transformer
+    plugin: dbt
+    depends_on:
+      - ingest
+    retries: 1
+
+schedule:
+  minute: "0"
+  hour: "*/2"

@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dataplatform"
+version = "0.1.0"
+description = "Cloud-agnostic, plug-and-play data platform framework"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "typer",
+    "pyyaml",
+    "duckdb",
+    "dbt-core",
+    "networkx",
+    "apscheduler",
+    "fastapi",
+    "uvicorn",
+    "snowflake-connector-python",
+    "pandas",
+    "requests",
+]
+authors = [
+    {name = "Prabhu Saravanan", email = "prabhu@example.com"},
+]
+maintainers = [
+    {name = "Prabhu Saravanan", email = "prabhu@example.com"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+dataplatform = "dataplatform.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dataplatform*"]
+
+[tool.setuptools.package-data]
+dataplatform = ["templates/*"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8",
+    "mypy",
+]
+ui = [
+    "react",
+    "d3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
