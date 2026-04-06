@@ -1,7 +1,8 @@
 import importlib
+import inspect
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from dataplatform.core.config import Task
 from dataplatform.plugins.base import Plugin
 from dataplatform.core.logging_config import log_task_start, log_task_success, log_task_failure
@@ -11,37 +12,59 @@ logger = logging.getLogger(__name__)
 
 class TaskExecutor:
     def __init__(self):
-        self.plugins = {}
+        self.plugins: Dict[Tuple[str, str], Plugin] = {}
 
     def load_plugin(self, plugin_name: str, plugin_type: str) -> Plugin:
         """Dynamically load a plugin."""
-        if plugin_name in self.plugins:
-            return self.plugins[plugin_name]
+        cache_key = (plugin_type, plugin_name)
+        if cache_key in self.plugins:
+            return self.plugins[cache_key]
 
         try:
             module_name = f"dataplatform.plugins.{plugin_type}s.{plugin_name}_plugin"
             module = importlib.import_module(module_name)
 
-            candidates = [
-                f"{plugin_name.capitalize()}{plugin_type.capitalize()}",
-                f"{plugin_name.upper()}{plugin_type.capitalize()}",
-                f"{plugin_name.title()}{plugin_type.capitalize()}"
-            ]
-
             plugin_class = None
-            for candidate in candidates:
-                plugin_class = getattr(module, candidate, None)
-                if plugin_class is not None:
+            for attribute in module.__dict__.values():
+                if (
+                    isinstance(attribute, type)
+                    and issubclass(attribute, Plugin)
+                    and attribute is not Plugin
+                    and not inspect.isabstract(attribute)
+                    and attribute.__module__ == module.__name__
+                ):
+                    plugin_class = attribute
                     break
 
             if plugin_class is None:
-                raise AttributeError(f"Plugin class not found in module {module_name}. Tried: {candidates}")
+                for attribute in module.__dict__.values():
+                    if (
+                        isinstance(attribute, type)
+                        and attribute.__module__ == module.__name__
+                        and callable(getattr(attribute, "execute", None))
+                        and not inspect.isabstract(attribute)
+                    ):
+                        plugin_class = attribute
+                        break
+
+            if plugin_class is None:
+                raise AttributeError(f"Plugin class not found in module {module_name}")
 
             plugin = plugin_class()
-            self.plugins[plugin_name] = plugin
+            self.plugins[cache_key] = plugin
             return plugin
         except (ImportError, AttributeError) as e:
             raise ValueError(f"Failed to load plugin {plugin_name}: {e}")
+
+    @staticmethod
+    def _extract_error_details(result: Any) -> str:
+        if isinstance(result, dict):
+            return str(result.get("error") or result.get("stderr") or result)
+        if isinstance(result, list):
+            return f"Plugin returned failure result with {len(result)} item(s)"
+        if result is None:
+            return "Plugin returned failure status"
+        return str(result)
 
     def execute_task(self, task: Task, config: Dict[str, Any] = None, previous_data: Any = None) -> tuple[bool, Any, str]:
         """Execute a task with retries and return result data and error details."""
@@ -87,7 +110,7 @@ class TaskExecutor:
                     log_task_success(task.name, duration)
                     return True, data, ""
                 else:
-                    error_msg = f"Plugin returned failure status"
+                    error_msg = self._extract_error_details(data)
                     error_details = error_msg
                     log_task_failure(task.name, error_msg, attempt + 1, task.retries + 1)
                     if attempt < task.retries:

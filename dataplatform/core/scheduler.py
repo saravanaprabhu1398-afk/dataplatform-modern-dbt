@@ -1,4 +1,5 @@
 import logging
+import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -18,6 +19,7 @@ class PipelineScheduler:
     """Scheduler for running pipelines based on cron schedules."""
 
     def __init__(self):
+        self.state_file = Path(__file__).parent.parent.parent / "data" / "scheduler_state.json"
         self.scheduler = BackgroundScheduler(
             jobstores={
                 'default': MemoryJobStore()
@@ -32,6 +34,37 @@ class PipelineScheduler:
             }
         )
         self.scheduled_pipelines = {}
+
+    def _persist_schedules(self) -> None:
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        persisted = {
+            name: {
+                "config_path": info["config_path"],
+                "schedule": info["schedule"],
+            }
+            for name, info in self.scheduled_pipelines.items()
+        }
+        self.state_file.write_text(json.dumps(persisted, indent=2), encoding="utf-8")
+
+    def _restore_schedules(self) -> None:
+        if not self.state_file.exists():
+            return
+
+        try:
+            restored = json.loads(self.state_file.read_text(encoding="utf-8"))
+            if not isinstance(restored, dict):
+                logger.warning("Ignoring invalid scheduler state file format")
+                return
+
+            for pipeline_name, payload in restored.items():
+                config_path = payload.get("config_path")
+                schedule = payload.get("schedule")
+                if not config_path or not isinstance(schedule, dict):
+                    logger.warning(f"Skipping invalid scheduler state entry for {pipeline_name}")
+                    continue
+                self.schedule_pipeline(config_path, custom_schedule=schedule)
+        except Exception as e:
+            logger.error(f"Failed to restore persisted schedules: {e}")
 
     def schedule_pipeline(self, config_path: str, custom_schedule: dict = None) -> bool:
         """Schedule a pipeline based on its cron configuration or custom schedule."""
@@ -71,6 +104,7 @@ class PipelineScheduler:
                 'schedule': schedule
             }
 
+            self._persist_schedules()
             logger.info(f"Scheduled pipeline {config.pipeline_name} with cron: {schedule}")
             return True
 
@@ -84,6 +118,7 @@ class PipelineScheduler:
             try:
                 self.scheduled_pipelines[pipeline_name]['job'].remove()
                 del self.scheduled_pipelines[pipeline_name]
+                self._persist_schedules()
                 logger.info(f"Unscheduled pipeline {pipeline_name}")
                 return True
             except Exception as e:
@@ -108,6 +143,7 @@ class PipelineScheduler:
         """Start the scheduler."""
         if not self.scheduler.running:
             self.scheduler.start()
+            self._restore_schedules()
             logger.info("Pipeline scheduler started")
 
     def stop(self):

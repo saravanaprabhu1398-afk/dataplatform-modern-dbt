@@ -1,6 +1,7 @@
 import subprocess
 import logging
 import os
+import shlex
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ class ShellExecutor:
         """
         try:
             command = config.get("command")
-            shell = config.get("shell", "bash")
             cwd = config.get("cwd")
             env = config.get("env", {})
             timeout = config.get("timeout", 300)
+            use_shell = bool(config.get("use_shell", False))
 
             if not command:
                 return False, {"error": "command is required"}
@@ -36,9 +37,16 @@ class ShellExecutor:
 
             logger.info(f"Executing shell command: {command}")
 
+            if isinstance(command, str):
+                command_to_run = command if use_shell else shlex.split(command)
+            elif isinstance(command, list):
+                command_to_run = command
+            else:
+                return False, {"error": "command must be a string or list"}
+
             result = subprocess.run(
-                command,
-                shell=True,
+                command_to_run,
+                shell=use_shell,
                 cwd=cwd,
                 env=exec_env,
                 capture_output=True,
@@ -54,10 +62,11 @@ class ShellExecutor:
             error = result.stderr.strip()
 
             return success, {
-                "command": command,
+                "command": command if isinstance(command, str) else " ".join(command),
                 "return_code": result.returncode,
                 "stdout": output,
-                "stderr": error
+                "stderr": error,
+                "used_shell": use_shell,
             }
 
         except subprocess.TimeoutExpired:

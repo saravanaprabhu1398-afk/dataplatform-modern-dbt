@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Platform - Pipeline Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-3">
+                        <a href="/" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+                            <i class="fas fa-arrow-left mr-2"></i>Back to Home
+                        </a>
+                        <button id="logoutBtn" class="inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-900">
+                            <i class="fas fa-arrow-right-from-bracket mr-2"></i>Logout
+                        </button>
+                    </div>
+                    <h1 class="text-3xl font-bold text-gray-800 mt-3">
+                        <i class="fas fa-magic text-cyan-600 mr-2"></i>
+                        Pipeline YAML Generator
+                    </h1>
+                    <p class="text-gray-600 mt-2">Paste Word-style notes or natural language instructions to generate a pipeline YAML draft.</p>
+                </div>
+                <div id="pipelineGeneratorMeta" class="bg-cyan-50 border border-cyan-200 rounded-lg px-4 py-3 text-sm text-cyan-800 min-w-64">
+                    <p><span class="font-semibold">Detected Language:</span> <span id="generatorDetectedLanguage">-</span></p>
+                    <p class="mt-1"><span class="font-semibold">Pipeline Name:</span> <span id="generatorPipelineName">-</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div>
+                        <label for="pipelineGeneratorInput" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-file-word text-blue-600 mr-2"></i>Natural Language Input
+                        </label>
+                        <textarea id="pipelineGeneratorInput" rows="14" placeholder="Example: Build a daily sales pipeline. First extract orders from PostgreSQL, then clean data with Python, then run dbt models, and finally publish results to Snowflake..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-y"></textarea>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3">
+                        <button id="generatePipelineYamlBtn" class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-wand-magic-sparkles mr-2"></i>Generate YAML
+                        </button>
+                        <button id="downloadGeneratedYamlBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-download mr-2"></i>Download
+                        </button>
+                        <button id="saveGeneratedYamlBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-save mr-2"></i>Save
+                        </button>
+                    </div>
+
+                    <div>
+                        <label for="generatedPipelineFilename" class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-file-signature text-gray-600 mr-2"></i>Filename
+                        </label>
+                        <input id="generatedPipelineFilename" type="text" placeholder="generated_pipeline" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                        <p class="text-xs text-gray-500 mt-1">Saved and downloaded as <code class="bg-gray-100 px-1 py-0.5 rounded">pipelines/<filename>.yaml</code></p>
+                    </div>
+
+                    <div id="pipelineGeneratorWarningsPanel" class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <h2 class="text-sm font-semibold text-amber-800 mb-2">
+                            <i class="fas fa-triangle-exclamation mr-2"></i>Warnings
+                        </h2>
+                        <div id="pipelineGeneratorWarnings" class="text-sm text-amber-700">
+                            <p>No warnings yet.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="generatedPipelineYamlPreview" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-code text-green-600 mr-2"></i>Generated YAML Preview
+                    </label>
+                    <textarea id="generatedPipelineYamlPreview" rows="22" placeholder="Generated YAML will appear here..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm resize-y bg-gray-50"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('generatePipelineYamlBtn').addEventListener('click', generatePipelineYaml);
+            document.getElementById('downloadGeneratedYamlBtn').addEventListener('click', downloadGeneratedPipelineYaml);
+            document.getElementById('saveGeneratedYamlBtn').addEventListener('click', saveGeneratedPipelineYaml);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+        });
+
+        async function logout() {
+            try {
+                await fetch('/logout', { method: 'POST' });
+            } finally {
+                window.location.href = '/login';
+            }
+        }
+
+        function ensureYamlFilename(filename) {
+            const trimmed = (filename || '').trim();
+            if (!trimmed) {
+                return 'generated_pipeline.yaml';
+            }
+
+            return trimmed.toLowerCase().endsWith('.yaml') ? trimmed : `${trimmed}.yaml`;
+        }
+
+        function setGeneratorWarnings(warnings) {
+            const warningsContainer = document.getElementById('pipelineGeneratorWarnings');
+
+            if (!warnings || warnings.length === 0) {
+                warningsContainer.innerHTML = '<p>No warnings.</p>';
+                return;
+            }
+
+            warningsContainer.innerHTML = `
+                <ul class="list-disc pl-5 space-y-1">
+                    ${warnings.map(warning => `<li>${warning}</li>`).join('')}
+                </ul>
+            `;
+        }
+
+        function updateGeneratorMetadata(response) {
+            document.getElementById('generatorDetectedLanguage').textContent = response.detected_language || '-';
+            document.getElementById('generatorPipelineName').textContent = response.parsed_config && response.parsed_config.pipeline_name
+                ? response.parsed_config.pipeline_name
+                : '-';
+        }
+
+        async function generatePipelineYaml() {
+            const inputText = document.getElementById('pipelineGeneratorInput').value.trim();
+
+            if (!inputText) {
+                showError('Please enter pipeline instructions before generating YAML');
+                return;
+            }
+
+            const generateButton = document.getElementById('generatePipelineYamlBtn');
+            const originalButtonContent = generateButton.innerHTML;
+            generateButton.disabled = true;
+            generateButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+
+            try {
+                const response = await fetch('/generate-pipeline', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ input_text: inputText })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('generatedPipelineYamlPreview').value = result.yaml_content || '';
+                    updateGeneratorMetadata(result);
+                    setGeneratorWarnings(result.warnings || []);
+
+                    const suggestedPipelineName = result.parsed_config && result.parsed_config.pipeline_name
+                        ? result.parsed_config.pipeline_name
+                        : 'generated_pipeline';
+
+                    const filenameInput = document.getElementById('generatedPipelineFilename');
+                    if (!filenameInput.value.trim()) {
+                        filenameInput.value = suggestedPipelineName;
+                    }
+
+                    showSuccess(`Generated YAML for ${suggestedPipelineName}`);
+                } else {
+                    showError(result.detail || 'Failed to generate pipeline YAML');
+                }
+            } catch (error) {
+                console.error('Error generating pipeline YAML:', error);
+                showError('Failed to generate pipeline YAML');
+            } finally {
+                generateButton.disabled = false;
+                generateButton.innerHTML = originalButtonContent;
+            }
+        }
+
+        function downloadGeneratedPipelineYaml() {
+            const yamlContent = document.getElementById('generatedPipelineYamlPreview').value.trim();
+            if (!yamlContent) {
+                showError('No generated YAML available to download');
+                return;
+            }
+
+            const filename = ensureYamlFilename(document.getElementById('generatedPipelineFilename').value);
+            const blob = new Blob([yamlContent], { type: 'text/yaml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showSuccess(`Downloaded ${filename}`);
+        }
+
+        async function saveGeneratedPipelineYaml() {
+            const yamlContent = document.getElementById('generatedPipelineYamlPreview').value.trim();
+            if (!yamlContent) {
+                showError('No generated YAML available to save');
+                return;
+            }
+
+            const filenameInput = document.getElementById('generatedPipelineFilename');
+            const filename = ensureYamlFilename(filenameInput.value);
+            filenameInput.value = filename;
+
+            const saveButton = document.getElementById('saveGeneratedYamlBtn');
+            const originalButtonContent = saveButton.innerHTML;
+            saveButton.disabled = true;
+            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+
+            try {
+                const response = await fetch('/save-pipeline', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        yaml_content: yamlContent,
+                        filename: filename
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    if (result.pipeline_name) {
+                        document.getElementById('generatorPipelineName').textContent = result.pipeline_name;
+                    }
+                    showSuccess(result.message || `Saved ${filename} successfully`);
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1200);
+                } else {
+                    showError(result.detail || 'Failed to save generated pipeline');
+                }
+            } catch (error) {
+                console.error('Error saving generated pipeline:', error);
+                showError('Failed to save generated pipeline');
+            } finally {
+                saveButton.disabled = false;
+                saveButton.innerHTML = originalButtonContent;
+            }
+        }
+
+        function showSuccess(message) {
+            showNotification(message, 'success');
+        }
+
+        function showError(message) {
+            showNotification(message, 'error');
+        }
+
+        function showNotification(message, type) {
+            let container = document.getElementById('notificationContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'notificationContainer';
+                container.className = 'fixed top-4 right-4 z-50 space-y-2';
+                document.body.appendChild(container);
+            }
+
+            const notification = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+
+            notification.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 min-w-80 animate-fadeIn`;
+            notification.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${message}</span>
+                <button class="ml-2 text-white-200 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+
+            notification.querySelector('button').addEventListener('click', () => {
+                notification.remove();
+            });
+
+            container.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

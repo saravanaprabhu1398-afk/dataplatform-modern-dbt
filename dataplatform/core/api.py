@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -9,11 +9,20 @@ from datetime import datetime
 import uvicorn
 import logging
 import os
+import base64
+import hashlib
+import hmac
+import json
+import time
 from dataplatform.core.config import load_config, PipelineConfig
 from dataplatform.core.dag import DAGBuilder
 from dataplatform.core.executor import PipelineExecutor
 from dataplatform.core.scheduler import get_scheduler
 from dataplatform.core.logging_config import setup_logging
+from dataplatform.core.pipeline_generator import (
+    generate_pipeline_yaml_from_text,
+    save_generated_pipeline,
+)
 
 # Set up logging from environment
 logger = setup_logging(
@@ -51,6 +60,96 @@ pipeline_statuses: Dict[str, List[Dict[str, Any]]] = {}
 
 
 pipeline_runs: Dict[str, List[Dict[str, Any]]] = {}
+
+SESSION_COOKIE_NAME = "dpflow_session"
+SESSION_DURATION_SECONDS = 60 * 60 * 12
+AUTH_USERNAME = os.getenv("DATAPLATFORM_USERNAME", "admin")
+AUTH_PASSWORD = os.getenv("DATAPLATFORM_PASSWORD", "admin")
+SESSION_SECRET = os.getenv("DATAPLATFORM_SESSION_SECRET", "dpflow-dev-secret-change-me")
+PUBLIC_PATH_PREFIXES = ("/login", "/static", "/health")
+PUBLIC_PATHS = {"/login", "/health"}
+
+if AUTH_USERNAME == "admin" and AUTH_PASSWORD == "admin":
+    logger.warning("Using default DATAPLATFORM_USERNAME/DATAPLATFORM_PASSWORD credentials. Set environment variables before production use.")
+if SESSION_SECRET == "dpflow-dev-secret-change-me":
+    logger.warning("Using default DATAPLATFORM_SESSION_SECRET. Set a strong secret before production use.")
+
+
+def _sign_value(value: str) -> str:
+    return hmac.new(SESSION_SECRET.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _create_session_cookie(username: str) -> str:
+    payload = {
+        "username": username,
+        "exp": int(time.time()) + SESSION_DURATION_SECONDS,
+    }
+    encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
+    signature = _sign_value(encoded)
+    return f"{encoded}.{signature}"
+
+
+def _read_session_cookie(cookie_value: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not cookie_value or "." not in cookie_value:
+        return None
+
+    encoded, signature = cookie_value.rsplit(".", 1)
+    if not hmac.compare_digest(_sign_value(encoded), signature):
+        return None
+
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(encoded.encode("utf-8")).decode("utf-8"))
+    except Exception:
+        return None
+
+    if int(payload.get("exp", 0)) < int(time.time()):
+        return None
+
+    return payload
+
+
+def _is_authenticated(request: Request) -> bool:
+    return _read_session_cookie(request.cookies.get(SESSION_COOKIE_NAME)) is not None
+
+
+def _set_session_cookie(response: Response, username: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        _create_session_cookie(username),
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=SESSION_DURATION_SECONDS,
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+
+
+def _is_browser_request(request: Request) -> bool:
+    accept = request.headers.get("accept", "")
+    return "text/html" in accept
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    if path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES):
+        return await call_next(request)
+
+    if _is_authenticated(request):
+        return await call_next(request)
+
+    if _is_browser_request(request):
+        return RedirectResponse(url="/login", status_code=303)
+
+    return JSONResponse(status_code=401, content={"detail": "Authentication required"})
 
 
 def update_pipeline_status(pipeline_name: str, status: str, message: str, details: Optional[Dict[str, Any]] = None):
@@ -115,6 +214,33 @@ class PipelineScheduleRequest(BaseModel):
     schedule: Optional[Dict[str, str]] = None  # Custom schedule: minute, hour, day, month, day_of_week
 
 
+class PipelineGenerationRequest(BaseModel):
+    input_text: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class PipelineSaveRequest(BaseModel):
+    yaml_content: str
+    filename: str
+
+
+class PipelineGenerationResponse(BaseModel):
+    yaml_content: str
+    parsed_config: Dict[str, Any]
+    warnings: List[str]
+    detected_language: str
+
+
+class PipelineSaveResponse(BaseModel):
+    file_path: str
+    pipeline_name: str
+    message: str
+
+
 class PipelineResponse(BaseModel):
     pipeline_name: str
     status: str
@@ -137,21 +263,103 @@ class PipelineStatusResponse(BaseModel):
     updated_at: Optional[str] = None
 
 
+def _discover_pipeline_files() -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], Path, Optional[Path]]:
+    """Discover pipeline YAML files and return loaded/failed metadata."""
+    workspace_root = Path(__file__).parent.parent.parent
+    pipelines_dir = workspace_root / "pipelines"
+
+    search_dirs: List[Path] = []
+    if pipelines_dir.exists():
+        search_dirs.append(pipelines_dir)
+    search_dirs.append(workspace_root)
+
+    yaml_files_set = set()
+    for search_dir in search_dirs:
+        for file_path in search_dir.glob("*.yaml"):
+            if file_path.parent == workspace_root and (pipelines_dir / file_path.name).exists():
+                continue
+            yaml_files_set.add(file_path)
+
+    pipelines: List[Dict[str, Any]] = []
+    failed_pipelines: List[Dict[str, Any]] = []
+
+    for yaml_file in sorted(yaml_files_set):
+        try:
+            config = load_config(str(yaml_file))
+            pipelines.append({
+                "name": yaml_file.name,
+                "display_name": config.pipeline_name,
+                "description": getattr(config, 'description', 'No description'),
+                "file_path": str(yaml_file),
+                "task_count": len(config.tasks),
+                "status": "loaded",
+                "error": None
+            })
+        except Exception as e:
+            failed_pipelines.append({
+                "name": yaml_file.name,
+                "file_path": str(yaml_file),
+                "status": "error",
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
+
+    return pipelines, failed_pipelines, workspace_root, pipelines_dir if pipelines_dir.exists() else None
+
+
+@app.get("/login")
+async def login_page(request: Request):
+    """Serve the login page."""
+    if _is_authenticated(request):
+        return RedirectResponse(url="/", status_code=303)
+
+    api_file = Path(__file__).resolve()
+    login_file = api_file.parent.parent / "static" / "login.html"
+    if login_file.exists():
+        return FileResponse(str(login_file), media_type="text/html")
+    raise HTTPException(status_code=404, detail=f"Login page not found at {login_file}")
+
+
+@app.post("/login")
+async def login(request: LoginRequest):
+    """Create an authenticated session."""
+    if request.username != AUTH_USERNAME or request.password != AUTH_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    response = JSONResponse({"message": "Login successful"})
+    _set_session_cookie(response, request.username)
+    return response
+
+
+@app.post("/logout")
+async def logout():
+    """Clear the current session."""
+    response = JSONResponse({"message": "Logged out"})
+    _clear_session_cookie(response)
+    return response
+
+
 @app.get("/")
 async def root():
-    """Serve the main dashboard or API root."""
-    # Use resolve() to get absolute path
+    """Serve the landing page."""
     api_file = Path(__file__).resolve()
-    static_index = api_file.parent.parent / "static" / "index.html"
-    logger.info(f"Looking for dashboard at: {static_index}")
-    logger.info(f"File exists: {static_index.exists()}")
-    
-    if static_index.exists():
-        logger.info(f"Serving dashboard from: {static_index}")
-        return FileResponse(str(static_index), media_type="text/html")
+    landing_page = api_file.parent.parent / "static" / "landing.html"
+    logger.info(f"Looking for landing page at: {landing_page}")
+    logger.info(f"File exists: {landing_page.exists()}")
+
+    if landing_page.exists():
+        logger.info(f"Serving landing page from: {landing_page}")
+        return FileResponse(str(landing_page), media_type="text/html")
     else:
-        logger.warning(f"Dashboard file not found at: {static_index}")
-        return {"message": "Data Platform API", "version": "0.1.0", "dashboard": "/dashboard", "static_path": str(static_index)}
+        logger.warning(f"Landing page not found at: {landing_page}")
+        return {
+            "message": "Data Platform API",
+            "version": "0.1.0",
+            "landing": "/",
+            "dashboard": "/dashboard",
+            "generator": "/generator",
+            "static_path": str(landing_page)
+        }
 
 
 @app.get("/dashboard")
@@ -164,6 +372,18 @@ async def dashboard():
         return FileResponse(str(static_index), media_type="text/html")
     else:
         raise HTTPException(status_code=404, detail=f"Dashboard not found at {static_index}")
+
+
+@app.get("/generator")
+async def generator_page():
+    """Serve the pipeline generator page."""
+    api_file = Path(__file__).resolve()
+    generator_index = api_file.parent.parent / "static" / "generator.html"
+
+    if generator_index.exists():
+        return FileResponse(str(generator_index), media_type="text/html")
+    else:
+        raise HTTPException(status_code=404, detail=f"Generator page not found at {generator_index}")
 
 
 @app.get("/health")
@@ -188,6 +408,55 @@ async def get_info():
         "static_exists": (Path(__file__).parent.parent / "static").exists(),
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+
+@app.get("/pipeline-config")
+async def get_pipeline_config(config_path: str):
+    """Return raw and parsed pipeline configuration for preview."""
+    try:
+        config_file = Path(config_path)
+        if not config_file.exists():
+            raise HTTPException(status_code=404, detail=f"Config file not found: {config_path}")
+
+        raw_content = config_file.read_text(encoding="utf-8")
+        parsed_config = load_config(str(config_file))
+
+        return {
+            "config_path": str(config_file),
+            "raw_content": raw_content,
+            "parsed_config": parsed_config.model_dump(exclude_none=True),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to load pipeline config preview: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/generate-pipeline", response_model=PipelineGenerationResponse)
+async def generate_pipeline(request: PipelineGenerationRequest):
+    """Generate pipeline YAML from free-form text."""
+    try:
+        return PipelineGenerationResponse(**generate_pipeline_yaml_from_text(request.input_text))
+    except Exception as e:
+        logger.error(f"Failed to generate pipeline YAML: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/save-pipeline", response_model=PipelineSaveResponse)
+async def save_pipeline(request: PipelineSaveRequest):
+    """Save generated pipeline YAML into the pipelines directory."""
+    try:
+        file_path = save_generated_pipeline(request.yaml_content, request.filename)
+        config = load_config(file_path)
+        return PipelineSaveResponse(
+            file_path=file_path,
+            pipeline_name=config.pipeline_name,
+            message="Pipeline saved successfully"
+        )
+    except Exception as e:
+        logger.error(f"Failed to save generated pipeline: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/run", response_model=PipelineResponse)
@@ -226,64 +495,7 @@ async def run_pipeline(request: PipelineRunRequest, background_tasks: Background
 async def list_pipelines():
     """List available pipeline configuration files from pipelines folder and root."""
     try:
-        pipelines = []
-        failed_pipelines = []
-        
-        # Get the workspace root directory (go up from dataplatform/core to root)
-        workspace_root = Path(__file__).parent.parent.parent
-        logger.info(f"Scanning for pipelines in: {workspace_root}")
-        
-        # Look for YAML files in pipelines folder (preferred) and root directory
-        pipelines_dir = workspace_root / "pipelines"
-        search_dirs = []
-        
-        if pipelines_dir.exists():
-            search_dirs.append(pipelines_dir)
-            logger.info(f"Found pipelines folder: {pipelines_dir}")
-        else:
-            logger.warning(f"Pipelines folder not found at: {pipelines_dir}")
-        
-        # Also search root for backward compatibility
-        search_dirs.append(workspace_root)
-        
-        # Collect all YAML files from search directories
-        yaml_files_set = set()  # Use set to avoid duplicates
-        for search_dir in search_dirs:
-            yaml_files = list(search_dir.glob("*.yaml"))
-            for f in yaml_files:
-                # Skip if from root but also exists in pipelines folder
-                if f.parent == workspace_root and (pipelines_dir / f.name).exists():
-                    continue
-                yaml_files_set.add(f)
-        
-        yaml_files = list(yaml_files_set)
-        logger.info(f"Found {len(yaml_files)} YAML files: {[f.name for f in yaml_files]}")
-        
-        # Load and validate pipelines
-        for yaml_file in sorted(yaml_files):
-            try:
-                config = load_config(str(yaml_file))
-                pipelines.append({
-                    "name": yaml_file.name,
-                    "display_name": config.pipeline_name,
-                    "description": getattr(config, 'description', 'No description'),
-                    "file_path": str(yaml_file),
-                    "task_count": len(config.tasks),
-                    "status": "loaded",
-                    "error": None
-                })
-                logger.info(f"Loaded pipeline: {yaml_file.name}")
-            except Exception as e:
-                error_msg = str(e)
-                logger.warning(f"Failed to load config {yaml_file}: {error_msg}")
-                # Add to failed pipelines for display
-                failed_pipelines.append({
-                    "name": yaml_file.name,
-                    "file_path": str(yaml_file),
-                    "status": "error",
-                    "error": error_msg,
-                    "error_type": type(e).__name__
-                })
+        pipelines, failed_pipelines, workspace_root, pipelines_dir = _discover_pipeline_files()
 
         logger.info(f"Returning {len(pipelines)} pipelines, {len(failed_pipelines)} failed")
         return {
@@ -354,6 +566,93 @@ async def get_pipeline_history(pipeline_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/dashboard-summary")
+async def dashboard_summary():
+    """Return Airflow-style overview data for the dashboard."""
+    try:
+        pipelines, failed_pipelines, _, _ = _discover_pipeline_files()
+        scheduler = get_scheduler()
+        scheduled = scheduler.list_scheduled_pipelines()
+
+        pipeline_summaries: List[Dict[str, Any]] = []
+        recent_runs: List[Dict[str, Any]] = []
+        active_runs: List[Dict[str, Any]] = []
+
+        for pipeline in pipelines:
+            pipeline_name = pipeline["display_name"]
+            runs = pipeline_runs.get(pipeline_name, [])
+            latest_status = None
+            latest_run_count = len(runs)
+
+            if runs:
+                latest_run = runs[-1]
+                if latest_run.get("statuses"):
+                    latest_status = latest_run["statuses"][-1]
+
+                for run in runs:
+                    if run.get("statuses"):
+                        final_status = run["statuses"][-1]
+                        recent_runs.append({
+                            "pipeline_name": pipeline_name,
+                            "status": final_status.get("status"),
+                            "message": final_status.get("message"),
+                            "updated_at": final_status.get("updated_at"),
+                            "details": final_status.get("details", {}),
+                        })
+
+            schedule_info = scheduled.get(pipeline_name)
+            health = "idle"
+            if latest_status:
+                health = latest_status.get("status", "idle")
+
+            summary = {
+                **pipeline,
+                "last_status": latest_status.get("status") if latest_status else "never_run",
+                "last_message": latest_status.get("message") if latest_status else "No runs yet",
+                "last_updated_at": latest_status.get("updated_at") if latest_status else None,
+                "run_count": latest_run_count,
+                "is_scheduled": schedule_info is not None,
+                "next_run": schedule_info.get("next_run") if schedule_info else None,
+                "schedule": schedule_info.get("schedule") if schedule_info else None,
+                "health": health,
+            }
+            pipeline_summaries.append(summary)
+
+            if latest_status and latest_status.get("status") in {"started", "running"}:
+                active_runs.append(summary)
+
+        recent_runs.sort(key=lambda item: item.get("updated_at") or "", reverse=True)
+
+        return {
+            "stats": {
+                "total_pipelines": len(pipelines),
+                "failed_configs": len(failed_pipelines),
+                "scheduled_pipelines": len(scheduled),
+                "active_runs": len(active_runs),
+                "successful_pipelines": sum(1 for item in pipeline_summaries if item["last_status"] == "completed"),
+                "failed_pipelines": sum(1 for item in pipeline_summaries if item["last_status"] == "failed"),
+            },
+            "active_runs": active_runs,
+            "recent_runs": recent_runs[:12],
+            "pipeline_summaries": sorted(
+                pipeline_summaries,
+                key=lambda item: (
+                    0 if item["last_status"] in {"running", "started"} else
+                    1 if item["last_status"] == "failed" else
+                    2 if item["last_status"] == "completed" else
+                    3
+                ,
+                    item["display_name"].lower(),
+                )
+            ),
+            "failed_pipelines": failed_pipelines,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as e:
+        logger.error(f"Failed to build dashboard summary: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/run/sync", response_model=PipelineResponse)
 async def run_pipeline_sync(request: PipelineRunRequest):
     """Run a pipeline synchronously."""
@@ -367,7 +666,7 @@ async def run_pipeline_sync(request: PipelineRunRequest):
 
         # Execute pipeline
         executor = PipelineExecutor()
-        success = executor.execute_pipeline(
+        success, results, errors = executor.execute_pipeline(
             tasks={task.name: task for task in config.tasks},
             execution_order=execution_order,
             config={"file_path": config.file_path}

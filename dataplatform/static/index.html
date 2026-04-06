@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Platform - Pipeline Dashboard</title>
+    <title>DP Flow - Data Platform Operations</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -47,19 +47,29 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
+<body class="bg-slate-100 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Header -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <div class="flex items-center justify-between">
+        <div class="bg-white rounded-2xl shadow-md p-6 mb-8 border border-slate-200">
+            <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-800">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-medium">
+                        <i class="fas fa-wave-square"></i>
+                        DP Flow
+                    </div>
+                    <h1 class="text-3xl font-bold text-slate-800 mt-3">
                         <i class="fas fa-cogs text-blue-600 mr-2"></i>
-                        Data Platform Dashboard
+                        DP Flow
                     </h1>
-                    <p class="text-gray-600 mt-2">Manage and monitor your data pipelines</p>
+                    <p class="text-slate-600 mt-2">Run, monitor, and manage your data platform orchestration from one operations console.</p>
                 </div>
-                <div class="flex space-x-4 items-center">
+                <div class="flex flex-wrap gap-3 items-center">
+                    <a href="/generator" class="inline-flex items-center bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg">
+                        <i class="fas fa-wand-magic-sparkles mr-2"></i>Open Generator
+                    </a>
+                    <button id="logoutBtn" class="inline-flex items-center bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg">
+                        <i class="fas fa-arrow-right-from-bracket mr-2"></i>Logout
+                    </button>
                     <div id="connectionStatus" class="flex items-center px-4 py-2 rounded-lg bg-gray-100">
                         <i class="fas fa-circle text-gray-400 mr-2 animate-pulse text-sm"></i>
                         <span class="text-sm text-gray-600">Connecting...</span>
@@ -71,19 +81,88 @@
             </div>
         </div>
 
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+            <div class="xl:col-span-2 bg-gradient-to-r from-slate-900 via-slate-800 to-blue-900 rounded-2xl shadow-md p-6 text-white">
+                <div class="max-w-3xl">
+                    <p class="text-sm uppercase tracking-[0.2em] text-blue-200">Orchestration Console</p>
+                    <h2 class="text-3xl font-semibold mt-2">See the health of every data flow at a glance</h2>
+                    <p class="text-slate-200 mt-3">Track active runs, inspect recent activity, manage schedules, and work through broken or failing pipelines with an Airflow-style control surface.</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-md p-6 border border-slate-200">
+                <h2 class="text-lg font-semibold text-slate-800">Quick Actions</h2>
+                <div class="mt-4 space-y-3">
+                    <a href="/generator" class="flex items-start gap-3 p-4 rounded-xl bg-cyan-50 border border-cyan-200 hover:bg-cyan-100 transition">
+                        <i class="fas fa-file-pen text-cyan-700 mt-1"></i>
+                        <div>
+                            <p class="font-semibold text-slate-800">Create a pipeline</p>
+                            <p class="text-sm text-slate-600">Jump to Pipeline Generator to draft and save YAML.</p>
+                        </div>
+                    </a>
+                    <div class="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                        <i class="fas fa-chart-line text-slate-700 mt-1"></i>
+                        <div>
+                            <p class="font-semibold text-slate-800">Monitor execution</p>
+                            <p class="text-sm text-slate-600">Use the sections below to review runs, schedules, and DAG state.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 mb-8" id="overviewStats">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm xl:col-span-6 text-slate-500">
+                Loading orchestration overview...
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-5 gap-6 mb-8">
+            <div class="xl:col-span-2 bg-white rounded-2xl shadow-md p-6 border border-slate-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-slate-800">
+                        <i class="fas fa-bolt text-amber-500 mr-2"></i>
+                        Active Runs
+                    </h2>
+                    <span class="text-xs uppercase tracking-[0.2em] text-slate-400">Live</span>
+                </div>
+                <div id="activeRunsBoard" class="space-y-3">
+                    <div class="text-slate-500">No active runs yet.</div>
+                </div>
+            </div>
+
+            <div class="xl:col-span-3 bg-white rounded-2xl shadow-md p-6 border border-slate-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-slate-800">
+                        <i class="fas fa-clock-rotate-left text-blue-600 mr-2"></i>
+                        Recent Activity
+                    </h2>
+                    <span class="text-xs uppercase tracking-[0.2em] text-slate-400">Latest 12 runs</span>
+                </div>
+                <div id="recentRunsBoard" class="space-y-3">
+                    <div class="text-slate-500">Run activity will appear here.</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Pipeline List -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">
-                <i class="fas fa-list text-green-600 mr-2"></i>
-                Available Pipelines
-            </h2>
+        <div class="bg-white rounded-2xl shadow-md p-6 mb-8 border border-slate-200">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-2xl font-semibold text-gray-800">
+                        <i class="fas fa-list text-green-600 mr-2"></i>
+                        Pipeline Catalog
+                    </h2>
+                    <p class="text-sm text-slate-500 mt-1">Airflow-style DAG inventory with last run state, scheduling, and operator actions.</p>
+                </div>
+            </div>
             <div id="pipelinesList" class="grid gap-4">
                 <!-- Pipelines will be loaded here -->
             </div>
         </div>
 
         <!-- Pipeline Status -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div class="bg-white rounded-2xl shadow-md p-6 mb-8 border border-slate-200">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">
                 <i class="fas fa-chart-line text-purple-600 mr-2"></i>
                 Pipeline Status
@@ -94,7 +173,7 @@
         </div>
 
         <!-- Scheduled Pipelines -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div class="bg-white rounded-2xl shadow-md p-6 mb-8 border border-slate-200">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">
                 <i class="fas fa-clock text-indigo-600 mr-2"></i>
                 Scheduled Pipelines
@@ -105,7 +184,7 @@
         </div>
 
         <!-- DAG Visualization -->
-        <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="bg-white rounded-2xl shadow-md p-6 border border-slate-200">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">
                 <i class="fas fa-project-diagram text-orange-600 mr-2"></i>
                 DAG Visualization
@@ -132,8 +211,8 @@
                 </div>
             </div>
 
-            <div id="dagContainer" class="border-2 border-gray-200 rounded-lg p-4 min-h-96">
-                <div id="dagVisualization" class="w-full h-96 flex items-center justify-center text-gray-500">
+            <div id="dagContainer" class="border-2 border-gray-200 rounded-lg p-4 min-h-[36rem] bg-slate-50 overflow-auto">
+                <div id="dagVisualization" class="w-full min-h-[34rem] flex items-center justify-center text-gray-500">
                     <div class="text-center">
                         <i class="fas fa-project-diagram text-4xl mb-2"></i>
                         <p>Run a pipeline to see the DAG visualization</p>
@@ -146,7 +225,7 @@
     <!-- Modal for Pipeline Details -->
     <div id="pipelineModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
         <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div class="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-screen overflow-y-auto">
                 <div class="p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-xl font-semibold" id="modalTitle">Pipeline Details</h3>
@@ -268,16 +347,25 @@
         let statusInterval = null;
         let retryCount = 0;
         const maxRetries = 3;
+        let dashboardSummary = {
+            stats: {},
+            active_runs: [],
+            recent_runs: [],
+            pipeline_summaries: [],
+            failed_pipelines: []
+        };
 
         // Initialize the dashboard
         document.addEventListener('DOMContentLoaded', function() {
             checkConnection();
+            loadDashboardSummary();
             loadPipelines();
             loadScheduledPipelines();
             startStatusUpdates();
 
             // Event listeners
             document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
             document.getElementById('closeModal').addEventListener('click', closeModal);
             document.getElementById('closeScheduleModal').addEventListener('click', closeScheduleModal);
             document.getElementById('cancelScheduleBtn').addEventListener('click', closeScheduleModal);
@@ -319,6 +407,207 @@
                     <i class="fas fa-circle text-red-500 mr-2 text-sm animate-pulse"></i>
                     <span class="text-sm text-red-600">${message}</span>
                 `;
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/logout', { method: 'POST' });
+            } finally {
+                window.location.href = '/login';
+            }
+        }
+
+        function getStatusMeta(status) {
+            switch (status) {
+                case 'started':
+                case 'running':
+                    return {
+                        color: 'blue',
+                        icon: 'fas fa-spinner fa-spin',
+                        label: 'Running',
+                        pill: 'bg-blue-100 text-blue-800',
+                        panel: 'bg-blue-50 border-blue-200'
+                    };
+                case 'completed':
+                    return {
+                        color: 'green',
+                        icon: 'fas fa-check-circle',
+                        label: 'Healthy',
+                        pill: 'bg-emerald-100 text-emerald-800',
+                        panel: 'bg-emerald-50 border-emerald-200'
+                    };
+                case 'failed':
+                    return {
+                        color: 'red',
+                        icon: 'fas fa-times-circle',
+                        label: 'Failed',
+                        pill: 'bg-red-100 text-red-800',
+                        panel: 'bg-red-50 border-red-200'
+                    };
+                case 'never_run':
+                    return {
+                        color: 'slate',
+                        icon: 'fas fa-circle-notch',
+                        label: 'Never run',
+                        pill: 'bg-slate-100 text-slate-700',
+                        panel: 'bg-slate-50 border-slate-200'
+                    };
+                default:
+                    return {
+                        color: 'amber',
+                        icon: 'fas fa-pause-circle',
+                        label: 'Idle',
+                        pill: 'bg-amber-100 text-amber-800',
+                        panel: 'bg-amber-50 border-amber-200'
+                    };
+            }
+        }
+
+        function formatRelativeTime(value) {
+            if (!value) {
+                return 'No timestamp';
+            }
+
+            const target = new Date(value);
+            const diffMs = target.getTime() - Date.now();
+            const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+            const minutes = Math.round(diffMs / 60000);
+
+            if (Math.abs(minutes) < 60) {
+                return rtf.format(minutes, 'minute');
+            }
+
+            const hours = Math.round(minutes / 60);
+            if (Math.abs(hours) < 24) {
+                return rtf.format(hours, 'hour');
+            }
+
+            const days = Math.round(hours / 24);
+            return rtf.format(days, 'day');
+        }
+
+        function formatSchedule(schedule) {
+            if (!schedule) {
+                return 'Manual only';
+            }
+            return `m:${schedule.minute || '*'} h:${schedule.hour || '*'} d:${schedule.day || '*'} mon:${schedule.month || '*'} dow:${schedule.day_of_week || '*'}`;
+        }
+
+        function getPipelineSummary(pipelineName) {
+            return dashboardSummary.pipeline_summaries.find(item => item.display_name === pipelineName) || null;
+        }
+
+        function renderOverviewStats() {
+            const container = document.getElementById('overviewStats');
+            const stats = dashboardSummary.stats || {};
+            const cards = [
+                { label: 'Total DAGs', value: stats.total_pipelines || 0, icon: 'fa-diagram-project', tone: 'text-blue-700 bg-blue-50 border-blue-200' },
+                { label: 'Active Runs', value: stats.active_runs || 0, icon: 'fa-bolt', tone: 'text-amber-700 bg-amber-50 border-amber-200' },
+                { label: 'Scheduled', value: stats.scheduled_pipelines || 0, icon: 'fa-clock', tone: 'text-indigo-700 bg-indigo-50 border-indigo-200' },
+                { label: 'Healthy', value: stats.successful_pipelines || 0, icon: 'fa-circle-check', tone: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+                { label: 'Failures', value: stats.failed_pipelines || 0, icon: 'fa-triangle-exclamation', tone: 'text-red-700 bg-red-50 border-red-200' },
+                { label: 'Broken Configs', value: stats.failed_configs || 0, icon: 'fa-file-circle-xmark', tone: 'text-slate-700 bg-slate-100 border-slate-200' }
+            ];
+
+            container.innerHTML = cards.map(card => `
+                <div class="bg-white rounded-2xl border ${card.tone} p-5 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium opacity-80">${card.label}</p>
+                            <p class="text-3xl font-bold mt-2">${card.value}</p>
+                        </div>
+                        <i class="fas ${card.icon} text-2xl opacity-80"></i>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderActiveRuns() {
+            const container = document.getElementById('activeRunsBoard');
+            const activeRuns = dashboardSummary.active_runs || [];
+
+            if (!activeRuns.length) {
+                container.innerHTML = `
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-slate-500">
+                        No pipelines are actively running right now.
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = activeRuns.map(run => `
+                <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="font-semibold text-slate-800">${run.display_name}</p>
+                            <p class="text-sm text-slate-600 mt-1">${run.last_message || 'Pipeline is in progress'}</p>
+                        </div>
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                            <i class="fas fa-spinner fa-spin mr-1"></i>${getStatusMeta(run.last_status).label}
+                        </span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                        <span class="px-2 py-1 rounded-full bg-white border border-blue-200">${run.task_count} tasks</span>
+                        <span class="px-2 py-1 rounded-full bg-white border border-blue-200">${run.run_count} runs</span>
+                        <span class="px-2 py-1 rounded-full bg-white border border-blue-200">${formatRelativeTime(run.last_updated_at)}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderRecentRuns() {
+            const container = document.getElementById('recentRunsBoard');
+            const recentRuns = dashboardSummary.recent_runs || [];
+
+            if (!recentRuns.length) {
+                container.innerHTML = `
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-slate-500">
+                        No run history yet.
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = recentRuns.map(run => {
+                const meta = getStatusMeta(run.status);
+                return `
+                    <div class="rounded-xl border ${meta.panel} p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="font-semibold text-slate-800">${run.pipeline_name}</p>
+                                <p class="text-sm text-slate-600 mt-1">${run.message || 'Run update recorded'}</p>
+                            </div>
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${meta.pill}">
+                                <i class="${meta.icon} mr-1"></i>${meta.label}
+                            </span>
+                        </div>
+                        <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                            <span>${new Date(run.updated_at).toLocaleString()}</span>
+                            <span class="text-slate-300">•</span>
+                            <span>${formatRelativeTime(run.updated_at)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadDashboardSummary() {
+            try {
+                const response = await fetch('/dashboard-summary');
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to load dashboard summary');
+                }
+
+                dashboardSummary = data;
+                renderOverviewStats();
+                renderActiveRuns();
+                renderRecentRuns();
+            } catch (error) {
+                console.error('Error loading dashboard summary:', error);
+                showError(`Failed to load dashboard summary: ${error.message}`);
             }
         }
 
@@ -395,6 +684,7 @@
 
                 if (response.ok) {
                     showSuccess(`Pipeline ${pipelineName} unscheduled successfully`);
+                    loadDashboardSummary();
                     loadScheduledPipelines();
                 } else {
                     showError(result.detail || 'Failed to unschedule pipeline');
@@ -407,27 +697,58 @@
 
         // Create pipeline card
         function createPipelineCard(pipeline) {
+            const summary = getPipelineSummary(pipeline.display_name);
+            const status = summary ? summary.last_status : pipeline.status;
+            const meta = getStatusMeta(status);
+            const statusLabel = summary ? meta.label : (pipeline.status === 'error' ? 'Error' : 'Ready');
             const card = document.createElement('div');
-            card.className = 'bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
+            card.className = 'bg-slate-50 border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-shadow';
 
             card.innerHTML = `
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
                     <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
-                            <h3 class="text-lg font-semibold text-gray-800">${pipeline.display_name}</h3>
-                            <span class="inline-block px-2 py-1 text-xs font-semibold rounded-full ${
-                                pipeline.status === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                            }">
-                                ${pipeline.status === 'error' ? '✗ Error' : '✓ Ready'}
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <h3 class="text-lg font-semibold text-slate-800">${pipeline.display_name}</h3>
+                            <span class="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full ${meta.pill}">
+                                <i class="${meta.icon} mr-1"></i>${statusLabel}
                             </span>
+                            ${summary && summary.is_scheduled ? `
+                                <span class="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800">
+                                    <i class="fas fa-clock mr-1"></i>Scheduled
+                                </span>
+                            ` : ''}
                         </div>
-                        <p class="text-gray-600 text-sm">${pipeline.description}</p>
-                        <p class="text-gray-500 text-xs mt-1">${pipeline.name} (${pipeline.task_count} tasks)</p>
+                        <p class="text-slate-600 text-sm">${pipeline.description}</p>
+                        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
+                            <div class="rounded-xl bg-white border border-slate-200 px-3 py-2">
+                                <p class="text-xs uppercase tracking-wide text-slate-400">DAG File</p>
+                                <p class="text-slate-700 mt-1 truncate">${pipeline.name}</p>
+                            </div>
+                            <div class="rounded-xl bg-white border border-slate-200 px-3 py-2">
+                                <p class="text-xs uppercase tracking-wide text-slate-400">Tasks</p>
+                                <p class="text-slate-700 mt-1">${pipeline.task_count}</p>
+                            </div>
+                            <div class="rounded-xl bg-white border border-slate-200 px-3 py-2">
+                                <p class="text-xs uppercase tracking-wide text-slate-400">Last Run</p>
+                                <p class="text-slate-700 mt-1">${summary && summary.last_updated_at ? formatRelativeTime(summary.last_updated_at) : 'Never run'}</p>
+                            </div>
+                            <div class="rounded-xl bg-white border border-slate-200 px-3 py-2">
+                                <p class="text-xs uppercase tracking-wide text-slate-400">Schedule</p>
+                                <p class="text-slate-700 mt-1 truncate">${summary && summary.is_scheduled ? formatSchedule(summary.schedule) : 'Manual only'}</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-3">
+                            ${summary ? summary.last_message : 'Pipeline configuration is ready for orchestration.'}
+                        </p>
                     </div>
-                    <div class="flex space-x-2">
+                    <div class="flex flex-wrap gap-2 xl:justify-end">
                         <button class="run-btn bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
                                 data-config="${pipeline.file_path}">
                             <i class="fas fa-play mr-1"></i>Run
+                        </button>
+                        <button class="preview-config-btn bg-slate-700 hover:bg-slate-800 text-white px-3 py-1 rounded text-sm"
+                                data-config="${pipeline.file_path}">
+                            <i class="fas fa-eye mr-1"></i>Preview Config
                         </button>
                         <button class="schedule-btn bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm"
                                 data-config="${pipeline.file_path}">
@@ -443,16 +764,17 @@
                         </button>
                     </div>
                 </div>
-                <div class="history-section hidden mt-4 border-t border-gray-300 pt-4">
-                    <h4 class="text-sm font-medium text-gray-700 mb-2">Recent Runs</h4>
+                <div class="history-section hidden mt-4 border-t border-slate-300 pt-4">
+                    <h4 class="text-sm font-medium text-slate-700 mb-2">Recent Runs</h4>
                     <div class="history-content space-y-2">
-                        <div class="text-sm text-gray-500">Loading...</div>
+                        <div class="text-sm text-slate-500">Loading...</div>
                     </div>
                 </div>
             `;
 
             // Add event listeners
             card.querySelector('.run-btn').addEventListener('click', () => runPipeline(pipeline.file_path));
+            card.querySelector('.preview-config-btn').addEventListener('click', () => previewPipelineConfig(pipeline.file_path));
             card.querySelector('.schedule-btn').addEventListener('click', () => schedulePipeline(pipeline.file_path));
             card.querySelector('.view-dag-btn').addEventListener('click', () => viewDAG(pipeline.file_path));
             card.querySelector('.history-btn').addEventListener('click', () => toggleHistory(card, pipeline.display_name));
@@ -539,18 +861,21 @@
                     container.innerHTML = '';
 
                     const hasValidPipelines = data.pipelines && data.pipelines.length > 0;
-                    const hasFailedPipelines = data.failed_pipelines && data.failed_pipelines.length > 0;
+                    const failedConfigs = (dashboardSummary.failed_pipelines && dashboardSummary.failed_pipelines.length)
+                        ? dashboardSummary.failed_pipelines
+                        : (data.failed_pipelines || []);
+                    const hasFailedPipelines = failedConfigs.length > 0;
 
                     // Show failed pipelines first with error highlighting
                     if (hasFailedPipelines) {
                         const failedLabel = document.createElement('div');
-                        failedLabel.className = 'col-span-full bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4';
+                        failedLabel.className = 'col-span-full bg-red-50 border-2 border-red-300 rounded-2xl p-4 mb-4';
                         failedLabel.innerHTML = `
                             <h3 class="text-lg font-semibold text-red-800 mb-2">
-                                <i class="fas fa-exclamation-triangle mr-2"></i>Failed to Load Pipelines (${data.failed_pipelines.length})
+                                <i class="fas fa-exclamation-triangle mr-2"></i>Broken DAGs / Failed Configs (${failedConfigs.length})
                             </h3>
                             <div class="space-y-2">
-                                ${data.failed_pipelines.map(pipeline => `
+                                ${failedConfigs.map(pipeline => `
                                     <div class="bg-red-100 border border-red-400 rounded p-3">
                                         <p class="font-semibold text-red-900">${pipeline.name}</p>
                                         <p class="text-sm text-red-700 mt-1"><strong>Error:</strong> ${pipeline.error_type}</p>
@@ -604,6 +929,7 @@
                 if (response.ok) {
                     showSuccess(`Pipeline ${result.pipeline_name} started successfully`);
                     currentPipeline = result.pipeline_name;
+                    loadDashboardSummary();
                     loadPipelineStatus();
                     loadCurrentPipelineDAG(); // Load initial DAG
                     // Refresh pipelines to update any open history sections
@@ -676,6 +1002,7 @@
                 if (response.ok) {
                     showSuccess(`Pipeline scheduled successfully (${schedule.hour}:${schedule.minute})`);
                     closeScheduleModal();
+                    loadDashboardSummary();
                     loadScheduledPipelines();  // Refresh scheduled list
                 } else {
                     showError(result.detail || 'Failed to schedule pipeline');
@@ -683,6 +1010,50 @@
             } catch (error) {
                 console.error('Error scheduling pipeline:', error);
                 showError('Failed to schedule pipeline');
+            }
+        }
+
+        async function previewPipelineConfig(configPath) {
+            try {
+                const response = await fetch(`/pipeline-config?config_path=${encodeURIComponent(configPath)}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to load pipeline config');
+                }
+
+                const parsed = data.parsed_config || {};
+                const taskCount = parsed.tasks ? parsed.tasks.length : 0;
+                const scheduleText = parsed.schedule ? formatSchedule(parsed.schedule) : 'Manual only';
+
+                showModal(
+                    `Config Preview: ${parsed.pipeline_name || data.config_path}`,
+                    `
+                        <div class="space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <p class="text-xs uppercase tracking-wide text-slate-400">Pipeline</p>
+                                    <p class="mt-2 font-semibold text-slate-800">${parsed.pipeline_name || 'Unknown'}</p>
+                                </div>
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <p class="text-xs uppercase tracking-wide text-slate-400">Tasks</p>
+                                    <p class="mt-2 font-semibold text-slate-800">${taskCount}</p>
+                                </div>
+                                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <p class="text-xs uppercase tracking-wide text-slate-400">Schedule</p>
+                                    <p class="mt-2 font-semibold text-slate-800 break-words">${scheduleText}</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-slate-800 mb-2">Source YAML</h4>
+                                <pre class="rounded-2xl bg-slate-950 text-slate-100 p-5 overflow-x-auto text-sm leading-6"><code>${escapeHtml(data.raw_content)}</code></pre>
+                            </div>
+                        </div>
+                    `
+                );
+            } catch (error) {
+                console.error('Error loading pipeline config preview:', error);
+                showError(error.message || 'Failed to load pipeline config');
             }
         }
 
@@ -709,7 +1080,7 @@
             if (!currentPipeline) {
                 document.getElementById('dagTitle').textContent = '(No pipeline running)';
                 document.getElementById('dagVisualization').innerHTML = `
-                    <div class="w-full h-96 flex items-center justify-center text-gray-500">
+                    <div class="w-full min-h-[34rem] flex items-center justify-center text-gray-500">
                         <div class="text-center">
                             <i class="fas fa-project-diagram text-4xl mb-2"></i>
                             <p>Run a pipeline to see the DAG visualization</p>
@@ -765,6 +1136,7 @@
 
                 if (response.ok) {
                     updateStatusDisplay(status);
+                    loadDashboardSummary();
                     // Also update DAG if pipeline is running
                     if (status.status === 'running' || status.status === 'started') {
                         loadCurrentPipelineDAG();
@@ -861,6 +1233,15 @@
             `;
         }
 
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         // Render DAG visualization
         function renderDAG(dagData, showInMain = false) {
             const containerId = showInMain ? 'dagVisualization' : 'dagVisualizationModal';
@@ -869,21 +1250,31 @@
             if (!container) {
                 // Create modal container if it doesn't exist
                 const modalContent = document.getElementById('modalContent');
-                modalContent.innerHTML += '<div id="dagVisualizationModal" class="w-full h-96 mt-4"></div>';
+                modalContent.innerHTML += '<div id="dagVisualizationModal" class="w-full min-h-[42rem] mt-6 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"></div>';
                 container = document.getElementById('dagVisualizationModal');
             }
 
             container.innerHTML = '';
 
-            // Simple D3.js DAG visualization
+            const nodeCount = Math.max(dagData.nodes.length, 1);
+            const columns = Math.max(1, Math.ceil(Math.sqrt(nodeCount)));
+            const nodeWidth = 180;
+            const nodeHeight = 64;
+            const gapX = 110;
+            const gapY = 90;
+            const paddingX = 90;
+            const paddingY = 70;
+            const rows = Math.ceil(nodeCount / columns);
+            const width = Math.max(1000, paddingX * 2 + columns * nodeWidth + Math.max(columns - 1, 0) * gapX);
+            const height = Math.max(620, paddingY * 2 + rows * nodeHeight + Math.max(rows - 1, 0) * gapY);
+
+            container.style.minHeight = showInMain ? '34rem' : '42rem';
+
             const svg = d3.select('#' + containerId)
                 .append('svg')
-                .attr('width', '100%')
-                .attr('height', '100%')
-                .attr('viewBox', '0 0 800 400');
-
-            const width = 800;
-            const height = 400;
+                .attr('width', width)
+                .attr('height', height)
+                .attr('viewBox', `0 0 ${width} ${height}`);
 
             // Create nodes with status
             const nodes = dagData.nodes.map((name, i) => {
@@ -909,8 +1300,8 @@
                     id: name,
                     name: name,
                     status: status,
-                    x: (i % 3) * 250 + 100,
-                    y: Math.floor(i / 3) * 100 + 50
+                    x: paddingX + (i % columns) * (nodeWidth + gapX),
+                    y: paddingY + Math.floor(i / columns) * (nodeHeight + gapY)
                 };
             });
 
@@ -939,25 +1330,28 @@
                 .enter()
                 .append('g')
                 .attr('class', 'node')
-                .attr('transform', d => `translate(${d.x - 45}, ${d.y - 17})`);
+                .attr('transform', d => `translate(${d.x}, ${d.y})`);
+
+            nodeGroups.append('title')
+                .text(d => `${d.name} (${d.status})`);
 
             // Add white background rectangle for text readability
             nodeGroups.append('rect')
-                .attr('x', -2)
-                .attr('y', 18)
-                .attr('width', 94)
-                .attr('height', 18)
+                .attr('x', 0)
+                .attr('y', nodeHeight + 10)
+                .attr('width', nodeWidth)
+                .attr('height', 28)
                 .attr('fill', 'white')
                 .attr('fill-opacity', 0.95)
-                .attr('rx', 3)
+                .attr('rx', 8)
                 .attr('stroke', '#E5E7EB')
                 .attr('stroke-width', 1);
 
             // Main node rectangle
             nodeGroups.append('rect')
-                .attr('width', 90)
-                .attr('height', 35)
-                .attr('rx', 5)
+                .attr('width', nodeWidth)
+                .attr('height', nodeHeight)
+                .attr('rx', 12)
                 .attr('class', d => {
                     switch(d.status) {
                         case 'success': return 'task-success';
@@ -970,22 +1364,22 @@
 
             // Task name text
             nodeGroups.append('text')
-                .attr('x', 45)
-                .attr('y', 25)
+                .attr('x', nodeWidth / 2)
+                .attr('y', 34)
                 .attr('text-anchor', 'middle')
                 .attr('fill', 'white')
-                .attr('font-size', '11px')
+                .attr('font-size', '13px')
                 .attr('font-weight', 'bold')
                 .attr('font-family', 'Arial, sans-serif')
-                .text(d => d.name.length > 12 ? d.name.substring(0, 12) + '...' : d.name);
+                .text(d => d.name.length > 24 ? d.name.substring(0, 24) + '...' : d.name);
 
             // Status text below the node
             nodeGroups.append('text')
-                .attr('x', 45)
-                .attr('y', 42)
+                .attr('x', nodeWidth / 2)
+                .attr('y', nodeHeight + 29)
                 .attr('text-anchor', 'middle')
                 .attr('fill', '#374151')
-                .attr('font-size', '9px')
+                .attr('font-size', '11px')
                 .attr('font-weight', '600')
                 .attr('font-family', 'Arial, sans-serif')
                 .text(d => {
@@ -999,9 +1393,9 @@
 
             // Status indicator circle
             nodeGroups.append('circle')
-                .attr('cx', 80)
-                .attr('cy', 8)
-                .attr('r', 5)
+                .attr('cx', nodeWidth - 14)
+                .attr('cy', 14)
+                .attr('r', 7)
                 .attr('fill', d => {
                     switch(d.status) {
                         case 'success': return '#10B981';
@@ -1052,6 +1446,8 @@
 
         // Refresh all data
         function refreshAll() {
+            checkConnection();
+            loadDashboardSummary();
             loadPipelines();
             loadScheduledPipelines();
             loadPipelineStatus();
@@ -1082,7 +1478,7 @@
             const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
             
             notification.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 min-w-80 animate-fadeIn`;
-            notification.innerHTML = `
+            notification.innerHTML = `a
                 <i class="fas ${icon}"></i>
                 <span>${message}</span>
                 <button class="ml-2 text-white-200 hover:text-white">
