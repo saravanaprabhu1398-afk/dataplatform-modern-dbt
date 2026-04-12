@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management — Data Platform Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-50">
+
+<!-- ─────────────────────────────── SIDEBAR ─────────────────────────────── -->
+<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
+    <div class="px-4 py-5 border-b border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+                <i class="fas fa-layer-group text-white text-xs"></i>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
+                <p class="text-slate-400 text-[11px]">Suite</p>
+            </div>
+        </div>
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
+        </a>
+        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
+        </a>
+        <a href="/generator" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wand-magic-sparkles w-4 text-center shrink-0"></i><span>Generator</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p></div>
+        <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
+        </a>
+        <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p></div>
+        <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p></div>
+        <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
+        <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
+            <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
+        </a>
+    </nav>
+    <div class="px-4 py-4 border-t border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                <i class="fas fa-user text-indigo-300 text-xs"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
+                <p class="text-slate-500 text-xs">Data Platform</p>
+            </div>
+            <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
+                <i class="fas fa-arrow-right-from-bracket text-sm"></i>
+            </button>
+        </div>
+    </div>
+</aside>
+
+<!-- ─────────────────────────────── MAIN LAYOUT ─────────────────────────── -->
+<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between shadow-sm">
+        <nav class="flex items-center gap-1.5 text-sm">
+            <a href="/" class="text-slate-400 hover:text-slate-600 transition-colors">Home</a>
+            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+            <span class="text-slate-400">Admin</span>
+            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+            <span class="text-slate-700 font-semibold">User Management</span>
+        </nav>
+        <button id="openCreateModal" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+            <i class="fas fa-plus text-xs"></i>New User
+        </button>
+    </header>
+
+    <!-- Page Content -->
+    <main class="p-6 space-y-6 flex-1">
+
+        <!-- Info Banner -->
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <i class="fas fa-triangle-exclamation text-amber-500 mt-0.5 shrink-0"></i>
+            <div class="text-sm">
+                <p class="font-semibold text-amber-800">Environment admin not listed</p>
+                <p class="text-amber-700 mt-0.5">The account configured via <code class="bg-amber-100 px-1 rounded">DATAPLATFORM_USERNAME</code> / <code class="bg-amber-100 px-1 rounded">DATAPLATFORM_PASSWORD</code> always has admin access and is not managed through this interface.</p>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Total Users Card -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                    <i class="fas fa-users text-indigo-500"></i>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Users</p>
+                    <p class="text-2xl font-bold text-slate-800 mt-0.5" id="statTotal">—</p>
+                </div>
+            </div>
+            <!-- Role Breakdown Card -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Role Breakdown</p>
+                <div class="flex items-center gap-2 flex-wrap" id="statRoles">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+                        admin <span id="statAdminCount" class="font-bold">0</span>
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        editor <span id="statEditorCount" class="font-bold">0</span>
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                        viewer <span id="statViewerCount" class="font-bold">0</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <table class="w-full">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Username</th>
+                        <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Role</th>
+                        <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Team</th>
+                        <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Created</th>
+                        <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody" class="divide-y divide-slate-100">
+                    <!-- Skeleton rows shown on load -->
+                    <tr id="skeletonRow">
+                        <td colspan="5" class="px-5 py-4">
+                            <div class="space-y-3">
+                                <div class="h-4 bg-slate-200 rounded animate-pulse w-3/4"></div>
+                                <div class="h-4 bg-slate-200 rounded animate-pulse w-1/2"></div>
+                                <div class="h-4 bg-slate-200 rounded animate-pulse w-2/3"></div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+</div>
+
+<!-- ─────────────────────────────── CREATE USER MODAL ───────────────────── -->
+<div id="createModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <i class="fas fa-user-plus text-indigo-500 text-sm"></i>
+                </div>
+                <h2 class="text-base font-bold text-slate-800">Create New User</h2>
+            </div>
+            <button id="closeCreateModal" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="px-6 py-5 space-y-4">
+            <!-- Error box -->
+            <div id="createError" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-start gap-2.5 text-sm text-red-700">
+                <i class="fas fa-circle-exclamation mt-0.5 shrink-0 text-red-500"></i>
+                <span id="createErrorMsg">An error occurred.</span>
+            </div>
+            <!-- Username -->
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1.5" for="createUsername">Username</label>
+                <input
+                    id="createUsername"
+                    type="text"
+                    required
+                    autocomplete="off"
+                    placeholder="e.g. alice"
+                    class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder-slate-400 text-slate-800"
+                />
+            </div>
+            <!-- Password -->
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1.5" for="createPassword">Password</label>
+                <div class="relative">
+                    <input
+                        id="createPassword"
+                        type="password"
+                        required
+                        autocomplete="new-password"
+                        placeholder="Min. 6 characters"
+                        class="w-full px-3.5 py-2.5 pr-10 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder-slate-400 text-slate-800"
+                    />
+                    <button
+                        type="button"
+                        id="togglePassword"
+                        class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 transition-colors"
+                        tabindex="-1"
+                        aria-label="Toggle password visibility"
+                    >
+                        <i class="fas fa-eye" id="togglePasswordIcon"></i>
+                    </button>
+                </div>
+                <p class="mt-1 text-xs text-slate-400">Must be at least 6 characters.</p>
+            </div>
+            <!-- Role -->
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1.5" for="createRole">Role</label>
+                <select
+                    id="createRole"
+                    class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition bg-white text-slate-800"
+                >
+                    <option value="viewer">viewer — Read only</option>
+                    <option value="editor">editor — Run &amp; schedule pipelines</option>
+                    <option value="admin">admin — Full access including user management</option>
+                </select>
+            </div>
+            <!-- Team (optional) -->
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1.5" for="createTeam">Team <span class="text-slate-400 font-normal">(optional)</span></label>
+                <input
+                    id="createTeam"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="e.g. data-engineering"
+                    class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder-slate-400 text-slate-800"
+                />
+            </div>
+        </div>
+        <!-- Footer -->
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl">
+            <button id="cancelCreateModal" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
+                Cancel
+            </button>
+            <button id="submitCreate" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+                <i class="fas fa-plus text-xs" id="submitCreateIcon"></i>
+                <span id="submitCreateLabel">Create User</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ─────────────────────────────── CHANGE ROLE MODAL ───────────────────── -->
+<div id="roleModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <i class="fas fa-user-gear text-indigo-500 text-sm"></i>
+                </div>
+                <h2 class="text-base font-bold text-slate-800">Change Role — <span id="roleModalUsername" class="text-indigo-600"></span></h2>
+            </div>
+            <button id="closeRoleModal" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="px-6 py-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1.5" for="roleSelect">New Role</label>
+            <select
+                id="roleSelect"
+                class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition bg-white text-slate-800"
+            >
+                <option value="viewer">viewer — Read only</option>
+                <option value="editor">editor — Run &amp; schedule pipelines</option>
+                <option value="admin">admin — Full access including user management</option>
+            </select>
+        </div>
+        <!-- Footer -->
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl">
+            <button id="cancelRoleModal" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
+                Cancel
+            </button>
+            <button id="submitChangeRole" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+                <i class="fas fa-check text-xs" id="submitRoleIcon"></i>
+                <span id="submitRoleLabel">Save Role</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ─────────────────────────────── DELETE CONFIRM MODAL ────────────────── -->
+<div id="deleteModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
+                    <i class="fas fa-trash text-red-500 text-sm"></i>
+                </div>
+                <h2 class="text-base font-bold text-slate-800">Delete User</h2>
+            </div>
+            <button id="closeDeleteModal" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="px-6 py-5">
+            <div class="flex gap-3 items-start mb-4">
+                <div class="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fas fa-triangle-exclamation text-red-500 text-sm"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-700">
+                        Are you sure you want to delete <strong class="text-slate-900" id="deleteModalUsername"></strong>?
+                        This cannot be undone.
+                    </p>
+                    <div class="mt-3">
+                        <span id="deleteModalRoleBadge" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer -->
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl">
+            <button id="cancelDeleteModal" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
+                Cancel
+            </button>
+            <button id="submitDelete" class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+                <i class="fas fa-trash text-xs" id="submitDeleteIcon"></i>
+                <span id="submitDeleteLabel">Delete</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ─────────────────────────────── TOAST CONTAINER ─────────────────────── -->
+<div id="toastContainer" class="fixed bottom-5 right-5 z-[100] space-y-2 pointer-events-none"></div>
+
+<!-- ─────────────────────────────── JAVASCRIPT ──────────────────────────── -->
+<script>
+// ─── State ────────────────────────────────────────────────────────────────
+let _users = [];
+let _currentRoleTarget = null;   // { username, currentRole }
+let _deleteTarget = null;        // { username }
+
+// ─── Toast System ─────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+    const container = document.getElementById('toastContainer');
+
+    const colours = {
+        success: 'bg-emerald-600',
+        error:   'bg-red-600',
+        info:    'bg-slate-700',
+        warning: 'bg-amber-500',
+    };
+    const icons = {
+        success: 'fa-circle-check',
+        error:   'fa-circle-xmark',
+        info:    'fa-circle-info',
+        warning: 'fa-triangle-exclamation',
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-white text-sm font-medium
+        ${colours[type] || colours.info} translate-y-2 opacity-0 transition-all duration-300`;
+    toast.innerHTML = `<i class="fas ${icons[type] || icons.info} shrink-0"></i><span>${msg}</span>`;
+    container.appendChild(toast);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-y-2', 'opacity-0');
+        });
+    });
+
+    // Auto-dismiss after 3.5s
+    setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+    }, 3500);
+}
+
+// ─── Utility: Relative Time ───────────────────────────────────────────────
+function relTime(iso) {
+    if (!iso) return '—';
+    const diff = Date.now() - new Date(iso).getTime();
+    const secs  = Math.floor(diff / 1000);
+    const mins  = Math.floor(secs / 60);
+    const hours = Math.floor(mins / 60);
+    const days  = Math.floor(hours / 24);
+    const weeks = Math.floor(days / 7);
+    const months = Math.floor(days / 30);
+    const years  = Math.floor(days / 365);
+    if (secs  <  60) return 'just now';
+    if (mins  <  60) return `${mins} minute${mins !== 1 ? 's' : ''} ago`;
+    if (hours <  24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    if (days  <   7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    if (weeks <   5) return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+    if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
+    return `${years} year${years !== 1 ? 's' : ''} ago`;
+}
+
+// ─── Utility: Format Date for title attribute ─────────────────────────────
+function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+        return new Date(iso).toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    } catch (_) { return iso; }
+}
+
+// ─── Role Icon ────────────────────────────────────────────────────────────
+function roleIcon(role) {
+    return { admin: 'fa-user-shield', editor: 'fa-user-pen', viewer: 'fa-user' }[role] || 'fa-user';
+}
+
+// ─── Role Badge Class ─────────────────────────────────────────────────────
+function roleBadge(role) {
+    return {
+        admin:  'bg-red-100 text-red-700 border border-red-200',
+        editor: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+        viewer: 'bg-slate-100 text-slate-600 border border-slate-200',
+    }[role] || 'bg-slate-100 text-slate-600 border border-slate-200';
+}
+
+// ─── Render Stats ─────────────────────────────────────────────────────────
+function renderStats(users) {
+    document.getElementById('statTotal').textContent = users.length;
+
+    const counts = users.reduce((acc, u) => {
+        acc[u.role] = (acc[u.role] || 0) + 1;
+        return acc;
+    }, {});
+
+    document.getElementById('statAdminCount').textContent  = counts.admin  || 0;
+    document.getElementById('statEditorCount').textContent = counts.editor || 0;
+    document.getElementById('statViewerCount').textContent = counts.viewer || 0;
+}
+
+// ─── Render Users Table ───────────────────────────────────────────────────
+function renderUsers(users) {
+    const tbody = document.getElementById('usersTableBody');
+    tbody.innerHTML = '';
+
+    if (users.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="px-5 py-14 text-center">
+                    <div class="flex flex-col items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+                            <i class="fas fa-users text-slate-300 text-xl"></i>
+                        </div>
+                        <p class="font-semibold text-slate-700">No database users yet</p>
+                        <p class="text-sm text-slate-400">Create the first user with the button above.</p>
+                    </div>
+                </td>
+            </tr>`;
+        return;
+    }
+
+    users.forEach(user => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors';
+        tr.innerHTML = `
+            <td class="px-5 py-4">
+                <div class="flex items-center gap-2.5">
+                    <i class="fas ${roleIcon(user.role)} text-slate-400 text-sm w-4 text-center shrink-0"></i>
+                    <span class="font-semibold text-slate-800 text-sm">${escapeHtml(user.username)}</span>
+                </div>
+            </td>
+            <td class="px-5 py-4">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${roleBadge(user.role)}">
+                    ${escapeHtml(user.role)}
+                </span>
+            </td>
+            <td class="px-5 py-4 text-sm ${user.team ? 'text-slate-700' : 'text-slate-400'}">
+                ${user.team ? escapeHtml(user.team) : '—'}
+            </td>
+            <td class="px-5 py-4 text-sm text-slate-500">
+                <span title="${fmtDate(user.created_at)}">${relTime(user.created_at)}</span>
+            </td>
+            <td class="px-5 py-4">
+                <div class="flex items-center gap-2">
+                    <button
+                        class="change-role-btn border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                        data-username="${escapeHtml(user.username)}"
+                        data-role="${escapeHtml(user.role)}"
+                    >
+                        Change Role
+                    </button>
+                    <button
+                        class="delete-btn bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+                        data-username="${escapeHtml(user.username)}"
+                        data-role="${escapeHtml(user.role)}"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </td>`;
+        tbody.appendChild(tr);
+    });
+
+    // Attach event listeners to newly created buttons
+    tbody.querySelectorAll('.change-role-btn').forEach(btn => {
+        btn.addEventListener('click', () => openRoleModal(btn.dataset.username, btn.dataset.role));
+    });
+    tbody.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => openDeleteModal(btn.dataset.username, btn.dataset.role));
+    });
+}
+
+// ─── HTML Escape ──────────────────────────────────────────────────────────
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// ─── Show Skeleton ────────────────────────────────────────────────────────
+function showSkeleton() {
+    const tbody = document.getElementById('usersTableBody');
+    tbody.innerHTML = `
+        <tr id="skeletonRow">
+            <td colspan="5" class="px-5 py-4">
+                <div class="space-y-3">
+                    <div class="h-4 bg-slate-200 rounded animate-pulse w-3/4"></div>
+                    <div class="h-4 bg-slate-200 rounded animate-pulse w-1/2"></div>
+                    <div class="h-4 bg-slate-200 rounded animate-pulse w-2/3"></div>
+                </div>
+            </td>
+        </tr>`;
+}
+
+// ─── Load Users ───────────────────────────────────────────────────────────
+async function loadUsers() {
+    showSkeleton();
+    try {
+        const res = await fetch('/admin/users');
+        if (res.status === 401 || res.status === 403) {
+            window.location.href = '/login';
+            return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        _users = await res.json();
+        renderUsers(_users);
+        renderStats(_users);
+    } catch (err) {
+        console.error('Failed to load users:', err);
+        document.getElementById('usersTableBody').innerHTML = `
+            <tr>
+                <td colspan="5" class="px-5 py-10 text-center">
+                    <div class="flex flex-col items-center gap-2 text-sm text-slate-500">
+                        <i class="fas fa-circle-exclamation text-red-400 text-2xl"></i>
+                        <p class="font-semibold text-slate-700">Failed to load users</p>
+                        <p class="text-slate-400">Check your connection and try again.</p>
+                        <button onclick="loadUsers()" class="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors">
+                            Retry
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        showToast('Failed to load users', 'error');
+    }
+}
+
+// ─── Submit: Create User ──────────────────────────────────────────────────
+async function submitCreate() {
+    const username = document.getElementById('createUsername').value.trim();
+    const password = document.getElementById('createPassword').value;
+    const role     = document.getElementById('createRole').value;
+    const team     = document.getElementById('createTeam').value.trim();
+
+    // Validation
+    const errorBox = document.getElementById('createError');
+    const errorMsg = document.getElementById('createErrorMsg');
+
+    function showCreateError(msg) {
+        errorMsg.textContent = msg;
+        errorBox.classList.remove('hidden');
+    }
+
+    errorBox.classList.add('hidden');
+
+    if (!username) { showCreateError('Username is required.'); return; }
+    if (!password) { showCreateError('Password is required.'); return; }
+    if (password.length < 6) { showCreateError('Password must be at least 6 characters.'); return; }
+
+    const btn   = document.getElementById('submitCreate');
+    const icon  = document.getElementById('submitCreateIcon');
+    const label = document.getElementById('submitCreateLabel');
+
+    btn.disabled   = true;
+    icon.className = 'fas fa-spinner fa-spin text-xs';
+    label.textContent = 'Creating…';
+
+    try {
+        const body = { username, password, role };
+        if (team) body.team = team;
+
+        const res = await fetch('/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (res.status === 409) {
+            showCreateError('Username already taken. Please choose a different one.');
+            return;
+        }
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showCreateError(data.message || `Unexpected error (HTTP ${res.status}).`);
+            return;
+        }
+
+        showToast(`User "${username}" created successfully.`, 'success');
+        closeCreateModal();
+        await loadUsers();
+    } catch (err) {
+        console.error('Create user error:', err);
+        showCreateError('Network error. Please try again.');
+    } finally {
+        btn.disabled   = false;
+        icon.className = 'fas fa-plus text-xs';
+        label.textContent = 'Create User';
+    }
+}
+
+// ─── Submit: Change Role ──────────────────────────────────────────────────
+async function submitChangeRole() {
+    if (!_currentRoleTarget) return;
+
+    const { username } = _currentRoleTarget;
+    const role = document.getElementById('roleSelect').value;
+
+    const btn   = document.getElementById('submitChangeRole');
+    const icon  = document.getElementById('submitRoleIcon');
+    const label = document.getElementById('submitRoleLabel');
+
+    btn.disabled   = true;
+    icon.className = 'fas fa-spinner fa-spin text-xs';
+    label.textContent = 'Saving…';
+
+    try {
+        const res = await fetch(`/admin/users/${encodeURIComponent(username)}/role`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role }),
+        });
+
+        if (res.status === 404) {
+            showToast(`User "${username}" not found.`, 'error');
+            closeRoleModal();
+            return;
+        }
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showToast(data.message || `Failed to update role (HTTP ${res.status}).`, 'error');
+            return;
+        }
+
+        showToast(`Role for "${username}" updated to ${role}.`, 'success');
+        closeRoleModal();
+        await loadUsers();
+    } catch (err) {
+        console.error('Change role error:', err);
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        btn.disabled   = false;
+        icon.className = 'fas fa-check text-xs';
+        label.textContent = 'Save Role';
+    }
+}
+
+// ─── Submit: Delete User ──────────────────────────────────────────────────
+async function submitDelete() {
+    if (!_deleteTarget) return;
+
+    const { username } = _deleteTarget;
+
+    const btn   = document.getElementById('submitDelete');
+    const icon  = document.getElementById('submitDeleteIcon');
+    const label = document.getElementById('submitDeleteLabel');
+
+    btn.disabled   = true;
+    icon.className = 'fas fa-spinner fa-spin text-xs';
+    label.textContent = 'Deleting…';
+
+    try {
+        const res = await fetch(`/admin/users/${encodeURIComponent(username)}`, {
+            method: 'DELETE',
+        });
+
+        if (res.status === 404) {
+            showToast(`User "${username}" not found.`, 'error');
+            closeDeleteModal();
+            return;
+        }
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showToast(data.message || `Failed to delete user (HTTP ${res.status}).`, 'error');
+            return;
+        }
+
+        showToast(`User "${username}" deleted.`, 'success');
+        closeDeleteModal();
+        await loadUsers();
+    } catch (err) {
+        console.error('Delete user error:', err);
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        btn.disabled   = false;
+        icon.className = 'fas fa-trash text-xs';
+        label.textContent = 'Delete';
+    }
+}
+
+// ─── Modal: Create ────────────────────────────────────────────────────────
+function openCreateModal() {
+    document.getElementById('createUsername').value = '';
+    document.getElementById('createPassword').value = '';
+    document.getElementById('createRole').value     = 'viewer';
+    document.getElementById('createTeam').value     = '';
+    document.getElementById('createError').classList.add('hidden');
+
+    // Reset password toggle
+    const pwInput = document.getElementById('createPassword');
+    pwInput.type  = 'password';
+    document.getElementById('togglePasswordIcon').className = 'fas fa-eye';
+
+    document.getElementById('createModal').classList.remove('hidden');
+    document.getElementById('createUsername').focus();
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').classList.add('hidden');
+}
+
+// ─── Modal: Change Role ───────────────────────────────────────────────────
+function openRoleModal(username, currentRole) {
+    _currentRoleTarget = { username, currentRole };
+    document.getElementById('roleModalUsername').textContent = username;
+    document.getElementById('roleSelect').value = currentRole || 'viewer';
+    document.getElementById('roleModal').classList.remove('hidden');
+    document.getElementById('roleSelect').focus();
+}
+
+function closeRoleModal() {
+    document.getElementById('roleModal').classList.add('hidden');
+    _currentRoleTarget = null;
+}
+
+// ─── Modal: Delete Confirm ────────────────────────────────────────────────
+function openDeleteModal(username, role) {
+    _deleteTarget = { username };
+    document.getElementById('deleteModalUsername').textContent = username;
+
+    const badgeEl = document.getElementById('deleteModalRoleBadge');
+    badgeEl.textContent = role;
+    badgeEl.className = `inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${roleBadge(role)}`;
+
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+    _deleteTarget = null;
+}
+
+// ─── Load Current User (sidebar) ──────────────────────────────────────────
+async function loadCurrentUser() {
+    try {
+        const data = await fetch('/me').then(r => r.json()).catch(() => null);
+        if (data && data.username) {
+            document.getElementById('sidebarUsername').textContent = data.username;
+        }
+    } catch (_) { /* silently ignore */ }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+    loadCurrentUser();
+
+    // Topbar "New User" button
+    document.getElementById('openCreateModal').addEventListener('click', openCreateModal);
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await fetch('/logout', { method: 'POST' }).catch(() => {});
+        window.location.href = '/login';
+    });
+
+    // Create modal buttons
+    document.getElementById('closeCreateModal').addEventListener('click',  closeCreateModal);
+    document.getElementById('cancelCreateModal').addEventListener('click', closeCreateModal);
+    document.getElementById('submitCreate').addEventListener('click',      submitCreate);
+
+    // Password show/hide toggle
+    document.getElementById('togglePassword').addEventListener('click', () => {
+        const input = document.getElementById('createPassword');
+        const icon  = document.getElementById('togglePasswordIcon');
+        if (input.type === 'password') {
+            input.type     = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            input.type     = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    });
+
+    // Allow Enter key to submit create form
+    ['createUsername', 'createPassword', 'createTeam'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', e => {
+            if (e.key === 'Enter') submitCreate();
+        });
+    });
+
+    // Role modal buttons
+    document.getElementById('closeRoleModal').addEventListener('click',  closeRoleModal);
+    document.getElementById('cancelRoleModal').addEventListener('click', closeRoleModal);
+    document.getElementById('submitChangeRole').addEventListener('click', submitChangeRole);
+
+    // Delete modal buttons
+    document.getElementById('closeDeleteModal').addEventListener('click',  closeDeleteModal);
+    document.getElementById('cancelDeleteModal').addEventListener('click', closeDeleteModal);
+    document.getElementById('submitDelete').addEventListener('click',      submitDelete);
+
+    // Backdrop clicks close the active modal
+    ['createModal', 'roleModal', 'deleteModal'].forEach(id => {
+        document.getElementById(id).addEventListener('click', e => {
+            if (e.target === e.currentTarget) {
+                if (id === 'createModal') closeCreateModal();
+                if (id === 'roleModal')   closeRoleModal();
+                if (id === 'deleteModal') closeDeleteModal();
+            }
+        });
+    });
+
+    // Escape key closes any open modal
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            closeCreateModal();
+            closeRoleModal();
+            closeDeleteModal();
+        }
+    });
+});
+</script>
+</body>
+</html>

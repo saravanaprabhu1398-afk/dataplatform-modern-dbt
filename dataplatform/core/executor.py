@@ -1,47 +1,79 @@
 import importlib
+import inspect
 import logging
+import threading
 import time
-from typing import Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, Any, List, Optional, Tuple
 from dataplatform.core.config import Task
 from dataplatform.plugins.base import Plugin
 from dataplatform.core.logging_config import log_task_start, log_task_success, log_task_failure
+from dataplatform.core.secrets import resolve_secrets
 
 logger = logging.getLogger(__name__)
 
 
 class TaskExecutor:
     def __init__(self):
-        self.plugins = {}
+        self.plugins: Dict[Tuple[str, str], Plugin] = {}
+        self._lock = threading.Lock()
 
     def load_plugin(self, plugin_name: str, plugin_type: str) -> Plugin:
         """Dynamically load a plugin."""
-        if plugin_name in self.plugins:
-            return self.plugins[plugin_name]
+        cache_key = (plugin_type, plugin_name)
+        if cache_key in self.plugins:
+            return self.plugins[cache_key]
+
+        with self._lock:
+            # Re-check inside lock to avoid double-loading
+            if cache_key in self.plugins:
+                return self.plugins[cache_key]
 
         try:
             module_name = f"dataplatform.plugins.{plugin_type}s.{plugin_name}_plugin"
             module = importlib.import_module(module_name)
 
-            candidates = [
-                f"{plugin_name.capitalize()}{plugin_type.capitalize()}",
-                f"{plugin_name.upper()}{plugin_type.capitalize()}",
-                f"{plugin_name.title()}{plugin_type.capitalize()}"
-            ]
-
             plugin_class = None
-            for candidate in candidates:
-                plugin_class = getattr(module, candidate, None)
-                if plugin_class is not None:
+            for attribute in module.__dict__.values():
+                if (
+                    isinstance(attribute, type)
+                    and issubclass(attribute, Plugin)
+                    and attribute is not Plugin
+                    and not inspect.isabstract(attribute)
+                    and attribute.__module__ == module.__name__
+                ):
+                    plugin_class = attribute
                     break
 
             if plugin_class is None:
-                raise AttributeError(f"Plugin class not found in module {module_name}. Tried: {candidates}")
+                for attribute in module.__dict__.values():
+                    if (
+                        isinstance(attribute, type)
+                        and attribute.__module__ == module.__name__
+                        and callable(getattr(attribute, "execute", None))
+                        and not inspect.isabstract(attribute)
+                    ):
+                        plugin_class = attribute
+                        break
+
+            if plugin_class is None:
+                raise AttributeError(f"Plugin class not found in module {module_name}")
 
             plugin = plugin_class()
-            self.plugins[plugin_name] = plugin
+            self.plugins[cache_key] = plugin
             return plugin
         except (ImportError, AttributeError) as e:
             raise ValueError(f"Failed to load plugin {plugin_name}: {e}")
+
+    @staticmethod
+    def _extract_error_details(result: Any) -> str:
+        if isinstance(result, dict):
+            return str(result.get("error") or result.get("stderr") or result)
+        if isinstance(result, list):
+            return f"Plugin returned failure result with {len(result)} item(s)"
+        if result is None:
+            return "Plugin returned failure status"
+        return str(result)
 
     def execute_task(self, task: Task, config: Dict[str, Any] = None, previous_data: Any = None) -> tuple[bool, Any, str]:
         """Execute a task with retries and return result data and error details."""
@@ -63,7 +95,11 @@ class TaskExecutor:
         # Pass previous task data if available
         if previous_data is not None:
             task_config["previous_data"] = previous_data
-        
+
+        # Resolve ${ENV_VAR} and ${vault:path:key} tokens before handing
+        # the config to the plugin (keeps secrets out of plain YAML files).
+        task_config = resolve_secrets(task_config)
+
         error_details = ""
         
         for attempt in range(task.retries + 1):
@@ -87,7 +123,7 @@ class TaskExecutor:
                     log_task_success(task.name, duration)
                     return True, data, ""
                 else:
-                    error_msg = f"Plugin returned failure status"
+                    error_msg = self._extract_error_details(data)
                     error_details = error_msg
                     log_task_failure(task.name, error_msg, attempt + 1, task.retries + 1)
                     if attempt < task.retries:
@@ -147,4 +183,92 @@ class PipelineExecutor:
                 return False, results, errors
 
         logger.info("Pipeline completed successfully")
+        return True, results, errors
+
+    def _collect_dependency_data(self, task: Task, task_data: Dict[str, Any]) -> Any:
+        """Return output data from a task's dependencies to pass as previous_data."""
+        if not task.depends_on:
+            return None
+        dependency_data = [
+            task_data[dep]
+            for dep in task.depends_on
+            if dep in task_data and task_data[dep] is not None
+        ]
+        if not dependency_data:
+            return None
+        return dependency_data[0] if len(dependency_data) == 1 else dependency_data
+
+    def execute_pipeline_parallel(
+        self,
+        tasks: Dict[str, Task],
+        execution_waves: List[List[str]],
+        config: Dict[str, Any] = None,
+        max_workers: int = 4,
+        pipeline_name: str = "",
+        run_id: str = "",
+    ) -> Tuple[bool, Dict[str, bool], Dict[str, str]]:
+        """Execute pipeline tasks in parallel waves.
+
+        Tasks within the same wave have no mutual dependencies and run
+        concurrently via ThreadPoolExecutor. Each wave completes before the
+        next starts, preserving the DAG ordering guarantee.
+        """
+        results: Dict[str, bool] = {}
+        task_data: Dict[str, Any] = {}
+        errors: Dict[str, str] = {}
+
+        for wave in execution_waves:
+            with ThreadPoolExecutor(max_workers=min(max_workers, len(wave))) as pool:
+                future_to_name = {}
+                for task_name in wave:
+                    task = tasks[task_name]
+                    previous_data = self._collect_dependency_data(task, task_data)
+                    future = pool.submit(
+                        self.task_executor.execute_task, task, config, previous_data
+                    )
+                    future_to_name[future] = task_name
+
+                for future in as_completed(future_to_name):
+                    task_name = future_to_name[future]
+                    task = tasks[task_name]
+                    try:
+                        success, data, error_details = future.result()
+                    except Exception as exc:
+                        success, data, error_details = False, None, str(exc)
+
+                    # --- Lineage recording (non-blocking, never fails the pipeline) ---
+                    if success and task.lineage and pipeline_name:
+                        try:
+                            from dataplatform.core.lineage import record_task_lineage
+                            record_task_lineage(run_id, pipeline_name, task_name, task.lineage)
+                        except Exception as exc:
+                            logger.warning("Lineage recording skipped for '%s': %s", task_name, exc)
+
+                    # --- Quality checks (failures propagate as task failure) ---
+                    if success and task.quality and task.quality.checks:
+                        try:
+                            from dataplatform.core.quality import run_quality_checks
+                            check_results = run_quality_checks(
+                                task.quality.checks, run_id, pipeline_name, task_name
+                            )
+                            failed = [r["name"] for r in check_results if not r["passed"]]
+                            if failed:
+                                success = False
+                                error_details = f"Quality checks failed: {failed}"
+                        except Exception as exc:
+                            logger.error("Quality check runner raised an exception for '%s': %s", task_name, exc)
+                            success = False
+                            error_details = f"Quality check error: {exc}"
+
+                    results[task_name] = success
+                    task_data[task_name] = data
+                    if not success and error_details:
+                        errors[task_name] = error_details
+
+            wave_failed = [name for name in wave if not results.get(name, False)]
+            if wave_failed:
+                logger.error(f"Pipeline failed in wave at tasks: {wave_failed}")
+                return False, results, errors
+
+        logger.info("Pipeline completed successfully (parallel)")
         return True, results, errors

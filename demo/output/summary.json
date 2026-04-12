@@ -1,0 +1,11 @@
+{
+  "row_count": 6,
+  "total_revenue": 7056.5,
+  "high_priority_orders": 2,
+  "regions": {
+    "East": 1575.75,
+    "North": 1660.75,
+    "South": 1620.0,
+    "West": 2200.0
+  }
+}

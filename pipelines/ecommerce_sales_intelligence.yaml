@@ -1,0 +1,418 @@
+pipeline_name: ecommerce_sales_intelligence
+description: |
+  End-to-end e-commerce sales analytics pipeline demonstrating the full
+  dataplatform-modern-dbt framework capabilities in a single run:
+
+    Stage 1  — Synthetic data generation (Python)
+    Stage 2  — Data quality validation (DuckDB validate)
+    Stage 3  — Schema profiling (DuckDB load)
+    Stage 4a — Revenue aggregation by category (DuckDB aggregate)  ─┐ parallel
+    Stage 4b — Revenue aggregation by region + quarter (DuckDB)    ─┘ wave
+    Stage 5  — KPI column derivation (DuckDB transform)
+    Stage 6  — Top-10 products analytical query (DuckDB query)
+    Stage 7  — Executive text report (Python)
+    Stage 8  — File summary & archive (Shell)
+
+  All stages run locally — no external services required.
+
+team: analytics
+tags:
+  - analytics
+  - ecommerce
+  - sales
+  - demo
+  - local
+
+schedule:
+  minute: "0"
+  hour: "9"
+  day: "*"
+  month: "*"
+  day_of_week: "1-5"
+
+sla:
+  max_duration_minutes: 10
+
+error_handlers:
+  - trigger: task_failure
+    executor: email
+    config:
+      subject: "Sales Intelligence Pipeline Failed"
+      body: "Task {{ failed_task }} failed with: {{ error_message }}"
+
+tasks:
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 1 — Generate 1 000 synthetic sales records
+  # ─────────────────────────────────────────────────────────────────
+  - name: Generate Sales Data
+    id: generate_sales
+    type: executor
+    plugin: python
+    timeout: 30
+    config:
+      operation: execute_code
+      code: |
+        import csv, random, os
+        from datetime import datetime, timedelta
+
+        random.seed(42)
+
+        categories = ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Books', 'Beauty']
+        regions    = ['North', 'South', 'East', 'West', 'Central']
+        products   = {
+            'Electronics':   ['Laptop Pro', 'Wireless Headphones', 'Smart Watch', 'Tablet 10"', 'USB-C Hub'],
+            'Apparel':       ['Running Shoes', 'Winter Jacket', 'Yoga Pants', 'Classic T-Shirt', 'Denim Jeans'],
+            'Home & Garden': ['Coffee Maker', 'Plant Pot Set', 'LED Desk Lamp', 'Kitchen Scale', 'Air Purifier'],
+            'Sports':        ['Yoga Mat', 'Resistance Bands', 'Water Bottle', 'Gym Gloves', 'Jump Rope'],
+            'Books':         ['Data Science Guide', 'Python Cookbook', 'Business Strategy', 'Sci-Fi Novel', 'History Atlas'],
+            'Beauty':        ['Face Serum', 'Moisturizer SPF', 'Lip Balm Kit', 'Hair Mask', 'Eye Cream'],
+        }
+        price_range = {
+            'Electronics': (49.99, 1299.99), 'Apparel': (19.99, 249.99),
+            'Home & Garden': (15.99, 199.99), 'Sports': (9.99, 89.99),
+            'Books': (9.99, 49.99),           'Beauty': (12.99, 89.99),
+        }
+
+        os.makedirs('data/sales', exist_ok=True)
+        rows = []
+        start = datetime(2024, 1, 1)
+
+        for i in range(1, 1001):
+            cat     = random.choice(categories)
+            product = random.choice(products[cat])
+            lo, hi  = price_range[cat]
+            price   = round(random.uniform(lo, hi), 2)
+            qty     = random.randint(1, 10)
+            disc    = round(random.choice([0, 0, 0, 5, 10, 15, 20]) / 100, 2)
+            region  = random.choice(regions)
+            date    = start + timedelta(days=random.randint(0, 364))
+            revenue = round(price * qty * (1 - disc), 2)
+
+            rows.append({
+                'order_id':     f'ORD-{i:05d}',
+                'product':      product,
+                'category':     cat,
+                'region':       region,
+                'quantity':     qty,
+                'unit_price':   price,
+                'discount_pct': disc,
+                'revenue':      revenue,
+                'sale_date':    date.strftime('%Y-%m-%d'),
+                'month':        date.month,
+                'quarter':      (date.month - 1) // 3 + 1,
+            })
+
+        path = 'data/sales/raw_sales.csv'
+        with open(path, 'w', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=rows[0].keys())
+            w.writeheader()
+            w.writerows(rows)
+
+        total_rev = sum(r['revenue'] for r in rows)
+        min_date  = min(r['sale_date'] for r in rows)
+        max_date  = max(r['sale_date'] for r in rows)
+        print(f"[OK] Generated {len(rows)} sales records → {path}")
+        print(f"     Date range : {min_date}  →  {max_date}")
+        print(f"     Total revenue in dataset : ${total_rev:,.2f}")
+    lineage:
+      writes_to:
+        - file://data/sales/raw_sales.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 2 — Validate data quality (5 checks)
+  # ─────────────────────────────────────────────────────────────────
+  - name: Validate Data Quality
+    id: validate_sales
+    type: executor
+    plugin: duckdb
+    retries: 1
+    depends_on:
+      - generate_sales
+    config:
+      operation: validate
+      file_path: data/sales/raw_sales.csv
+      checks:
+        - name: no_null_order_ids
+          sql: "SELECT COUNT(*) FROM data WHERE order_id IS NULL OR TRIM(order_id) = ''"
+          expect: 0
+        - name: positive_revenue
+          sql: "SELECT COUNT(*) FROM data WHERE CAST(revenue AS DOUBLE) <= 0"
+          expect: 0
+        - name: valid_discount_range
+          sql: "SELECT COUNT(*) FROM data WHERE CAST(discount_pct AS DOUBLE) < 0 OR CAST(discount_pct AS DOUBLE) > 1"
+          expect: 0
+        - name: minimum_record_count
+          sql: "SELECT COUNT(*) FROM data"
+          expect_gt: 500
+        - name: valid_regions_only
+          sql: "SELECT COUNT(*) FROM data WHERE region NOT IN ('North','South','East','West','Central')"
+          expect: 0
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 3 — Profile the raw dataset schema and sample rows
+  # ─────────────────────────────────────────────────────────────────
+  - name: Profile Raw Dataset
+    id: profile_data
+    type: executor
+    plugin: duckdb
+    depends_on:
+      - validate_sales
+    config:
+      operation: load
+      file_path: data/sales/raw_sales.csv
+      show_columns: true
+      show_sample: true
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 4a — Aggregate revenue by product category  (parallel wave)
+  # ─────────────────────────────────────────────────────────────────
+  - name: Aggregate by Category
+    id: agg_by_category
+    type: executor
+    plugin: duckdb
+    depends_on:
+      - profile_data
+    config:
+      operation: aggregate
+      file_path: data/sales/raw_sales.csv
+      group_by:
+        - category
+      metrics:
+        - column: revenue
+          function: sum
+          alias: total_revenue
+        - column: quantity
+          function: sum
+          alias: total_units
+        - column: order_id
+          function: count
+          alias: order_count
+        - column: unit_price
+          function: avg
+          alias: avg_unit_price
+      order_by: total_revenue DESC
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 4b — Aggregate revenue by region × quarter  (parallel wave)
+  # ─────────────────────────────────────────────────────────────────
+  - name: Aggregate by Region
+    id: agg_by_region
+    type: executor
+    plugin: duckdb
+    depends_on:
+      - profile_data
+    config:
+      operation: aggregate
+      file_path: data/sales/raw_sales.csv
+      group_by:
+        - region
+        - quarter
+      metrics:
+        - column: revenue
+          function: sum
+          alias: total_revenue
+        - column: order_id
+          function: count
+          alias: order_count
+        - column: discount_pct
+          function: avg
+          alias: avg_discount
+      order_by: quarter ASC, total_revenue DESC
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 5 — Derive KPI columns (gross / net revenue, discount amt)
+  # ─────────────────────────────────────────────────────────────────
+  - name: Compute KPI Columns
+    id: compute_kpis
+    type: executor
+    plugin: duckdb
+    depends_on:
+      - agg_by_category
+      - agg_by_region
+    config:
+      operation: transform
+      file_path: data/sales/raw_sales.csv
+      columns:
+        - name: gross_revenue
+          sql: "ROUND(unit_price * quantity, 2)"
+        - name: discount_amount
+          sql: "ROUND(unit_price * quantity * discount_pct, 2)"
+        - name: net_revenue
+          sql: "ROUND(unit_price * quantity * (1 - discount_pct), 2)"
+        - name: revenue_per_unit
+          sql: "ROUND(revenue / quantity, 2)"
+      output_table: kpi_data
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 6 — Top-10 products by revenue (analytical SQL)
+  # ─────────────────────────────────────────────────────────────────
+  - name: Top 10 Products
+    id: top_products
+    type: executor
+    plugin: duckdb
+    depends_on:
+      - compute_kpis
+    config:
+      operation: query
+      file_path: data/sales/raw_sales.csv
+      return_data: true
+      sql: |
+        SELECT
+          product,
+          category,
+          COUNT(*)                          AS order_count,
+          SUM(quantity)                     AS units_sold,
+          ROUND(SUM(revenue), 2)            AS total_revenue,
+          ROUND(AVG(unit_price), 2)         AS avg_price,
+          ROUND(AVG(discount_pct) * 100, 1) AS avg_discount_pct
+        FROM data
+        GROUP BY product, category
+        ORDER BY total_revenue DESC
+        LIMIT 10
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 7 — Generate executive intelligence report
+  # ─────────────────────────────────────────────────────────────────
+  - name: Generate Executive Report
+    id: generate_report
+    type: executor
+    plugin: python
+    depends_on:
+      - top_products
+    config:
+      operation: execute_code
+      code: |
+        import csv
+        from datetime import datetime
+        from collections import defaultdict
+
+        rows = []
+        with open('data/sales/raw_sales.csv', newline='') as f:
+            for row in csv.DictReader(f):
+                row['revenue']      = float(row['revenue'])
+                row['unit_price']   = float(row['unit_price'])
+                row['quantity']     = int(row['quantity'])
+                row['discount_pct'] = float(row['discount_pct'])
+                row['quarter']      = int(row['quarter'])
+                rows.append(row)
+
+        total_rev    = sum(r['revenue'] for r in rows)
+        total_orders = len(rows)
+        total_units  = sum(r['quantity'] for r in rows)
+        avg_order    = total_rev / total_orders
+
+        by_cat = defaultdict(lambda: {'rev': 0.0, 'orders': 0, 'units': 0})
+        for r in rows:
+            by_cat[r['category']]['rev']    += r['revenue']
+            by_cat[r['category']]['orders'] += 1
+            by_cat[r['category']]['units']  += r['quantity']
+
+        by_region = defaultdict(float)
+        for r in rows:
+            by_region[r['region']] += r['revenue']
+
+        by_qtr = defaultdict(float)
+        for r in rows:
+            by_qtr[f"Q{r['quarter']}"] += r['revenue']
+
+        by_product = defaultdict(float)
+        for r in rows:
+            by_product[r['product']] += r['revenue']
+        top10 = sorted(by_product.items(), key=lambda x: -x[1])[:10]
+
+        D = "=" * 64
+        S = "-" * 64
+
+        report  = f"\n{D}\n"
+        report += f"  E-COMMERCE SALES INTELLIGENCE REPORT\n"
+        report += f"  Generated  : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        report += f"  Framework  : dataplatform-modern-dbt v1.0\n"
+        report += f"  Pipeline   : ecommerce_sales_intelligence\n"
+        report += f"{D}\n\n"
+
+        report += f"EXECUTIVE SUMMARY\n{S}\n"
+        report += f"  Total Revenue     :  ${total_rev:>12,.2f}\n"
+        report += f"  Total Orders      :  {total_orders:>12,}\n"
+        report += f"  Total Units Sold  :  {total_units:>12,}\n"
+        report += f"  Avg Order Value   :  ${avg_order:>12,.2f}\n\n"
+
+        report += f"REVENUE BY CATEGORY\n{S}\n"
+        for cat, d in sorted(by_cat.items(), key=lambda x: -x[1]['rev']):
+            pct = d['rev'] / total_rev * 100
+            bar = '█' * int(pct / 2)
+            report += f"  {cat:<20}  ${d['rev']:>10,.2f}  {pct:5.1f}%  {bar}\n"
+
+        report += f"\nREVENUE BY REGION\n{S}\n"
+        for reg, rev in sorted(by_region.items(), key=lambda x: -x[1]):
+            pct = rev / total_rev * 100
+            report += f"  {reg:<20}  ${rev:>10,.2f}  {pct:5.1f}%\n"
+
+        report += f"\nREVENUE BY QUARTER\n{S}\n"
+        for q, rev in sorted(by_qtr.items()):
+            pct = rev / total_rev * 100
+            report += f"  {q}  ${rev:>10,.2f}  {pct:5.1f}%\n"
+
+        report += f"\nTOP 10 PRODUCTS BY REVENUE\n{S}\n"
+        for rank, (prod, rev) in enumerate(top10, 1):
+            report += f"  {rank:2}. {prod:<32}  ${rev:>9,.2f}\n"
+
+        report += f"\n{D}\n  End of Report\n{D}\n"
+
+        with open('data/sales/intelligence_report.txt', 'w') as f:
+            f.write(report)
+
+        print(report)
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+      writes_to:
+        - file://data/sales/intelligence_report.txt
+
+  # ─────────────────────────────────────────────────────────────────
+  # STAGE 8 — Shell: print file summary and archive listing
+  # ─────────────────────────────────────────────────────────────────
+  - name: Archive and Summarise
+    id: archive_summary
+    type: executor
+    plugin: shell
+    depends_on:
+      - generate_report
+    config:
+      command: |
+        echo "============================================================"
+        echo "  PIPELINE OUTPUT SUMMARY"
+        echo "============================================================"
+        echo ""
+        echo "Files in data/sales/:"
+        ls -lh data/sales/
+        echo ""
+        echo "Raw CSV row count : $(wc -l < data/sales/raw_sales.csv) lines"
+        echo ""
+        echo "Report preview:"
+        head -14 data/sales/intelligence_report.txt
+        echo ""
+        echo "Pipeline complete ✓"
+      shell: bash
+    lineage:
+      reads_from:
+        - file://data/sales/raw_sales.csv
+        - file://data/sales/intelligence_report.txt

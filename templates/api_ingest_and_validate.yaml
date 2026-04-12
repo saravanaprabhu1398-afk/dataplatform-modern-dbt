@@ -1,0 +1,56 @@
+pipeline_name: api_ingest_and_validate
+description: Ingest data from a REST API, save to file, validate with quality checks
+tags:
+  - api
+  - ingestion
+  - quality
+  - validation
+
+tasks:
+  - name: fetch_from_api
+    type: executor
+    plugin: api
+    operation: GET
+    config:
+      method: GET
+      url: "https://api.example.com/v1/records"
+      headers:
+        Authorization: "Bearer ${API_TOKEN}"
+      params:
+        limit: 1000
+    lineage:
+      reads_from:
+        - "https://api.example.com/v1/records"
+      writes_to:
+        - "file://data/api_response.json"
+
+  - name: validate_response
+    type: executor
+    plugin: duckdb
+    operation: validate
+    depends_on:
+      - fetch_from_api
+    config:
+      file_path: data/api_response.json
+    quality:
+      checks:
+        - name: not_empty
+          sql: "SELECT COUNT(*) FROM read_json_auto('data/api_response.json')"
+          expect_min: 1
+        - name: no_null_ids
+          sql: "SELECT COUNT(*) FROM read_json_auto('data/api_response.json') WHERE id IS NULL"
+          expect: 0
+
+  - name: notify_completion
+    type: executor
+    plugin: kafka
+    operation: publish
+    depends_on:
+      - validate_response
+    config:
+      brokers:
+        - "localhost:9092"
+      topic: pipeline_events
+      message:
+        event: api_ingest_completed
+        pipeline: api_ingest_and_validate

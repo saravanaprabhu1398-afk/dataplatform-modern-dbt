@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metrics — Data Platform Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <style>
+        @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+        .tr-active { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.08); font-weight:700; color:#1e293b; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
+    <div class="px-4 py-5 border-b border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+                <i class="fas fa-layer-group text-white text-xs"></i>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
+                <p class="text-slate-400 text-[11px]">Suite</p>
+            </div>
+        </div>
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
+        </a>
+        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
+        </a>
+        <a href="/generator" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wand-magic-sparkles w-4 text-center shrink-0"></i><span>Generator</span>
+        </a>
+        <div class="pt-4 pb-1">
+            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Observability</p>
+        </div>
+        <a href="/alerts" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-bell w-4 text-center shrink-0"></i><span>Alerts</span>
+        </a>
+        <a href="/monitoring" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
+            <i class="fas fa-chart-line w-4 text-center shrink-0"></i><span>Metrics</span>
+        </a>
+        <div class="pt-4 pb-1">
+            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p>
+        </div>
+        <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
+        </a>
+        <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
+        </a>
+        <div class="pt-4 pb-1">
+            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p>
+        </div>
+        <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
+        </a>
+        <div class="pt-4 pb-1">
+            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p>
+        </div>
+        <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
+        <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
+        </a>
+    </nav>
+    <div class="px-4 py-4 border-t border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                <i class="fas fa-user text-indigo-300 text-xs"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
+                <p class="text-slate-500 text-xs">Data Platform</p>
+            </div>
+            <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
+                <i class="fas fa-arrow-right-from-bracket text-sm"></i>
+            </button>
+        </div>
+    </div>
+</aside>
+
+<!-- ═══ MAIN ═══ -->
+<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+
+    <!-- Topbar -->
+    <header class="bg-white border-b border-slate-200 px-6 py-3.5 sticky top-0 z-30">
+        <div class="flex items-center justify-between">
+            <nav class="flex items-center gap-1.5 text-sm">
+                <a href="/" class="text-slate-400 hover:text-slate-600 transition-colors">Home</a>
+                <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+                <span class="text-slate-700 font-semibold">Metrics Dashboard</span>
+            </nav>
+            <!-- Time range selector -->
+            <div class="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                <button onclick="setTimeRange('1h')"  data-tr="1h"  class="tr-btn text-xs px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 hover:text-slate-800">1h</button>
+                <button onclick="setTimeRange('6h')"  data-tr="6h"  class="tr-btn text-xs px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 hover:text-slate-800">6h</button>
+                <button onclick="setTimeRange('24h')" data-tr="24h" class="tr-btn tr-active text-xs px-3 py-1.5 rounded-lg font-medium transition-all">24h</button>
+                <button onclick="setTimeRange('7d')"  data-tr="7d"  class="tr-btn text-xs px-3 py-1.5 rounded-lg font-medium transition-all text-slate-500 hover:text-slate-800">7d</button>
+                <button onclick="refreshMetrics()" class="ml-1 w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-white rounded-lg transition-all" title="Refresh">
+                    <i class="fas fa-rotate-right text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 p-6 space-y-6">
+
+        <!-- Page title -->
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center">
+                <i class="fas fa-chart-line text-indigo-500"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-900">Metrics Dashboard</h1>
+                <p class="text-xs text-slate-500 mt-0.5">Pipeline health · Performance · SLA compliance</p>
+            </div>
+            <span class="ml-auto text-[11px] text-slate-400 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+                Live · auto-refresh every 60 s
+            </span>
+        </div>
+
+        <!-- KPI strip -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0"><i class="fas fa-play text-indigo-500 text-sm"></i></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Total Runs</p><p class="text-xl font-bold text-slate-900" id="kpiTotalRuns">187</p></div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0"><i class="fas fa-circle-check text-emerald-500 text-sm"></i></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Success Rate</p><p class="text-xl font-bold text-emerald-600" id="kpiSuccess">95.2%</p></div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0"><i class="fas fa-triangle-exclamation text-red-500 text-sm"></i></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Failures</p><p class="text-xl font-bold text-red-500" id="kpiFailed">9</p></div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0"><i class="fas fa-clock text-amber-500 text-sm"></i></div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Avg Duration</p><p class="text-xl font-bold text-amber-600" id="kpiAvgDur">34s</p></div>
+            </div>
+        </div>
+
+        <!-- Panels grid — 3 cols on xl, 2 on md -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+
+            <!-- Panel 1: Execution Volume -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div class="flex items-start justify-between mb-1">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Execution Volume</p>
+                    <span class="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">+12% vs prev</span>
+                </div>
+                <p class="text-2xl font-bold text-slate-900 mb-0.5" id="metTotalRuns">187</p>
+                <p class="text-xs text-slate-400 mb-3">Total pipeline runs in selected range</p>
+                <div class="bg-slate-50 rounded-xl p-2" style="height:120px">
+                    <canvas id="chartExecVolume"></canvas>
+                </div>
+            </div>
+
+            <!-- Panel 2: Success Rate donut -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div class="flex items-start justify-between mb-1">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Success Rate</p>
+                    <span class="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">HEALTHY</span>
+                </div>
+                <p class="text-2xl font-bold text-emerald-600 mb-0.5">95.2%</p>
+                <p class="text-xs text-slate-400 mb-3">178 succeeded · 9 failed</p>
+                <div class="flex items-center justify-center" style="height:120px">
+                    <canvas id="chartSuccessRate"></canvas>
+                </div>
+            </div>
+
+            <!-- Panel 3: Error Rate trend -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div class="flex items-start justify-between mb-1">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Error Rate Trend</p>
+                    <span class="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">WATCH</span>
+                </div>
+                <p class="text-2xl font-bold text-red-500 mb-0.5">4.8%</p>
+                <p class="text-xs text-slate-400 mb-3">Failed runs per hour · 24 h trend</p>
+                <div class="bg-slate-50 rounded-xl p-2" style="height:120px">
+                    <canvas id="chartErrorRate"></canvas>
+                </div>
+            </div>
+
+            <!-- Panel 4: P95 Task Duration -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div class="flex items-start justify-between mb-1">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">P95 Task Duration</p>
+                    <span class="bg-red-50 border border-red-200 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full">SLA BREACH</span>
+                </div>
+                <p class="text-2xl font-bold text-slate-900 mb-0.5">91 s</p>
+                <p class="text-xs text-slate-400 mb-3">Slowest 5% per pipeline · SLA: 60 s</p>
+                <div class="bg-slate-50 rounded-xl p-2" style="height:120px">
+                    <canvas id="chartP95Duration"></canvas>
+                </div>
+            </div>
+
+            <!-- Panel 5: SLA Compliance donut -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div class="flex items-start justify-between mb-1">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">SLA Compliance</p>
+                    <span class="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">BELOW TARGET</span>
+                </div>
+                <p class="text-2xl font-bold text-indigo-600 mb-0.5">91.7%</p>
+                <p class="text-xs text-slate-400 mb-3">11 of 12 pipelines within SLA</p>
+                <div class="flex items-center justify-center" style="height:120px">
+                    <canvas id="chartSLA"></canvas>
+                </div>
+            </div>
+
+            <!-- Panel 6: 7-Day Health Map -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div class="flex items-start justify-between mb-1">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">7-Day Health Map</p>
+                    <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-emerald-400 inline-block"></span>OK</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-400 inline-block"></span>Fail</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-amber-300 inline-block"></span>Warn</span>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-400 mb-3">Run status · last 7 days · 6 pipelines</p>
+                <div id="healthMap"></div>
+            </div>
+
+        </div><!-- /panels grid -->
+
+        <!-- Bottom row: Throughput over 7 days (full-width) -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div class="flex items-start justify-between mb-1">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Pipeline Throughput · 7-Day View</p>
+                <span class="text-[10px] text-slate-400">Stacked: success (green) vs failure (red)</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">Daily run counts across all pipelines</p>
+            <div class="bg-slate-50 rounded-xl p-3" style="height:160px">
+                <canvas id="chartThroughput"></canvas>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const EXEC_VOLUME_24H = [1,0,1,0,1,1,2,4,12,15,13,14,11,16,13,12,10,8,6,5,4,3,2,3];
+const ERROR_COUNT_24H = [0,0,0,0,0,0,0,1,1,2,0,1,1,2,1,0,1,0,1,0,0,0,0,0];
+const PIPELINES       = ['sales_intel','etl_orders','mkt_attrib','user_profile','data_quality','finance_rpt'];
+const P95_DURATIONS   = [42,78,15,34,91,28];
+const SUCCESS_COUNT   = 178;
+const TOTAL_COUNT     = 187;
+const SLA_OK          = 11;
+const SLA_TOTAL       = 12;
+const DAY_LABELS      = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const THROUGHPUT_OK   = [24,31,27,29,35,18,23];
+const THROUGHPUT_FAIL = [2,1,3,1,2,1,0];
+const HEALTH_MAP      = [
+    ['ok','ok','ok','ok','fail','ok','ok'],
+    ['ok','ok','warn','ok','ok','ok','fail'],
+    ['ok','ok','ok','ok','ok','ok','ok'],
+    ['ok','warn','ok','ok','ok','ok','ok'],
+    ['fail','ok','ok','ok','warn','ok','ok'],
+    ['ok','ok','ok','fail','ok','ok','ok'],
+];
+
+const HOUR_LABELS = Array.from({length:24}, (_,i) => {
+    const h = ((new Date().getHours()-23+i)+24)%24;
+    return h%6===0 ? String(h).padStart(2,'0')+':00' : '';
+});
+
+let currentRange = '24h';
+let charts = {};
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function showToast(msg, type='info') {
+    const c = document.getElementById('toastContainer');
+    const m = {success:['bg-emerald-600','fa-circle-check'],error:['bg-red-600','fa-circle-xmark'],warning:['bg-amber-500','fa-triangle-exclamation'],info:['bg-indigo-600','fa-circle-info']}[type]||['bg-slate-700','fa-circle-info'];
+    const t = document.createElement('div');
+    t.className = `${m[0]} text-white px-4 py-3 rounded-xl shadow-xl border border-white/20 flex items-start gap-3 pointer-events-auto`;
+    t.innerHTML = `<i class="fas ${m[1]} mt-0.5 shrink-0 text-sm"></i><span class="text-sm flex-1 leading-snug">${msg}</span><button class="shrink-0 text-white/60 hover:text-white ml-1"><i class="fas fa-xmark text-xs"></i></button>`;
+    t.querySelector('button').onclick = ()=>t.remove();
+    c.appendChild(t);
+    setTimeout(()=>t&&t.remove(), 4000);
+}
+
+// ── Health Map ────────────────────────────────────────────────────────────────
+const HC = { ok:'#34d399', fail:'#f87171', warn:'#fcd34d', none:'#e2e8f0' };
+
+function renderHealthMap() {
+    let h = `<div style="display:grid;grid-template-columns:84px repeat(7,1fr);gap:3px;align-items:center">`;
+    h += `<div></div>` + DAY_LABELS.map(d=>`<div style="text-align:center;font-size:10px;color:#94a3b8;font-weight:600;padding-bottom:3px">${d}</div>`).join('');
+    PIPELINES.forEach((name,pi) => {
+        h += `<div style="font-size:10px;color:#475569;font-weight:500;padding-right:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</div>`;
+        HEALTH_MAP[pi].forEach((s,di) => {
+            h += `<div title="${name} · ${DAY_LABELS[di]}: ${s}" style="height:22px;border-radius:4px;background:${HC[s]||HC.none};transition:opacity .15s;cursor:default" onmouseenter="this.style.opacity='.65'" onmouseleave="this.style.opacity='1'"></div>`;
+        });
+    });
+    h += `</div>`;
+    document.getElementById('healthMap').innerHTML = h;
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+const BASE = {
+    responsive:true, maintainAspectRatio:false, animation:{duration:500},
+    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
+    scales:{
+        x:{grid:{color:'#f1f5f9',drawBorder:false},ticks:{color:'#94a3b8',font:{size:9}}},
+        y:{grid:{color:'#f1f5f9',drawBorder:false},ticks:{color:'#94a3b8',font:{size:9}}},
+    }
+};
+
+function buildCharts() {
+    // Exec Volume
+    charts.exec = new Chart(document.getElementById('chartExecVolume'), {
+        type:'line',
+        data:{labels:HOUR_LABELS, datasets:[{data:EXEC_VOLUME_24H, borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,.12)', fill:true, tension:.4, borderWidth:2, pointRadius:0, pointHoverRadius:4}]},
+        options:{...BASE}
+    });
+
+    // Success Rate doughnut
+    charts.success = new Chart(document.getElementById('chartSuccessRate'), {
+        type:'doughnut',
+        data:{labels:['Success','Failed'], datasets:[{data:[SUCCESS_COUNT,TOTAL_COUNT-SUCCESS_COUNT], backgroundColor:['#10b981','#fca5a5'], borderWidth:0}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
+    });
+
+    // Error Rate
+    charts.error = new Chart(document.getElementById('chartErrorRate'), {
+        type:'line',
+        data:{labels:HOUR_LABELS, datasets:[{data:ERROR_COUNT_24H, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.1)', fill:true, tension:.4, borderWidth:2, pointRadius:0, pointHoverRadius:4}]},
+        options:{...BASE}
+    });
+
+    // P95 Duration horizontal bar
+    charts.p95 = new Chart(document.getElementById('chartP95Duration'), {
+        type:'bar',
+        data:{labels:PIPELINES, datasets:[{data:P95_DURATIONS, backgroundColor:P95_DURATIONS.map(v=>v>60?'rgba(239,68,68,.75)':v>30?'rgba(245,158,11,.75)':'rgba(16,185,129,.75)'), borderRadius:4, borderSkipped:false}]},
+        options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, animation:{duration:500},
+            plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw}s`}}},
+            scales:{x:{grid:{color:'#f1f5f9'},ticks:{color:'#94a3b8',font:{size:9},callback:v=>`${v}s`}},y:{grid:{display:false},ticks:{color:'#64748b',font:{size:9}}}}}
+    });
+
+    // SLA doughnut
+    charts.sla = new Chart(document.getElementById('chartSLA'), {
+        type:'doughnut',
+        data:{labels:['Within SLA','SLA Breach'], datasets:[{data:[SLA_OK,SLA_TOTAL-SLA_OK], backgroundColor:['#6366f1','#fcd34d'], borderWidth:0}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
+    });
+
+    // Throughput stacked bar
+    charts.throughput = new Chart(document.getElementById('chartThroughput'), {
+        type:'bar',
+        data:{labels:DAY_LABELS, datasets:[
+            {label:'Success', data:THROUGHPUT_OK,   backgroundColor:'rgba(16,185,129,.75)', borderRadius:3, stack:'s'},
+            {label:'Failed',  data:THROUGHPUT_FAIL, backgroundColor:'rgba(239,68,68,.7)',   borderRadius:3, stack:'s'},
+        ]},
+        options:{responsive:true, maintainAspectRatio:false, animation:{duration:500},
+            plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10},color:'#64748b'}}},
+            scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{size:10}}},
+                    y:{grid:{color:'#f1f5f9'},ticks:{color:'#94a3b8',font:{size:9}},stacked:true},
+                    x2:{display:false,stacked:true}}}
+    });
+}
+
+// ── Time range ────────────────────────────────────────────────────────────────
+function setTimeRange(range) {
+    currentRange = range;
+    document.querySelectorAll('.tr-btn').forEach(b => {
+        b.className = 'tr-btn text-xs px-3 py-1.5 rounded-lg font-medium transition-all ' +
+            (b.dataset.tr===range ? 'tr-active' : 'text-slate-500 hover:text-slate-800');
+    });
+    const scale = {'1h':.1,'6h':.4,'24h':1,'7d':7}[range]||1;
+    const total = Math.round(187*scale);
+    document.getElementById('metTotalRuns').textContent  = total;
+    document.getElementById('kpiTotalRuns').textContent  = total;
+    document.getElementById('kpiFailed').textContent     = Math.round(9*scale);
+    showToast(`Metrics updated · ${range} window`, 'info');
+}
+
+function refreshMetrics() {
+    showToast(`Metrics refreshed · ${currentRange}`, 'success');
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    renderHealthMap();
+    buildCharts();
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await fetch('/logout', {method:'POST'});
+        window.location.href = '/login';
+    });
+    fetch('/me').then(r=>r.ok?r.json():null).then(d=>{
+        if(d&&d.username) document.getElementById('sidebarUsername').textContent=d.username;
+    }).catch(()=>{});
+});
+</script>
+</body>
+</html>

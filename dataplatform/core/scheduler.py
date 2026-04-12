@@ -1,4 +1,6 @@
 import logging
+import json
+import uuid
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -9,6 +11,8 @@ from dataplatform.core.config import load_config
 from dataplatform.core.dag import DAGBuilder
 from dataplatform.core.executor import PipelineExecutor
 from dataplatform.core.logging_config import log_pipeline_start, log_pipeline_success, log_pipeline_failure
+from dataplatform.core.database import save_run_status
+from dataplatform.core.alerts import check_sla_and_alert
 import time
 
 logger = logging.getLogger(__name__)
@@ -18,6 +22,7 @@ class PipelineScheduler:
     """Scheduler for running pipelines based on cron schedules."""
 
     def __init__(self):
+        self.state_file = Path(__file__).parent.parent.parent / "data" / "scheduler_state.json"
         self.scheduler = BackgroundScheduler(
             jobstores={
                 'default': MemoryJobStore()
@@ -32,6 +37,37 @@ class PipelineScheduler:
             }
         )
         self.scheduled_pipelines = {}
+
+    def _persist_schedules(self) -> None:
+        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        persisted = {
+            name: {
+                "config_path": info["config_path"],
+                "schedule": info["schedule"],
+            }
+            for name, info in self.scheduled_pipelines.items()
+        }
+        self.state_file.write_text(json.dumps(persisted, indent=2), encoding="utf-8")
+
+    def _restore_schedules(self) -> None:
+        if not self.state_file.exists():
+            return
+
+        try:
+            restored = json.loads(self.state_file.read_text(encoding="utf-8"))
+            if not isinstance(restored, dict):
+                logger.warning("Ignoring invalid scheduler state file format")
+                return
+
+            for pipeline_name, payload in restored.items():
+                config_path = payload.get("config_path")
+                schedule = payload.get("schedule")
+                if not config_path or not isinstance(schedule, dict):
+                    logger.warning(f"Skipping invalid scheduler state entry for {pipeline_name}")
+                    continue
+                self.schedule_pipeline(config_path, custom_schedule=schedule)
+        except Exception as e:
+            logger.error(f"Failed to restore persisted schedules: {e}")
 
     def schedule_pipeline(self, config_path: str, custom_schedule: dict = None) -> bool:
         """Schedule a pipeline based on its cron configuration or custom schedule."""
@@ -71,6 +107,7 @@ class PipelineScheduler:
                 'schedule': schedule
             }
 
+            self._persist_schedules()
             logger.info(f"Scheduled pipeline {config.pipeline_name} with cron: {schedule}")
             return True
 
@@ -84,6 +121,7 @@ class PipelineScheduler:
             try:
                 self.scheduled_pipelines[pipeline_name]['job'].remove()
                 del self.scheduled_pipelines[pipeline_name]
+                self._persist_schedules()
                 logger.info(f"Unscheduled pipeline {pipeline_name}")
                 return True
             except Exception as e:
@@ -108,6 +146,7 @@ class PipelineScheduler:
         """Start the scheduler."""
         if not self.scheduler.running:
             self.scheduler.start()
+            self._restore_schedules()
             logger.info("Pipeline scheduler started")
 
     def stop(self):
@@ -120,34 +159,45 @@ class PipelineScheduler:
         """Execute a scheduled pipeline run."""
         try:
             config = load_config(config_path)
-            logger.info(f"Running scheduled pipeline: {config.pipeline_name}")
+            run_id = str(uuid.uuid4())
+            logger.info(f"Running scheduled pipeline: {config.pipeline_name} (run_id={run_id})")
 
-            # Log pipeline start
             log_pipeline_start(config.pipeline_name, len(config.tasks))
+            save_run_status(config.pipeline_name, run_id, "started", "Scheduled run started")
             start_time = time.time()
 
             dag_builder = DAGBuilder(config.tasks)
-            dag = dag_builder.build()
-            execution_order = dag_builder.get_execution_order()
+            dag_builder.build()
+            execution_waves = dag_builder.get_execution_waves()
+            execution_order = [t for wave in execution_waves for t in wave]
 
             executor = PipelineExecutor()
-            success, results, errors = executor.execute_pipeline(
+            success, results, errors = executor.execute_pipeline_parallel(
                 tasks={task.name: task for task in config.tasks},
-                execution_order=execution_order,
-                config={"file_path": config.file_path}
+                execution_waves=execution_waves,
+                config={"file_path": config.file_path},
+                pipeline_name=config.pipeline_name,
+                run_id=run_id,
             )
 
             duration = time.time() - start_time
 
+            sla_violated = False
+            if config.sla:
+                sla_violated = check_sla_and_alert(config.pipeline_name, run_id, duration, config.sla)
+
             if success:
                 log_pipeline_success(config.pipeline_name, duration)
+                save_run_status(config.pipeline_name, run_id, "completed", "Scheduled run completed",
+                                {"duration_seconds": round(duration, 2), "sla_violated": sla_violated})
             else:
-                # Log which task failed
-                failed_tasks = [task for task, result in results.items() if not result]
+                failed_tasks = [t for t, r in results.items() if not r]
                 error_msg = f"Failed at tasks: {failed_tasks}"
                 if errors:
                     error_msg += f" - Errors: {errors}"
                 log_pipeline_failure(config.pipeline_name, error_msg, duration)
+                save_run_status(config.pipeline_name, run_id, "failed", error_msg,
+                                {"duration_seconds": round(duration, 2), "sla_violated": sla_violated})
 
         except Exception as e:
             logger.error(f"Scheduled pipeline execution failed for {config_path}: {e}", exc_info=True)

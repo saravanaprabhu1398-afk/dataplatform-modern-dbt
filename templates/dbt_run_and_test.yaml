@@ -1,0 +1,40 @@
+pipeline_name: dbt_run_and_test
+description: Run dbt models then execute dbt tests to validate data quality
+tags:
+  - dbt
+  - transformation
+  - testing
+
+tasks:
+  - name: dbt_run
+    type: transformer
+    plugin: dbt
+    operation: run
+    config:
+      project_dir: dbt_project
+      profiles_dir: "~/.dbt"
+      select: null
+    lineage:
+      writes_to:
+        - "duckdb://dbt_project/target/models"
+
+  - name: dbt_test
+    type: transformer
+    plugin: dbt
+    operation: test
+    depends_on:
+      - dbt_run
+    config:
+      project_dir: dbt_project
+      profiles_dir: "~/.dbt"
+      select: null
+
+  - name: dbt_docs
+    type: transformer
+    plugin: dbt
+    operation: docs
+    depends_on:
+      - dbt_test
+    config:
+      project_dir: dbt_project
+      profiles_dir: "~/.dbt"
