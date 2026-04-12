@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Catalog — Data Platform Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- Sidebar -->
+<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
+    <div class="px-4 py-5 border-b border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+                <i class="fas fa-layer-group text-white text-xs"></i>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
+                <p class="text-slate-400 text-[11px]">Suite</p>
+            </div>
+        </div>
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
+        </a>
+        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
+        </a>
+        <a href="/generator" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wand-magic-sparkles w-4 text-center shrink-0"></i><span>Generator</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p></div>
+        <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
+            <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
+        </a>
+        <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p></div>
+        <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p></div>
+        <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
+        </a>
+            <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
+        <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
+        </a>
+    </nav>
+    <div class="px-4 py-4 border-t border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                <i class="fas fa-user text-indigo-300 text-xs"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
+                <p class="text-slate-500 text-xs">Data Platform</p>
+            </div>
+            <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
+                <i class="fas fa-arrow-right-from-bracket text-sm"></i>
+            </button>
+        </div>
+    </div>
+</aside>
+
+<!-- Page wrapper -->
+<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+
+    <!-- Top bar -->
+    <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30">
+        <nav class="flex items-center gap-2 text-sm">
+            <a href="/" class="text-slate-500 hover:text-slate-800 transition-colors">Home</a>
+            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+            <a href="/catalog" class="text-slate-500 hover:text-slate-800 transition-colors">Discovery</a>
+            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+            <span class="text-slate-900 font-semibold">Catalog</span>
+        </nav>
+        <div class="flex items-center gap-3">
+            <button onclick="loadAssets()" class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2">
+                <i class="fas fa-rotate-right text-slate-400"></i> Refresh
+            </button>
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="flex-1 p-6 space-y-6">
+
+        <!-- Stats row -->
+        <div id="statsRow" class="grid grid-cols-3 gap-4 hidden">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
+                <div class="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                    <i class="fas fa-server text-indigo-500 text-lg"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-indigo-600" id="statTotal">0</p>
+                    <p class="text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wide">Total Assets</p>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
+                <div class="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                    <i class="fas fa-tags text-emerald-500 text-lg"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-emerald-600" id="statTypes">0</p>
+                    <p class="text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wide">Asset Types</p>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
+                <div class="w-11 h-11 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
+                    <i class="fas fa-diagram-project text-sky-500 text-lg"></i>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-sky-600" id="statPipes">0</p>
+                    <p class="text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wide">Pipeline Connections</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs + content panel -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+
+            <!-- Tab bar -->
+            <div class="border-b border-slate-200 px-4 flex gap-0">
+                <button id="tab-assets" onclick="showTab('assets')"
+                    class="border-b-2 border-indigo-600 text-indigo-600 font-semibold text-sm px-5 py-3.5">
+                    <i class="fas fa-server mr-2"></i>Data Assets
+                </button>
+                <button id="tab-pipelines" onclick="showTab('pipelines')"
+                    class="text-slate-500 hover:text-slate-800 text-sm px-5 py-3.5 border-b-2 border-transparent">
+                    <i class="fas fa-diagram-project mr-2"></i>Pipelines
+                </button>
+            </div>
+
+            <!-- Search bar (assets tab only) -->
+            <div id="search-bar" class="px-5 py-4 border-b border-slate-100">
+                <div class="relative max-w-md">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input id="searchInput" type="text" placeholder="Search by URI, type, or pipeline…"
+                        class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                        oninput="debounceSearch()">
+                </div>
+            </div>
+
+            <!-- Assets panel -->
+            <div id="panel-assets" class="divide-y divide-slate-100">
+                <!-- Loading placeholder -->
+                <div id="assetLoading" class="px-5 py-10 flex items-center justify-center gap-3 text-slate-400">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span class="text-sm">Loading assets…</span>
+                </div>
+            </div>
+
+            <!-- Pipelines panel -->
+            <div id="panel-pipelines" class="hidden divide-y divide-slate-100">
+                <div id="pipelineLoading" class="px-5 py-10 flex items-center justify-center gap-3 text-slate-400">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span class="text-sm">Loading pipelines…</span>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+</div>
+
+<!-- Asset Detail Modal -->
+<div id="assetModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-start justify-between">
+            <div class="min-w-0 flex-1 pr-4">
+                <div class="flex items-center gap-2 mb-1">
+                    <span id="modalTypeBadge" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700"></span>
+                </div>
+                <h2 class="text-base font-bold text-slate-900 break-all font-mono" id="modalUri"></h2>
+            </div>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 transition-colors shrink-0 mt-0.5">
+                <i class="fas fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <div class="px-6 py-5">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Connected Pipelines</h3>
+            <div id="modalPipelines" class="space-y-2"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
+
+<script>
+let _searchTimer = null;
+
+function debounceSearch() {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(loadAssets, 400);
+}
+
+function showToast(msg, type = 'info') {
+    const c = document.getElementById('toastContainer');
+    const cfg = {
+        success: ['bg-emerald-600', 'fa-circle-check'],
+        error:   ['bg-red-600',     'fa-circle-xmark'],
+        warning: ['bg-amber-500',   'fa-triangle-exclamation'],
+        info:    ['bg-indigo-600',  'fa-circle-info']
+    }[type] || ['bg-slate-700', 'fa-circle-info'];
+    const t = document.createElement('div');
+    t.className = `${cfg[0]} text-white px-4 py-3 rounded-xl shadow-xl border border-white/20 flex items-start gap-3 pointer-events-auto`;
+    t.innerHTML = `<i class="fas ${cfg[1]} mt-0.5 shrink-0 text-sm"></i><span class="text-sm flex-1 leading-snug">${msg}</span><button class="shrink-0 text-white/60 hover:text-white ml-1"><i class="fas fa-xmark text-xs"></i></button>`;
+    t.querySelector('button').onclick = () => t.remove();
+    c.appendChild(t);
+    setTimeout(() => t && t.remove(), 5000);
+}
+
+function showTab(name) {
+    const tabs = ['assets', 'pipelines'];
+    tabs.forEach(t => {
+        document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== name);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === name) {
+            btn.className = 'border-b-2 border-indigo-600 text-indigo-600 font-semibold text-sm px-5 py-3.5';
+        } else {
+            btn.className = 'text-slate-500 hover:text-slate-800 text-sm px-5 py-3.5 border-b-2 border-transparent';
+        }
+    });
+    const searchBar = document.getElementById('search-bar');
+    searchBar.classList.toggle('hidden', name !== 'assets');
+    if (name === 'pipelines') loadPipelines();
+}
+
+const TYPE_COLORS = {
+    'PostgreSQL': 'bg-blue-100 text-blue-700',
+    'postgres':   'bg-blue-100 text-blue-700',
+    'S3':         'bg-amber-100 text-amber-700',
+    'DuckDB':     'bg-yellow-100 text-yellow-700',
+    'duckdb':     'bg-yellow-100 text-yellow-700',
+    'Kafka':      'bg-red-100 text-red-700',
+    'kafka':      'bg-red-100 text-red-700',
+    'Snowflake':  'bg-sky-100 text-sky-700',
+    'BigQuery':   'bg-green-100 text-green-700',
+    'File':       'bg-slate-100 text-slate-600',
+    'HTTP':       'bg-purple-100 text-purple-700',
+    'MySQL':      'bg-orange-100 text-orange-700',
+    'mysql':      'bg-orange-100 text-orange-700',
+};
+
+function typeColor(t) {
+    return TYPE_COLORS[t] || 'bg-indigo-100 text-indigo-700';
+}
+
+function assetIcon(t) {
+    const icons = {
+        'PostgreSQL': 'fa-database', 'postgres': 'fa-database',
+        'S3': 'fa-bucket',
+        'DuckDB': 'fa-table', 'duckdb': 'fa-table',
+        'Kafka': 'fa-stream', 'kafka': 'fa-stream',
+        'Snowflake': 'fa-snowflake',
+        'BigQuery': 'fa-cloud',
+        'File': 'fa-file',
+        'HTTP': 'fa-globe',
+        'MySQL': 'fa-database', 'mysql': 'fa-database',
+    };
+    return icons[t] || 'fa-server';
+}
+
+async function loadAssets() {
+    const q = document.getElementById('searchInput').value.trim();
+    const url = q ? `/catalog/assets?q=${encodeURIComponent(q)}&limit=100` : '/catalog/assets?limit=100';
+
+    const panel = document.getElementById('panel-assets');
+    panel.innerHTML = `
+        <div class="px-5 py-10 flex items-center justify-center gap-3 text-slate-400">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span class="text-sm">Loading assets…</span>
+        </div>`;
+
+    const data = await fetch(url).then(r => r.json()).catch(() => {
+        showToast('Failed to load assets', 'error');
+        return { assets: [] };
+    });
+    const assets = data.assets || [];
+
+    const statsRow = document.getElementById('statsRow');
+
+    if (!assets.length) {
+        statsRow.classList.add('hidden');
+        panel.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-20 gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+                    <i class="fas fa-inbox text-slate-400 text-2xl"></i>
+                </div>
+                <div class="text-center">
+                    <p class="text-slate-700 font-semibold">No assets found</p>
+                    <p class="text-slate-400 text-sm max-w-sm mt-1">Run pipelines with lineage declarations to populate the catalog</p>
+                </div>
+                <a href="/dashboard" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-semibold">
+                    Go to DP Flow
+                </a>
+            </div>`;
+        return;
+    }
+
+    statsRow.classList.remove('hidden');
+    const types = new Set(assets.map(a => a.asset_type));
+    document.getElementById('statTotal').textContent = assets.length;
+    document.getElementById('statTypes').textContent = types.size;
+    document.getElementById('statPipes').textContent = assets.reduce((s, a) => s + (a.pipeline_count || 0), 0);
+
+    panel.innerHTML = assets.map(a => `
+        <div class="px-5 py-4 hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-between gap-4"
+             onclick="openAssetDetail('${encodeURIComponent(a.asset_uri)}')">
+            <div class="flex items-center gap-4 min-w-0 flex-1">
+                <div class="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                    <i class="fas ${assetIcon(a.asset_type)} text-indigo-500 text-sm"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${typeColor(a.asset_type)}">${a.asset_type}</span>
+                    </div>
+                    <p class="font-mono text-sm text-slate-800 truncate">${a.asset_uri}</p>
+                    ${a.last_seen_at ? `<p class="text-[11px] text-slate-400 mt-0.5">Last seen ${new Date(a.last_seen_at).toLocaleString()}</p>` : ''}
+                </div>
+            </div>
+            <div class="flex items-center gap-6 shrink-0 text-center">
+                <div><p class="text-sm font-bold text-indigo-600">${a.pipeline_count || 0}</p><p class="text-[11px] text-slate-400">pipelines</p></div>
+                <div><p class="text-sm font-bold text-emerald-600">${a.write_count || 0}</p><p class="text-[11px] text-slate-400">writes</p></div>
+                <div><p class="text-sm font-bold text-sky-600">${a.read_count || 0}</p><p class="text-[11px] text-slate-400">reads</p></div>
+                <i class="fas fa-chevron-right text-slate-300 text-xs"></i>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function openAssetDetail(encodedUri) {
+    const uri = decodeURIComponent(encodedUri);
+    const data = await fetch(`/catalog/assets/detail?uri=${encodedUri}`).then(r => r.json()).catch(() => null);
+    if (!data) {
+        showToast('Failed to load asset details', 'error');
+        return;
+    }
+
+    const badge = document.getElementById('modalTypeBadge');
+    badge.textContent = data.asset_type || '';
+    badge.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${typeColor(data.asset_type)}`;
+    document.getElementById('modalUri').textContent = uri;
+
+    const pipelines = data.pipelines || [];
+    document.getElementById('modalPipelines').innerHTML = pipelines.length
+        ? pipelines.map(p => `
+            <div class="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-lg border border-slate-100">
+                <div class="min-w-0">
+                    <p class="text-sm font-semibold text-slate-800">${p.pipeline_name}</p>
+                    <p class="text-xs text-slate-400 mt-0.5">${p.task_name}</p>
+                </div>
+                <span class="text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ml-3 ${p.direction === 'reads_from' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}">
+                    ${p.direction === 'reads_from' ? 'reads' : 'writes'}
+                </span>
+            </div>
+        `).join('')
+        : '<p class="text-sm text-slate-400 py-4 text-center">No pipeline connections found</p>';
+
+    document.getElementById('assetModal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('assetModal').classList.add('hidden');
+}
+
+async function loadPipelines() {
+    const panel = document.getElementById('panel-pipelines');
+    panel.innerHTML = `
+        <div class="px-5 py-10 flex items-center justify-center gap-3 text-slate-400">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span class="text-sm">Loading pipelines…</span>
+        </div>`;
+
+    const data = await fetch('/catalog/pipelines').then(r => r.json()).catch(() => {
+        showToast('Failed to load pipelines', 'error');
+        return { pipelines: [] };
+    });
+    const pipelines = data.pipelines || [];
+
+    if (!pipelines.length) {
+        panel.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-20 gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+                    <i class="fas fa-diagram-project text-slate-400 text-2xl"></i>
+                </div>
+                <div class="text-center">
+                    <p class="text-slate-700 font-semibold">No pipeline lineage recorded yet</p>
+                    <p class="text-slate-400 text-sm max-w-sm mt-1">Run pipelines with lineage declarations to see connections here</p>
+                </div>
+                <a href="/dashboard" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-semibold">
+                    Go to DP Flow
+                </a>
+            </div>`;
+        return;
+    }
+
+    panel.innerHTML = pipelines.map(p => `
+        <div class="px-5 py-4 hover:bg-slate-50 transition-colors flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                    <i class="fas fa-diagram-project text-slate-500 text-sm"></i>
+                </div>
+                <div>
+                    <p class="font-semibold text-slate-800 text-sm">${p.pipeline_name}</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Last run: ${p.last_run_at ? new Date(p.last_run_at).toLocaleString() : 'never'}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-6 text-center">
+                <div><p class="text-sm font-bold text-slate-700">${p.asset_count || 0}</p><p class="text-[11px] text-slate-400">assets</p></div>
+                <div><p class="text-sm font-bold text-sky-600">${p.inputs || 0}</p><p class="text-[11px] text-slate-400">inputs</p></div>
+                <div><p class="text-sm font-bold text-emerald-600">${p.outputs || 0}</p><p class="text-[11px] text-slate-400">outputs</p></div>
+            </div>
+        </div>
+    `).join('');
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await fetch('/logout', { method: 'POST' });
+    window.location.href = '/login';
+});
+
+// Init
+loadAssets();
+fetch('/me').then(r => r.ok ? r.json() : null).then(data => { if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username; }).catch(() => {});
+</script>
+</body>
+</html>

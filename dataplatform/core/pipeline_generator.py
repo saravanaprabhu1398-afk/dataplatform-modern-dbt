@@ -1,3 +1,4 @@
+import logging
 import re
 import unicodedata
 from pathlib import Path
@@ -7,6 +8,8 @@ import yaml
 from pydantic import BaseModel, Field
 
 from dataplatform.core.config import PipelineConfig, load_config
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineGenerationRequestModel(BaseModel):
@@ -112,6 +115,183 @@ TASK_HINT_WORDS = set(OPERATION_KEYWORDS) | {
     "json",
     "parquet",
 }
+
+PLUGIN_CONFIG_TEMPLATES: Dict[Tuple[Optional[str], Optional[str]], Dict[str, Any]] = {
+    ("duckdb", "load"): {"file_path": "data/input.csv", "show_columns": True},
+    ("duckdb", "query"): {"file_path": "data/input.csv", "sql": "SELECT * FROM data"},
+    ("duckdb", "validate"): {
+        "file_path": "data/input.csv",
+        "checks": [{"name": "no_nulls", "sql": "SELECT COUNT(*) FROM data WHERE id IS NULL", "expect": 0}],
+    },
+    ("duckdb", "aggregate"): {
+        "file_path": "data/input.csv",
+        "group_by": ["category"],
+        "metrics": [{"column": "amount", "function": "sum", "alias": "total_amount"}],
+    },
+    ("duckdb", "transform"): {
+        "file_path": "data/input.csv",
+        "columns": [{"name": "new_col", "sql": "col * 1.0"}],
+    },
+    ("postgres", "query"): {
+        "connection": {"host": "localhost", "port": 5432, "database": "mydb", "user": "user", "password": "${POSTGRES_PASSWORD}"},
+        "sql": "SELECT * FROM my_table",
+    },
+    ("postgres", "load"): {
+        "connection": {"host": "localhost", "port": 5432, "database": "mydb", "user": "user", "password": "${POSTGRES_PASSWORD}"},
+        "table_name": "target_table",
+        "file_path": "data/input.csv",
+    },
+    ("postgres", "execute"): {
+        "connection": {"host": "localhost", "port": 5432, "database": "mydb", "user": "user", "password": "${POSTGRES_PASSWORD}"},
+        "sql": "INSERT INTO my_table VALUES (...)",
+    },
+    ("mysql", "query"): {
+        "connection": {"host": "localhost", "port": 3306, "database": "mydb", "user": "user", "password": "${MYSQL_PASSWORD}"},
+        "sql": "SELECT * FROM my_table",
+    },
+    ("mysql", "load"): {
+        "connection": {"host": "localhost", "port": 3306, "database": "mydb", "user": "user", "password": "${MYSQL_PASSWORD}"},
+        "table_name": "target_table",
+        "file_path": "data/input.csv",
+    },
+    ("mysql", "execute"): {
+        "connection": {"host": "localhost", "port": 3306, "database": "mydb", "user": "user", "password": "${MYSQL_PASSWORD}"},
+        "sql": "UPDATE my_table SET col = val",
+    },
+    ("snowflake", "load_to_snowflake"): {
+        "snowflake_config": {
+            "account": "your_account.snowflakecomputing.com",
+            "user": "${SNOWFLAKE_USER}",
+            "password": "${SNOWFLAKE_PASSWORD}",
+            "warehouse": "COMPUTE_WH",
+            "database": "MY_DB",
+            "schema": "PUBLIC",
+        },
+        "table_name": "target_table",
+    },
+    ("snowflake", "load"): {
+        "snowflake_config": {
+            "account": "your_account.snowflakecomputing.com",
+            "user": "${SNOWFLAKE_USER}",
+            "password": "${SNOWFLAKE_PASSWORD}",
+            "warehouse": "COMPUTE_WH",
+            "database": "MY_DB",
+            "schema": "PUBLIC",
+        },
+        "table_name": "target_table",
+    },
+    ("bigquery", "query"): {
+        "project_id": "my-gcp-project",
+        "dataset_id": "my_dataset",
+        "sql": "SELECT * FROM `my-gcp-project.my_dataset.my_table`",
+    },
+    ("bigquery", "load"): {
+        "project_id": "my-gcp-project",
+        "dataset_id": "my_dataset",
+        "table_id": "my_table",
+        "source_file": "data/input.csv",
+    },
+    ("api", "GET"): {
+        "method": "GET",
+        "url": "https://api.example.com/endpoint",
+        "headers": {"Authorization": "Bearer ${API_TOKEN}"},
+        "params": {},
+    },
+    ("api", "POST"): {
+        "method": "POST",
+        "url": "https://api.example.com/endpoint",
+        "headers": {"Authorization": "Bearer ${API_TOKEN}", "Content-Type": "application/json"},
+        "json": {"key": "value"},
+    },
+    ("api", "fetch"): {
+        "method": "GET",
+        "url": "https://api.example.com/endpoint",
+        "headers": {"Authorization": "Bearer ${API_TOKEN}"},
+        "params": {},
+    },
+    ("kafka", "publish"): {
+        "brokers": ["localhost:9092"],
+        "topic": "my_topic",
+        "message": {"event": "data_ready"},
+    },
+    ("kafka", "subscribe"): {
+        "brokers": ["localhost:9092"],
+        "topic": "my_topic",
+        "group_id": "my_consumer_group",
+        "max_messages": 100,
+    },
+    ("spark", "submit"): {
+        "spark_master": "spark://localhost:7077",
+        "app_name": "MySparkApp",
+        "input_path": "data/input.parquet",
+        "output_path": "data/output.parquet",
+    },
+    ("python", "execute_code"): {"code": "result = 'hello from python'\nprint(result)"},
+    ("python", "run_script"): {
+        "script_path": "scripts/my_script.py",
+        "parameters": {"input": "data/input.csv"},
+    },
+    ("shell", "execute"): {"command": "bash scripts/my_script.sh", "cwd": ".", "timeout": 300},
+    ("file", "read"): {"file_path": "data/input.csv"},
+    ("file", "write"): {"file_path": "data/output.csv", "content": ""},
+    ("file", "merge"): {
+        "source_files": ["data/part1.csv", "data/part2.csv"],
+        "destination": "data/merged.csv",
+    },
+    ("email", "send"): {
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "sender_email": "${EMAIL_SENDER}",
+        "sender_password": "${EMAIL_PASSWORD}",
+        "recipients": ["recipient@example.com"],
+        "subject": "Pipeline Notification",
+        "body": "Pipeline execution completed.",
+    },
+    ("dbt", "run"): {"project_dir": "dbt_project", "profiles_dir": "~/.dbt"},
+    ("dbt", "test"): {"project_dir": "dbt_project", "profiles_dir": "~/.dbt"},
+    ("dbt", "compile"): {"project_dir": "dbt_project", "profiles_dir": "~/.dbt"},
+    ("dbt", "seed"): {"project_dir": "dbt_project", "profiles_dir": "~/.dbt"},
+    ("dbt", "snapshot"): {"project_dir": "dbt_project", "profiles_dir": "~/.dbt"},
+    ("dbt", "docs"): {"project_dir": "dbt_project", "profiles_dir": "~/.dbt"},
+}
+
+
+# Maps operation synonyms to canonical operations used as template keys
+_OPERATION_ALIASES: Dict[str, str] = {
+    "extract": "query",
+    "fetch": "query",
+    "ingest": "load",
+    "export": "load",
+    "stage": "load",
+    "sync": "load",
+    "transform": "transform",
+    "report": "query",
+}
+
+
+def _get_config_template(plugin: str, operation: Optional[str]) -> Dict[str, Any]:
+    """Return a config template dict for the given (plugin, operation) pair.
+
+    Falls back to an aliased operation when the exact pair is missing, then
+    falls back to the first available template for the plugin.
+    """
+    key = (plugin, operation)
+    if key in PLUGIN_CONFIG_TEMPLATES:
+        return dict(PLUGIN_CONFIG_TEMPLATES[key])
+
+    # Try resolving an operation alias
+    if operation and operation in _OPERATION_ALIASES:
+        aliased_op = _OPERATION_ALIASES[operation]
+        alias_key = (plugin, aliased_op)
+        if alias_key in PLUGIN_CONFIG_TEMPLATES:
+            return dict(PLUGIN_CONFIG_TEMPLATES[alias_key])
+
+    # Fall back to any template available for this plugin
+    for (p, _op), template in PLUGIN_CONFIG_TEMPLATES.items():
+        if p == plugin:
+            return dict(template)
+
+    return {}
 
 
 def _normalize_text(input_text: str) -> str:
@@ -337,7 +517,7 @@ def _build_task_from_line(line: str, index: int) -> Optional[Dict[str, Any]]:
         "type": task_type,
         "plugin": plugin or "python",
         "operation": operation,
-        "config": {},
+        "config": _get_config_template(plugin or "python", operation),
         "retries": 0,
     }
 
@@ -407,8 +587,22 @@ def _cleanup_task_fields(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def generate_pipeline_yaml_from_text(input_text: str) -> Dict[str, Any]:
+    """
+    Primary entry point for pipeline generation from free text.
+
+    Uses the NLP engine (nlp_generator.py) as the primary path.
+    Falls back to the legacy regex approach if NLP raises an unexpected error.
+    """
+    # ── NLP path (primary) ───────────────────────────────────────────────────
+    try:
+        from dataplatform.core.nlp_generator import generate_from_text as _nlp_generate
+        return _nlp_generate(input_text)
+    except Exception as nlp_exc:  # pragma: no cover
+        logger.warning("NLP generator failed (%s); falling back to legacy regex parser.", nlp_exc)
+
+    # ── Legacy regex fallback ─────────────────────────────────────────────────
     normalized_text = _normalize_text(input_text)
-    warnings: List[str] = []
+    warnings: List[str] = ["NLP parser unavailable; used legacy regex engine."]
 
     if not normalized_text:
         normalized_text = "generated pipeline"
@@ -451,6 +645,7 @@ def generate_pipeline_yaml_from_text(input_text: str) -> Dict[str, Any]:
         "parsed_config": parsed_config.model_dump(exclude_none=True),
         "warnings": warnings,
         "detected_language": "english-like-free-text",
+        "nlp_summary": [],
     }
 
 

@@ -8,177 +8,505 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
-
-        .animate-fadeIn {
-            animation: fadeIn 0.3s ease-in-out;
-        }
+        .animate-fadeIn { animation: fadeIn 0.25s ease-out; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .nlp-badge { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <a href="/" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
-                            <i class="fas fa-arrow-left mr-2"></i>Back to Home
-                        </a>
-                        <button id="logoutBtn" class="inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-900">
-                            <i class="fas fa-arrow-right-from-bracket mr-2"></i>Logout
-                        </button>
-                    </div>
-                    <h1 class="text-3xl font-bold text-gray-800 mt-3">
-                        <i class="fas fa-magic text-cyan-600 mr-2"></i>
-                        Pipeline YAML Generator
-                    </h1>
-                    <p class="text-gray-600 mt-2">Paste Word-style notes or natural language instructions to generate a pipeline YAML draft.</p>
+<body class="bg-slate-50 min-h-screen">
+
+    <!-- ═══════════════════════════ SIDEBAR ═══════════════════════════ -->
+    <aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
+        <!-- Brand -->
+        <div class="px-4 py-5 border-b border-slate-700/50">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+                    <i class="fas fa-layer-group text-white text-xs"></i>
                 </div>
-                <div id="pipelineGeneratorMeta" class="bg-cyan-50 border border-cyan-200 rounded-lg px-4 py-3 text-sm text-cyan-800 min-w-64">
-                    <p><span class="font-semibold">Detected Language:</span> <span id="generatorDetectedLanguage">-</span></p>
-                    <p class="mt-1"><span class="font-semibold">Pipeline Name:</span> <span id="generatorPipelineName">-</span></p>
+                <div>
+                    <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
+                    <p class="text-slate-400 text-[11px]">Suite</p>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div class="space-y-4">
+        <!-- Nav -->
+        <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+            <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+                <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
+            </a>
+            <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+                <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
+            </a>
+            <a href="/generator" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
+                <i class="fas fa-wand-magic-sparkles w-4 text-center shrink-0"></i><span>Generator</span>
+            </a>
+
+            <div class="pt-4 pb-1">
+                <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p>
+            </div>
+            <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+                <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
+            </a>
+            <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+                <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
+            </a>
+
+            <div class="pt-4 pb-1">
+                <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p>
+            </div>
+            <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+                <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
+            </a>
+
+            <div class="pt-4 pb-1">
+                <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p>
+            </div>
+            <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+                <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
+            </a>
+                    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
+            <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+                <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
+            </a>
+        </nav>
+
+        <!-- User footer -->
+        <div class="px-4 py-4 border-t border-slate-700/50">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                    <i class="fas fa-user text-indigo-300 text-xs"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
+                    <p class="text-slate-500 text-xs">Data Platform</p>
+                </div>
+                <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
+                    <i class="fas fa-arrow-right-from-bracket text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ═══════════════════════════ PAGE SHELL ═══════════════════════════ -->
+    <div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+
+        <!-- Topbar -->
+        <header class="bg-white border-b border-slate-200 px-6 py-3.5 sticky top-0 z-30">
+            <div class="flex items-center justify-between">
+                <!-- Breadcrumb -->
+                <nav class="flex items-center gap-1.5 text-sm">
+                    <a href="/" class="text-slate-400 hover:text-slate-600 transition-colors">Home</a>
+                    <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+                    <span class="text-slate-700 font-medium">Generator Studio</span>
+                </nav>
+                <!-- Keyboard hint -->
+                <span class="text-xs text-slate-400 select-none">
+                    <i class="fas fa-keyboard mr-1.5"></i>Ctrl+Enter to generate
+                </span>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="flex-1 p-6">
+
+            <!-- ── Page header card ── -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
-                        <label for="pipelineGeneratorInput" class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-file-word text-blue-600 mr-2"></i>Natural Language Input
-                        </label>
-                        <textarea id="pipelineGeneratorInput" rows="14" placeholder="Example: Build a daily sales pipeline. First extract orders from PostgreSQL, then clean data with Python, then run dbt models, and finally publish results to Snowflake..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-y"></textarea>
+                        <h1 class="text-xl font-bold text-slate-900">Pipeline YAML Generator</h1>
+                        <p class="text-sm text-slate-500 mt-1">Describe your pipeline in plain English and get production-ready YAML in seconds</p>
                     </div>
 
-                    <div class="flex flex-wrap gap-3">
-                        <button id="generatePipelineYamlBtn" class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg">
-                            <i class="fas fa-wand-magic-sparkles mr-2"></i>Generate YAML
+                    <!-- Meta panel — hidden until first successful generation -->
+                    <div id="metaPanel" class="hidden flex-shrink-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <!-- NLP engine badge (shown when nlp-pattern-matching is detected) -->
+                            <div id="nlpEngineBadge" class="hidden items-center gap-1.5 nlp-badge rounded-lg px-3 py-1.5">
+                                <i class="fas fa-brain text-white text-xs"></i>
+                                <span class="text-xs text-white font-semibold">NLP Powered</span>
+                            </div>
+                            <!-- Fallback language pill -->
+                            <div id="langPill" class="hidden items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5">
+                                <i class="fas fa-code text-slate-400 text-xs"></i>
+                                <span class="text-xs text-slate-500 font-medium">Engine:</span>
+                                <span id="generatorDetectedLanguage" class="text-xs text-slate-700 font-semibold">-</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-1.5">
+                                <i class="fas fa-sitemap text-indigo-400 text-xs"></i>
+                                <span class="text-xs text-indigo-500 font-medium">Pipeline:</span>
+                                <span id="generatorPipelineName" class="text-xs text-indigo-700 font-semibold">-</span>
+                            </div>
+                            <!-- Task count badge -->
+                            <div id="taskCountBadge" class="hidden items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+                                <i class="fas fa-layer-group text-emerald-500 text-xs"></i>
+                                <span id="taskCountLabel" class="text-xs text-emerald-700 font-semibold">0 tasks</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Two-column generator layout ── -->
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+
+                <!-- Left column: Input -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
+
+                    <!-- Label -->
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-pen-to-square text-indigo-500 text-sm"></i>
+                        <span class="text-sm font-semibold text-slate-700">Instructions</span>
+                    </div>
+
+                    <!-- Textarea -->
+                    <textarea
+                        id="pipelineGeneratorInput"
+                        rows="14"
+                        placeholder="Example:
+Build a daily sales pipeline.
+- Extract orders from PostgreSQL (source: orders_db)
+- Clean and deduplicate records with Python
+- Run dbt models: stg_orders, int_orders_enriched, fct_daily_sales
+- Load final results into Snowflake (target: analytics.sales)
+- Schedule: every day at 06:00 UTC"
+                        class="w-full border border-slate-200 rounded-lg p-3 text-sm font-sans text-slate-800 placeholder-slate-400 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+                    ></textarea>
+
+                    <!-- Action buttons -->
+                    <div class="flex flex-wrap gap-2">
+                        <button id="generatePipelineYamlBtn"
+                            class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                            <i class="fas fa-wand-magic-sparkles"></i>Generate
                         </button>
-                        <button id="downloadGeneratedYamlBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg">
-                            <i class="fas fa-download mr-2"></i>Download
+                        <button id="downloadGeneratedYamlBtn"
+                            class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-download text-emerald-600"></i>Download
                         </button>
-                        <button id="saveGeneratedYamlBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                            <i class="fas fa-save mr-2"></i>Save
+                        <button id="saveGeneratedYamlBtn"
+                            class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                            <i class="fas fa-floppy-disk text-blue-600"></i>Save to Library
                         </button>
                     </div>
 
+                    <!-- Filename -->
                     <div>
-                        <label for="generatedPipelineFilename" class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-file-signature text-gray-600 mr-2"></i>Filename
+                        <label for="generatedPipelineFilename" class="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+                            Output filename
                         </label>
-                        <input id="generatedPipelineFilename" type="text" placeholder="generated_pipeline" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                        <p class="text-xs text-gray-500 mt-1">Saved and downloaded as <code class="bg-gray-100 px-1 py-0.5 rounded">pipelines/<filename>.yaml</code></p>
+                        <input
+                            id="generatedPipelineFilename"
+                            type="text"
+                            placeholder="generated_pipeline"
+                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+                        >
+                        <p class="text-xs text-slate-400 mt-1.5">
+                            Saved as <code class="bg-slate-100 text-slate-600 px-1 py-0.5 rounded text-[11px]">pipelines/&lt;name&gt;.yaml</code>
+                        </p>
                     </div>
 
-                    <div id="pipelineGeneratorWarningsPanel" class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                        <h2 class="text-sm font-semibold text-amber-800 mb-2">
-                            <i class="fas fa-triangle-exclamation mr-2"></i>Warnings
+                    <!-- Warnings panel — hidden when no warnings -->
+                    <div id="pipelineGeneratorWarningsPanel" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <h2 class="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2">
+                            <i class="fas fa-triangle-exclamation"></i>Warnings
                         </h2>
-                        <div id="pipelineGeneratorWarnings" class="text-sm text-amber-700">
-                            <p>No warnings yet.</p>
+                        <div id="pipelineGeneratorWarnings" class="text-sm text-amber-700"></div>
+                    </div>
+                </div>
+
+                <!-- Right column: YAML preview -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
+
+                    <!-- Label row with copy button -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-code text-emerald-500 text-sm"></i>
+                            <span class="text-sm font-semibold text-slate-700">Generated YAML</span>
+                        </div>
+                        <button id="copyBtn"
+                            title="Copy to clipboard"
+                            class="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors">
+                            <i class="fas fa-copy"></i>
+                            <span id="copyBtnLabel">Copy</span>
+                        </button>
+                    </div>
+
+                    <!-- Code area + empty-state overlay wrapper -->
+                    <div class="relative flex-1">
+                        <textarea
+                            id="generatedPipelineYamlPreview"
+                            rows="22"
+                            class="w-full bg-slate-950 text-emerald-300 font-mono text-xs resize-y rounded-lg p-4 border-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        ></textarea>
+
+                        <!-- Empty-state overlay -->
+                        <div id="yamlEmptyState"
+                            class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none rounded-lg bg-slate-950">
+                            <i class="fas fa-code text-4xl text-slate-600 mb-3"></i>
+                            <p class="text-slate-500 font-medium text-sm">Generated YAML will appear here</p>
+                            <p class="text-slate-400 text-sm mt-1">Enter instructions on the left and click Generate</p>
                         </div>
                     </div>
                 </div>
 
-                <div>
-                    <label for="generatedPipelineYamlPreview" class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-code text-green-600 mr-2"></i>Generated YAML Preview
-                    </label>
-                    <textarea id="generatedPipelineYamlPreview" rows="22" placeholder="Generated YAML will appear here..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm resize-y bg-gray-50"></textarea>
+            </div><!-- /grid -->
+
+            <!-- ── NLP Intent Breakdown panel ── -->
+            <div id="nlpIntentPanel" class="hidden mt-6 animate-fadeIn">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <!-- Panel header -->
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                                <i class="fas fa-brain text-violet-600 text-xs"></i>
+                            </div>
+                            <span class="text-sm font-semibold text-slate-700">NLP Intent Analysis</span>
+                            <span class="bg-violet-100 text-violet-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">per task</span>
+                        </div>
+                        <p class="text-xs text-slate-400">How the NLP engine understood each step of your description</p>
+                    </div>
+                    <!-- Task cards grid -->
+                    <div id="nlpIntentGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
                 </div>
             </div>
-        </div>
-    </div>
 
+        </main>
+    </div><!-- /pl-56 -->
+
+    <!-- ═══════════════════════════ TOAST CONTAINER ═══════════════════════════ -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 w-80 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ═══════════════════════════ JAVASCRIPT ═══════════════════════════ -->
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('generatePipelineYamlBtn').addEventListener('click', generatePipelineYaml);
-            document.getElementById('downloadGeneratedYamlBtn').addEventListener('click', downloadGeneratedPipelineYaml);
-            document.getElementById('saveGeneratedYamlBtn').addEventListener('click', saveGeneratedPipelineYaml);
-            document.getElementById('logoutBtn').addEventListener('click', logout);
-        });
+        // ── Toast system ──────────────────────────────────────────────────────
+        function showToast(msg, type = 'info') {
+            const c = document.getElementById('toastContainer');
+            const cfg = {
+                success: ['bg-emerald-600', 'fa-circle-check'],
+                error:   ['bg-red-600',     'fa-circle-xmark'],
+                warning: ['bg-amber-500',   'fa-triangle-exclamation'],
+                info:    ['bg-indigo-600',  'fa-circle-info']
+            }[type] || ['bg-slate-700', 'fa-circle-info'];
 
-        async function logout() {
-            try {
-                await fetch('/logout', { method: 'POST' });
-            } finally {
-                window.location.href = '/login';
-            }
+            const t = document.createElement('div');
+            t.className = `${cfg[0]} text-white px-4 py-3 rounded-xl shadow-xl border border-white/20 flex items-start gap-3 pointer-events-auto animate-fadeIn`;
+            t.innerHTML = `<i class="fas ${cfg[1]} mt-0.5 shrink-0 text-sm"></i><span class="text-sm flex-1 leading-snug">${msg}</span><button class="shrink-0 text-white/60 hover:text-white ml-1"><i class="fas fa-xmark text-xs"></i></button>`;
+            t.querySelector('button').onclick = () => t.remove();
+            c.appendChild(t);
+            setTimeout(() => { if (t && t.parentNode) t.remove(); }, 5000);
         }
 
+        function showSuccess(msg) { showToast(msg, 'success'); }
+        function showError(msg)   { showToast(msg, 'error'); }
+
+        // ── Filename helper ───────────────────────────────────────────────────
         function ensureYamlFilename(filename) {
             const trimmed = (filename || '').trim();
-            if (!trimmed) {
-                return 'generated_pipeline.yaml';
-            }
-
+            if (!trimmed) return 'generated_pipeline.yaml';
             return trimmed.toLowerCase().endsWith('.yaml') ? trimmed : `${trimmed}.yaml`;
         }
 
+        // ── Warnings panel ────────────────────────────────────────────────────
         function setGeneratorWarnings(warnings) {
-            const warningsContainer = document.getElementById('pipelineGeneratorWarnings');
+            const panel     = document.getElementById('pipelineGeneratorWarningsPanel');
+            const container = document.getElementById('pipelineGeneratorWarnings');
 
             if (!warnings || warnings.length === 0) {
-                warningsContainer.innerHTML = '<p>No warnings.</p>';
+                panel.classList.add('hidden');
+                container.innerHTML = '';
                 return;
             }
 
-            warningsContainer.innerHTML = `
+            container.innerHTML = `
                 <ul class="list-disc pl-5 space-y-1">
-                    ${warnings.map(warning => `<li>${warning}</li>`).join('')}
+                    ${warnings.map(w => `<li>${w}</li>`).join('')}
                 </ul>
             `;
+            panel.classList.remove('hidden');
         }
 
+        // ── Metadata panel ────────────────────────────────────────────────────
         function updateGeneratorMetadata(response) {
-            document.getElementById('generatorDetectedLanguage').textContent = response.detected_language || '-';
-            document.getElementById('generatorPipelineName').textContent = response.parsed_config && response.parsed_config.pipeline_name
-                ? response.parsed_config.pipeline_name
-                : '-';
+            const lang = response.detected_language || '';
+            const isNlp = lang === 'nlp-pattern-matching';
+
+            // NLP badge vs. fallback pill
+            const nlpBadge = document.getElementById('nlpEngineBadge');
+            const langPill = document.getElementById('langPill');
+            if (isNlp) {
+                nlpBadge.classList.remove('hidden');
+                nlpBadge.classList.add('flex');
+                langPill.classList.add('hidden');
+            } else {
+                nlpBadge.classList.add('hidden');
+                langPill.classList.remove('hidden');
+                langPill.classList.add('flex');
+                document.getElementById('generatorDetectedLanguage').textContent = lang || 'regex';
+            }
+
+            // Pipeline name
+            document.getElementById('generatorPipelineName').textContent =
+                (response.parsed_config && response.parsed_config.pipeline_name)
+                    ? response.parsed_config.pipeline_name
+                    : '-';
+
+            // Task count badge
+            const tasks = (response.parsed_config && response.parsed_config.tasks) || [];
+            const countBadge = document.getElementById('taskCountBadge');
+            if (tasks.length > 0) {
+                document.getElementById('taskCountLabel').textContent = `${tasks.length} task${tasks.length !== 1 ? 's' : ''}`;
+                countBadge.classList.remove('hidden');
+                countBadge.classList.add('flex');
+            } else {
+                countBadge.classList.add('hidden');
+            }
+
+            document.getElementById('metaPanel').classList.remove('hidden');
         }
 
+        // ── NLP Intent Breakdown renderer ─────────────────────────────────────
+        function renderNlpSummary(summary) {
+            const panel = document.getElementById('nlpIntentPanel');
+            const grid  = document.getElementById('nlpIntentGrid');
+
+            if (!summary || summary.length === 0) {
+                panel.classList.add('hidden');
+                return;
+            }
+
+            const PLUGIN_COLORS = {
+                postgres:  'bg-blue-100 text-blue-700 border-blue-200',
+                mysql:     'bg-blue-100 text-blue-700 border-blue-200',
+                duckdb:    'bg-amber-100 text-amber-700 border-amber-200',
+                snowflake: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+                bigquery:  'bg-emerald-100 text-emerald-700 border-emerald-200',
+                dbt:       'bg-orange-100 text-orange-700 border-orange-200',
+                spark:     'bg-red-100 text-red-700 border-red-200',
+                kafka:     'bg-red-100 text-red-700 border-red-200',
+                python:    'bg-green-100 text-green-700 border-green-200',
+                shell:     'bg-slate-100 text-slate-600 border-slate-200',
+                api:       'bg-purple-100 text-purple-700 border-purple-200',
+                email:     'bg-pink-100 text-pink-700 border-pink-200',
+                file:      'bg-indigo-100 text-indigo-700 border-indigo-200',
+            };
+
+            const PLUGIN_ICONS = {
+                postgres: 'fa-database', mysql: 'fa-database', duckdb: 'fa-duck',
+                snowflake: 'fa-snowflake', bigquery: 'fa-google', dbt: 'fa-cubes',
+                spark: 'fa-fire', kafka: 'fa-rss', python: 'fa-python',
+                shell: 'fa-terminal', api: 'fa-globe', email: 'fa-envelope', file: 'fa-file',
+            };
+
+            function pluginChip(p) {
+                if (!p) return '';
+                const cls = (PLUGIN_COLORS[p] || 'bg-slate-100 text-slate-600 border-slate-200');
+                const ico = PLUGIN_ICONS[p] || 'fa-plug';
+                return `<span class="inline-flex items-center gap-1 ${cls} border px-2 py-0.5 rounded-full text-[11px] font-semibold">
+                            <i class="fab ${ico} text-[9px]"></i>${p}
+                        </span>`;
+            }
+
+            function operationChip(op) {
+                if (!op) return '';
+                return `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">${op}</span>`;
+            }
+
+            grid.innerHTML = summary.map((item, i) => {
+                const srcChip = pluginChip(item.source);
+                const tgtChip = pluginChip(item.target);
+                const arrow   = (srcChip && tgtChip) ? `<i class="fas fa-long-arrow-alt-right text-slate-300 text-xs mx-0.5"></i>` : '';
+                const opChip  = operationChip(item.operation);
+
+                const tables = (item.tables || []).slice(0, 3).map(t =>
+                    `<span class="bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono">${t}</span>`
+                ).join('');
+                const models = (item.models || []).slice(0, 3).map(m =>
+                    `<span class="bg-orange-50 text-orange-600 border border-orange-200 px-1.5 py-0.5 rounded text-[10px] font-mono">${m}</span>`
+                ).join('');
+                const parallelBadge = item.parallel
+                    ? `<span class="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">parallel</span>` : '';
+
+                const hasDetails = srcChip || tgtChip || tables || models;
+
+                return `
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">${i + 1}</span>
+                                ${opChip}
+                                ${item.verb && item.verb !== item.operation
+                                    ? `<span class="text-slate-400 text-[10px] font-medium">(${item.verb})</span>` : ''}
+                            </div>
+                            ${parallelBadge}
+                        </div>
+                        <p class="text-[11px] text-slate-500 leading-snug line-clamp-2">${item.sentence}</p>
+                        ${hasDetails ? `
+                        <div class="flex items-center flex-wrap gap-1 pt-1 border-t border-slate-200">
+                            ${srcChip}${arrow}${tgtChip}
+                            ${tables}${models}
+                        </div>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            panel.classList.remove('hidden');
+        }
+
+        // ── Empty-state overlay ───────────────────────────────────────────────
+        function syncYamlEmptyState() {
+            const ta      = document.getElementById('generatedPipelineYamlPreview');
+            const overlay = document.getElementById('yamlEmptyState');
+            if (ta.value.trim()) {
+                overlay.classList.add('hidden');
+            } else {
+                overlay.classList.remove('hidden');
+            }
+        }
+
+        // ── Generate ──────────────────────────────────────────────────────────
         async function generatePipelineYaml() {
             const inputText = document.getElementById('pipelineGeneratorInput').value.trim();
-
             if (!inputText) {
                 showError('Please enter pipeline instructions before generating YAML');
                 return;
             }
 
-            const generateButton = document.getElementById('generatePipelineYamlBtn');
-            const originalButtonContent = generateButton.innerHTML;
-            generateButton.disabled = true;
-            generateButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+            const btn = document.getElementById('generatePipelineYamlBtn');
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating…';
 
             try {
                 const response = await fetch('/generate-pipeline', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ input_text: inputText })
                 });
 
                 const result = await response.json();
 
                 if (response.ok) {
-                    document.getElementById('generatedPipelineYamlPreview').value = result.yaml_content || '';
+                    const ta = document.getElementById('generatedPipelineYamlPreview');
+                    ta.value = result.yaml_content || '';
+                    syncYamlEmptyState();
+
                     updateGeneratorMetadata(result);
                     setGeneratorWarnings(result.warnings || []);
+                    renderNlpSummary(result.nlp_summary || []);
 
-                    const suggestedPipelineName = result.parsed_config && result.parsed_config.pipeline_name
+                    const suggestedName = (result.parsed_config && result.parsed_config.pipeline_name)
                         ? result.parsed_config.pipeline_name
                         : 'generated_pipeline';
 
                     const filenameInput = document.getElementById('generatedPipelineFilename');
                     if (!filenameInput.value.trim()) {
-                        filenameInput.value = suggestedPipelineName;
+                        filenameInput.value = suggestedName;
                     }
 
-                    showSuccess(`Generated YAML for ${suggestedPipelineName}`);
+                    showSuccess(`Generated YAML for "${suggestedName}"`);
                 } else {
                     showError(result.detail || 'Failed to generate pipeline YAML');
                 }
@@ -186,11 +514,12 @@
                 console.error('Error generating pipeline YAML:', error);
                 showError('Failed to generate pipeline YAML');
             } finally {
-                generateButton.disabled = false;
-                generateButton.innerHTML = originalButtonContent;
+                btn.disabled = false;
+                btn.innerHTML = original;
             }
         }
 
+        // ── Download ──────────────────────────────────────────────────────────
         function downloadGeneratedPipelineYaml() {
             const yamlContent = document.getElementById('generatedPipelineYamlPreview').value.trim();
             if (!yamlContent) {
@@ -200,9 +529,9 @@
 
             const filename = ensureYamlFilename(document.getElementById('generatedPipelineFilename').value);
             const blob = new Blob([yamlContent], { type: 'text/yaml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
+            const url  = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.href = url;
+            link.href     = url;
             link.download = filename;
             document.body.appendChild(link);
             link.click();
@@ -212,6 +541,7 @@
             showSuccess(`Downloaded ${filename}`);
         }
 
+        // ── Save ──────────────────────────────────────────────────────────────
         async function saveGeneratedPipelineYaml() {
             const yamlContent = document.getElementById('generatedPipelineYamlPreview').value.trim();
             if (!yamlContent) {
@@ -223,21 +553,16 @@
             const filename = ensureYamlFilename(filenameInput.value);
             filenameInput.value = filename;
 
-            const saveButton = document.getElementById('saveGeneratedYamlBtn');
-            const originalButtonContent = saveButton.innerHTML;
-            saveButton.disabled = true;
-            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            const btn = document.getElementById('saveGeneratedYamlBtn');
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
 
             try {
                 const response = await fetch('/save-pipeline', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        yaml_content: yamlContent,
-                        filename: filename
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ yaml_content: yamlContent, filename })
                 });
 
                 const result = await response.json();
@@ -247,9 +572,7 @@
                         document.getElementById('generatorPipelineName').textContent = result.pipeline_name;
                     }
                     showSuccess(result.message || `Saved ${filename} successfully`);
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1200);
+                    setTimeout(() => { window.location.href = '/dashboard'; }, 1500);
                 } else {
                     showError(result.detail || 'Failed to save generated pipeline');
                 }
@@ -257,51 +580,69 @@
                 console.error('Error saving generated pipeline:', error);
                 showError('Failed to save generated pipeline');
             } finally {
-                saveButton.disabled = false;
-                saveButton.innerHTML = originalButtonContent;
+                btn.disabled = false;
+                btn.innerHTML = original;
             }
         }
 
-        function showSuccess(message) {
-            showNotification(message, 'success');
+        // ── Copy button ───────────────────────────────────────────────────────
+        function setupCopyBtn() {
+            const btn   = document.getElementById('copyBtn');
+            const label = document.getElementById('copyBtnLabel');
+
+            btn.addEventListener('click', async () => {
+                const content = document.getElementById('generatedPipelineYamlPreview').value;
+                if (!content.trim()) {
+                    showError('Nothing to copy — generate YAML first');
+                    return;
+                }
+                try {
+                    await navigator.clipboard.writeText(content);
+                    label.textContent = 'Copied!';
+                    btn.classList.add('text-emerald-600', 'border-emerald-300');
+                    setTimeout(() => {
+                        label.textContent = 'Copy';
+                        btn.classList.remove('text-emerald-600', 'border-emerald-300');
+                    }, 2000);
+                } catch {
+                    showError('Clipboard access denied — please copy manually');
+                }
+            });
         }
 
-        function showError(message) {
-            showNotification(message, 'error');
-        }
-
-        function showNotification(message, type) {
-            let container = document.getElementById('notificationContainer');
-            if (!container) {
-                container = document.createElement('div');
-                container.id = 'notificationContainer';
-                container.className = 'fixed top-4 right-4 z-50 space-y-2';
-                document.body.appendChild(container);
+        // ── Logout ────────────────────────────────────────────────────────────
+        async function logout() {
+            try {
+                await fetch('/logout', { method: 'POST' });
+            } finally {
+                window.location.href = '/login';
             }
+        }
 
-            const notification = document.createElement('div');
-            const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
-            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        // ── Boot ──────────────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('generatePipelineYamlBtn').addEventListener('click', generatePipelineYaml);
+            document.getElementById('downloadGeneratedYamlBtn').addEventListener('click', downloadGeneratedPipelineYaml);
+            document.getElementById('saveGeneratedYamlBtn').addEventListener('click', saveGeneratedPipelineYaml);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
 
-            notification.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 min-w-80 animate-fadeIn`;
-            notification.innerHTML = `
-                <i class="fas ${icon}"></i>
-                <span>${message}</span>
-                <button class="ml-2 text-white-200 hover:text-white">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
+            setupCopyBtn();
 
-            notification.querySelector('button').addEventListener('click', () => {
-                notification.remove();
+            // Ctrl+Enter shortcut on the instructions textarea
+            document.getElementById('pipelineGeneratorInput').addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    generatePipelineYaml();
+                }
             });
 
-            container.appendChild(notification);
+            // Keep empty-state overlay in sync if user edits the YAML directly
+            document.getElementById('generatedPipelineYamlPreview').addEventListener('input', syncYamlEmptyState);
 
-            setTimeout(() => {
-                notification.remove();
-            }, 5000);
-        }
+            // Initial state
+            syncYamlEmptyState();
+        });
+        fetch('/me').then(r => r.ok ? r.json() : null).then(data => { if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username; }).catch(() => {});
     </script>
 </body>
 </html>

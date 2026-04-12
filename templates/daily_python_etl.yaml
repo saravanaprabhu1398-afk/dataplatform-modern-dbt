@@ -1,0 +1,73 @@
+pipeline_name: daily_python_etl
+description: Daily ETL using Python scripts for custom transformation logic
+tags:
+  - python
+  - etl
+  - daily
+  - shell
+
+tasks:
+  - name: extract_data
+    type: executor
+    plugin: shell
+    operation: execute
+    config:
+      command: "python scripts/extract.py --date $(date +%Y-%m-%d)"
+      cwd: "."
+      timeout: 300
+    lineage:
+      writes_to:
+        - "file://data/raw/extract_$(date +%Y-%m-%d).csv"
+
+  - name: transform_data
+    type: executor
+    plugin: python
+    operation: run_script
+    depends_on:
+      - extract_data
+    config:
+      script_path: scripts/transform.py
+      parameters:
+        input_dir: data/raw
+        output_dir: data/processed
+    lineage:
+      reads_from:
+        - "file://data/raw"
+      writes_to:
+        - "file://data/processed"
+
+  - name: load_to_warehouse
+    type: executor
+    plugin: duckdb
+    operation: load
+    depends_on:
+      - transform_data
+    config:
+      file_path: data/processed/output.parquet
+      show_columns: true
+    lineage:
+      reads_from:
+        - "file://data/processed/output.parquet"
+      writes_to:
+        - "duckdb://data/warehouse.db/daily_metrics"
+    quality:
+      checks:
+        - name: row_count_positive
+          sql: "SELECT COUNT(*) FROM read_parquet('data/processed/output.parquet')"
+          expect_min: 1
+
+  - name: send_completion_email
+    type: executor
+    plugin: email
+    operation: send
+    depends_on:
+      - load_to_warehouse
+    config:
+      smtp_server: smtp.gmail.com
+      smtp_port: 587
+      sender_email: "${EMAIL_SENDER}"
+      sender_password: "${EMAIL_PASSWORD}"
+      recipients:
+        - "data-team@example.com"
+      subject: "Daily ETL completed successfully"
+      body: "The daily Python ETL pipeline completed. Data loaded to warehouse."

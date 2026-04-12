@@ -1,871 +1,573 @@
-# 🚀 Data Platform - Modern DBT Alternative
+# Dataplatform — Modern Data Orchestration
 
-A comprehensive, enterprise-grade data orchestration platform with YAML configuration, multi-plugin architecture, and built-in dashboard. Similar to Airflow but simpler and more extensible.
+A self-hosted data orchestration platform built in Python. Define pipelines in YAML, run them via web UI or REST API, and manage everything from a single dashboard — without Airflow's complexity.
 
-![Status: Production Ready](https://img.shields.io/badge/Status-Production--Ready-brightgreen)
 ![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)
-![Plugins: 12+](https://img.shields.io/badge/Plugins-12%2B-orange)
+![Plugins: 13](https://img.shields.io/badge/Plugins-13-orange)
+![License: MIT](https://img.shields.io/badge/License-MIT-green)
 
-## ✨ Key Features
+---
 
-### 🎯 Core Capabilities
-- **YAML-Based Pipelines**: Define complex data workflows with simple YAML configs
-- **12+ Built-in Plugins**: Database, API, file, cloud, and streaming integrations
-- **Web Dashboard**: Real-time monitoring with DAG visualization (Airflow-style)
-- **REST API**: Programmatic pipeline management
-- **Background Execution**: Async pipeline runs without blocking
-- **Flexible Scheduling**: Cron-based scheduling with UI picker
-- **Error Tracking**: Task-level error reporting and alerting
-- **Multi-Platform**: Works on Linux, macOS, Windows
+## What it does
 
-### 🔌 Integrated Plugins
+- **Run data pipelines** defined in YAML with task dependencies (DAG execution)
+- **Generate pipelines from plain English** using the built-in NLP generator
+- **Monitor runs** in real time with a web dashboard, alerts page, and metrics dashboard
+- **Schedule pipelines** with cron expressions
+- **Trigger pipelines** via webhooks or API events
+- **Track lineage, costs, and data quality** per pipeline and asset
+- **Manage users** with role-based access control (viewer / editor / admin)
 
-| Category | Plugins |
-|----------|---------|
-| **Databases** | PostgreSQL, MySQL, Snowflake, DuckDB |
-| **Cloud** | Google BigQuery, Snowflake |
-| **APIs** | HTTP/REST, Kafka |
-| **Processing** | Spark, Python, DuckDB |
-| **Files** | Local files, CSV, JSON |
-| **Execution** | Shell commands, Python scripts |
-| **Notifications** | Email alerts |
+---
 
-## 🚀 Quick Start
+## Quick start
 
-### 1. Install
+### 1. Clone and install
 
 ```bash
-# Clone repository
 git clone <repo_url>
-cd data-platform-modern-dbt
-
-# Install dependencies
+cd dataplatform-modern-dbt
 pip install -r requirements.txt
 ```
 
-### 2. Start Web Dashboard
+### 2. Configure environment
 
 ```bash
-# Start the API server (runs on port 8000)
-python3 -m dataplatform.core.api
+# Minimum required — sets the admin login
+export DATAPLATFORM_USERNAME=admin
+export DATAPLATFORM_PASSWORD=changeme
+export DATAPLATFORM_SECRET_KEY=your-secret-key-here   # JWT signing key
 
-# Or in background
-python3 -m dataplatform.core.api &
+# Optional plugin credentials
+export POSTGRES_PASSWORD=...
+export SNOWFLAKE_USER=...
+export SNOWFLAKE_PASSWORD=...
+export MYSQL_PASSWORD=...
+export API_TOKEN=...
+export EMAIL_SENDER=...
+export EMAIL_PASSWORD=...
 ```
 
-**Dashboard**: http://localhost:8000
+A `.env` file at the project root is loaded automatically on startup.
 
-### 3. Create Your First Pipeline
+### 3. Start the server
 
-**Best Practice**: Store pipelines in the `pipelines/` folder for auto-discovery.
+```bash
+python -m dataplatform.core.api
+# Server runs at http://localhost:8000
+```
+
+### 4. Open the dashboard
+
+Navigate to `http://localhost:8000` and log in with the credentials you set above.
+
+---
+
+## Web dashboard
+
+| Page | URL | Purpose |
+|------|-----|---------|
+| Home | `/` | Workspace overview, quick links |
+| Pipelines | `/dashboard` | DAG view, run status, execution history |
+| Generator | `/generator` | NLP pipeline builder |
+| Catalog | `/catalog` | Data asset catalog |
+| Lineage | `/lineage-viz` | Visual data lineage graph |
+| Costs | `/costs` | Pipeline cost attribution |
+| Templates | `/templates-ui` | Reusable pipeline templates |
+| Alerts | `/alerts` | Incident management (Zenduty-style) |
+| Monitoring | `/monitoring` | Metrics dashboard (Grafana-style) |
+| Admin | `/admin` | User and role management |
+
+---
+
+## Pipelines
+
+### Defining a pipeline
+
+Pipelines are YAML files stored in the `pipelines/` folder. They are auto-discovered on startup.
 
 ```yaml
-# pipelines/my_pipeline.yaml
-pipeline_name: My First Pipeline
-description: Load data and transform
+pipeline_name: daily_orders_etl
+description: Extract orders from Postgres, validate, aggregate, load to Snowflake
 
 schedule:
   minute: "0"
-  hour: "9"
+  hour: "6"
   day: "*"
   month: "*"
-  day_of_week: "*"
+  day_of_week: "mon-fri"
 
 tasks:
-  - name: Fetch Data
-    id: fetch_data
+  - name: extract_orders
+    id: extract_orders
     type: executor
-    plugin: api
+    plugin: postgres
     config:
-      method: GET
-      url: https://api.example.com/data
+      connection:
+        host: localhost
+        port: 5432
+        database: mydb
+        user: user
+        password: "${POSTGRES_PASSWORD}"
+      sql: "SELECT * FROM orders WHERE created_at >= CURRENT_DATE - INTERVAL '1 day'"
 
-  - name: Validate Data
-    id: validate
+  - name: validate_orders
+    id: validate_orders
     type: executor
     plugin: duckdb
+    depends_on: [extract_orders]
     config:
-      operation: validate
-      sql: "SELECT * FROM data"
-    depends_on: [fetch_data]
+      file_path: data/orders.csv
+      checks:
+        - name: no_nulls
+          sql: "SELECT COUNT(*) FROM data WHERE order_id IS NULL"
+          expect: 0
+        - name: positive_amounts
+          sql: "SELECT COUNT(*) FROM data WHERE amount <= 0"
+          expect: 0
 
-  - name: Load to Warehouse
-    id: load_warehouse
+  - name: load_to_snowflake
+    id: load_to_snowflake
     type: executor
     plugin: snowflake
+    depends_on: [validate_orders]
     config:
-      operation: load
-      table_name: raw_data
-    depends_on: [validate]
+      snowflake_config:
+        account: "${SNOWFLAKE_ACCOUNT}"
+        user: "${SNOWFLAKE_USER}"
+        password: "${SNOWFLAKE_PASSWORD}"
+        warehouse: COMPUTE_WH
+        database: MY_DB
+        schema: PUBLIC
+      table_name: orders_daily
+      if_exists: replace
 ```
 
-**Key points:**
-- ✅ Save in `pipelines/` folder - auto-discovered
-- ✅ Use `pipeline_name` (required field)
-- ✅ Each task needs `name` field
-- ✅ Task IDs in `depends_on` create dependencies
-- ✅ Use YAML dict for `schedule` field
+### Task fields
 
-See [pipelines/README.md](pipelines/README.md) for complete guide and examples.
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Human-readable task name |
+| `id` | No | Used in `depends_on` references (defaults to slugified name) |
+| `type` | Yes | `executor` or `transformer` |
+| `plugin` | Yes | Plugin name (see plugins below) |
+| `config` | No | Plugin-specific config dict |
+| `depends_on` | No | List of task IDs this task waits for |
+| `retries` | No | Number of retry attempts on failure (default 0) |
 
-### 4. Run It!
+### Execution model
 
-- **Via Web UI**: Go to http://localhost:8000, select pipeline, click "Run"
-- **Via REST API**: `curl http://localhost:8000/run/my_pipeline`
-- **View Status**: Real-time DAG visualization with task status
-
-## 🎨 Web Dashboard Features
-
-### 📊 Pipeline Management
-- **Auto-discovery** of all pipelines in `pipelines/` folder
-- **Real-time validation** - errors shown immediately
-- **Error highlighting** - failed pipelines red-highlighted with details
-- **One-click execution** with async background processing
-- **Configuration preview** before running
-
-### 📈 Live Monitoring
-- **Real-time status updates** (2-second polling)
-- **Airflow-style DAG visualization** with task status colors
-- **Execution history** (last 5 runs per pipeline)
-- **Error details** at task level
-- **Task dependency visualization** in DAG
-
-### ⏰ Scheduling
-- **Flexible cron scheduling** with second-level precision
-- **UI schedule picker** with quick presets (Daily, Hourly, Weekdays, Weekends)
-- **Custom schedules** saved per pipeline
-
-### 🔴 Error Handling
-- **Failed task highlighting** (red nodes in DAG)
-- **Error message display** in execution history
-- **Pipeline validation errors** shown in dashboard with fix suggestions
-- **Error type and path** displayed for debugging
-- **Retry configuration** support
-
-## 📚 Detailed Documentation
-
-### Plugins Guide
-See [PLUGINS_GUIDE.md](PLUGINS_GUIDE.md) for:
-- Configuration examples for each plugin
-- Best practices and performance tips
-- Troubleshooting guide
-- Custom plugin development
-
-### Example Pipelines
-
-**Sample Pipelines Included**:
-- `sample_pipeline.yaml` - Employee analytics (DuckDB + Snowflake)
-- `sales_pipeline.yaml` - Sales transaction processing (8-task workflow)
-- `multi_source_pipeline.yaml` - Advanced multi-plugin integration
-
-## 🔌 Available Plugins
-
-### Databases
-- **PostgreSQL** - Traditional RDBMS, ETL pipelines
-- **MySQL/MariaDB** - MySQL integration, legacy systems
-- **Snowflake** - Cloud data warehouse, scalable analytics
-- **DuckDB** - In-memory OLAP, data validation
-
-### APIs & Streaming
-- **HTTP/REST** - API calls, webhooks, data ingestion
-- **Kafka** - Event streaming, message queues
-- **Email** - Notifications and alerts
-
-### Data Processing
-- **Python** - Custom Python code and scripts
-- **Spark** - Distributed processing, machine learning
-- **Shell** - System commands, custom scripts
-
-### Files & Storage
-- **File Operations** - Read, write, transform, merge files
-- **Local & Cloud** - File operations with easy extension
-
-### Cloud
-- **Google BigQuery** - Query, load, export operations
-
-## 🛠️ Configuration Examples
-
-### PostgreSQL Integration
-```yaml
-task:
-  type: executor
-  plugin: postgres
-  config:
-    operation: query
-    connection:
-      host: localhost
-      database: analytics
-      user: postgres
-    sql: "SELECT COUNT(*) FROM users"
-```
-
-### API Data Ingestion
-```yaml
-task:
-  type: executor
-  plugin: api
-  config:
-    method: GET
-    url: https://api.example.com/data
-    headers:
-      Authorization: Bearer token
-    retry_count: 3
-```
-
-### Kafka Event Publishing
-```yaml
-task:
-  type: executor
-  plugin: kafka
-  config:
-    operation: publish
-    brokers: ["localhost:9092"]
-    topic: events
-    message:
-      event_type: data_loaded
-      timestamp: "{{ timestamp }}"
-```
-
-### Email Notifications
-```yaml
-task:
-  type: executor
-  plugin: email
-  config:
-    smtp_server: smtp.gmail.com
-    sender_email: alerts@company.com
-    recipients: [team@company.com]
-    subject: "Pipeline {{ pipeline_name }} - {{ status }}"
-```
-
-## 📊 Architecture
+Tasks are executed in **parallel waves** based on their dependency graph. Independent tasks within the same wave run concurrently; a wave must complete before the next begins.
 
 ```
-dataplatform/
-├── core/
-│   ├── api.py           # FastAPI server with REST endpoints
-│   ├── executor.py      # Task execution engine
-│   ├── scheduler.py     # APScheduler wrapper
-│   └── config.py        # Configuration models
-├── plugins/
-│   ├── base.py          # Base plugin classes
-│   ├── registry.py      # Plugin registry
-│   └── executors/       # Individual plugin implementations
-│       ├── duckdb_plugin.py
-│       ├── postgres_plugin.py
-│       ├── api_plugin.py
-│       ├── kafka_plugin.py
-│       └── ... (8+ more)
-└── static/
-    └── index.html       # Web dashboard
+Wave 1: [extract_postgres]  [fetch_api]          ← run concurrently
+Wave 2: [validate]                               ← waits for both above
+Wave 3: [load_snowflake]  [send_email]           ← run concurrently
 ```
 
-## 🔐 Security
+---
 
-- **Environment variables** for credentials (`.env`)
-- **No secrets in YAML** configs
-- **Secure password storage** support
-- **API authentication** ready (extend as needed)
+## NLP pipeline generator
 
-## 📈 Performance
+Describe your pipeline in plain English and get a ready-to-run YAML config.
 
-- **DuckDB**: 10-100x faster than pandas for analytical queries
-- **Spark**: Distributed processing for large datasets (GB-TB scale)
-- **Async execution**: Non-blocking pipeline runs
-- **Efficient scheduling**: Low CPU overhead
+**Example input:**
+```
+Extract orders from postgres, validate with duckdb, run dbt transformations,
+then load results to snowflake and send email notification
+```
 
-## 🐛 Troubleshooting
+**What it produces:** a fully structured YAML with correct plugin assignments, config templates, dependency chain, and task names derived from the detected entities.
 
-If you encounter issues:
-
-1. **Check logs**:
-   ```bash
-   # View API server logs
-   tail -f /path/to/combined.log
-   ```
-
-2. **Quick diagnostics**:
-   ```bash
-   python3 diagnose_api.py
-   ```
-
-3. **Common issues**:
-   - Port 8000 in use: Kill existing process or change port
-   - Pluggy/module not found: Install requirements
-   - API not responding: Check server is running
-
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed help.
-
-## ✅ Supported Platforms
-
-- ✅ Linux (Ubuntu, CentOS, etc.)
-- ✅ macOS (Intel and Apple Silicon)
-- ✅ Windows (with WSL recommended)
-- ✅ Docker (containerize for production)
-
-## 🤝 Contributing
-
-To add a custom plugin:
-
-1. Create `dataplatform/plugins/executors/my_plugin.py`
-2. Implement `execute(config: dict) -> tuple[bool, dict]`
-3. Add to registry in `dataplatform/plugins/registry.py`
-4. Reference in pipelines as `plugin: my_plugin`
-
-See [PLUGINS_GUIDE.md](PLUGINS_GUIDE.md#contributing-custom-plugins) for details.
-
-## 📝 Examples
-
-Run the included example pipelines:
+Access at `/generator` in the dashboard or via API:
 
 ```bash
-# View in web dashboard at http://localhost:8000
-# Or run via API:
-curl -X POST http://localhost:8000/run/sample_pipeline
-curl -X POST http://localhost:8000/run/sales_pipeline
-curl -X POST http://localhost:8000/run/multi_source_pipeline
+curl -X POST http://localhost:8000/generate-pipeline \
+  -H "Content-Type: application/json" \
+  -d '{"text": "load csv from s3, validate with duckdb, send results to bigquery"}'
 ```
 
-## 🎓 Learning Resources
+The generator detects:
+- Source and target systems (`from postgres`, `into snowflake`)
+- ETL verbs (`extract`, `load`, `validate`, `transform`, `aggregate`, `send`, ...)
+- Table and model names
+- Parallel steps (`simultaneously`, `in parallel`)
+- Schedule expressions (`daily at 6am`, `every business day`, `twice daily`)
 
-- [PLUGINS_GUIDE.md](PLUGINS_GUIDE.md) - Complete plugin reference
-- [sample_pipeline.yaml](sample_pipeline.yaml) - Basic example
-- [sales_pipeline.yaml](sales_pipeline.yaml) - Advanced example
-- [multi_source_pipeline.yaml](multi_source_pipeline.yaml) - Multi-plugin integration
+---
 
-## 📄 API Reference
+## Plugins
 
-### Endpoints
+### Executors
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/pipelines` | List all pipelines |
-| GET | `/status` | Get all pipeline statuses |
-| GET | `/history/{name}` | Get last 5 runs |
-| GET | `/dag/{name}` | Get DAG for pipeline |
-| POST | `/run/{name}` | Execute pipeline |
-| POST | `/schedule/{name}` | Set schedule with custom cron |
+| Plugin | Key operations | Notes |
+|--------|---------------|-------|
+| `duckdb` | `load`, `query`, `validate`, `aggregate`, `transform` | In-process OLAP; good for validation and analytics |
+| `postgres` | `query`, `load`, `execute` | Requires `psycopg2-binary` |
+| `mysql` | `query`, `execute` | Requires `mysql-connector-python` |
+| `snowflake` | `load_to_snowflake` | Requires `snowflake-connector-python` |
+| `bigquery` | `query`, `load` | Requires `google-cloud-bigquery` |
+| `api` | `GET`, `POST`, `PUT`, `DELETE` | HTTP/REST calls with retry support |
+| `kafka` | `publish`, `subscribe` | Requires `kafka-python` |
+| `spark` | `submit` | Requires `pyspark` |
+| `python` | `execute_code`, `run_script` | Inline code or `.py` file |
+| `shell` | `execute` | Shell command with timeout |
+| `file` | `read`, `write`, `merge` | Local file operations |
+| `email` | `send` | SMTP email notifications |
 
-## 🚀 Production Deployment
+### Transformers
 
-For production deployment:
+| Plugin | Operations | Notes |
+|--------|-----------|-------|
+| `dbt` | `run`, `test`, `compile`, `seed`, `snapshot`, `docs`, `ls` | Supports `--select` flag and `profiles_dir` |
 
-1. Use a process manager (systemd, supervisor)
-2. Set environment variables for credentials
-3. Configure database for persistent storage
-4. Use reverse proxy (nginx) for security
-5. Enable monitoring and alerting
-6. Run in Docker for consistency
+### Plugin config examples
 
-See deployment guides for specific platforms.
-
-## 📄 License
-
-[Add your license here]
-
-## 💬 Support
-
-- Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- Review [PLUGINS_GUIDE.md](PLUGINS_GUIDE.md)
-- File an issue on GitHub
-- **Status Persistence**: Execution status is maintained across page refreshes
-- **Error Handling**: Clear error messages and failure diagnostics
-
-## 📊 API Endpoints
-
-The web UI communicates with a REST API:
-
-- `GET /` - Main dashboard
-- `GET /pipelines` - List available pipelines
-- `POST /run` - Trigger pipeline execution
-- `GET /status` - Get pipeline execution status
-- `GET /dag` - Get DAG structure for visualization
-- `POST /schedule` - Schedule pipelines for automatic execution
-
-## ⚙️ Pipeline Configuration
-
+**DuckDB — validate**
 ```yaml
-pipeline_name: my_pipeline
-file_path: data/my_data.csv
-
-tasks:
-  - name: load_data
-    type: executor
-    plugin: duckdb
-    operation: load
-
-  - name: validate
-    type: executor
-    plugin: duckdb
-    operation: validate
-    config:
-      checks:
-        - name: positive_amounts
-          sql: 'SELECT COUNT(*) FROM data WHERE amount <= 0'
-          expect: 0
-    depends_on: [load_data]
-
-  - name: analyze
-    type: executor
-    plugin: duckdb
-    operation: aggregate
-    config:
-      group_by: ['category']
-      metrics:
-        - column: 'revenue'
-          function: 'sum'
-          alias: 'total_revenue'
-    depends_on: [validate]
+config:
+  file_path: data/orders.csv
+  checks:
+    - name: positive_amounts
+      sql: "SELECT COUNT(*) FROM data WHERE amount <= 0"
+      expect: 0
 ```
 
-## 🔧 Available Operations
-
-### DuckDB Executor
-- **load**: Load CSV data
-- **validate**: Data quality checks
-- **aggregate**: Group and aggregate
-- **transform**: Add derived columns
-- **query**: Execute custom SQL (can return data for next tasks)
-
-### Snowflake Executor
-- **load_to_snowflake**: Load data from previous task into Snowflake table
-
-## ❄️ Snowflake Integration
-
-The framework supports loading processed data into Snowflake as an aggregated layer:
-
+**PostgreSQL — query**
 ```yaml
-- name: load_aggregates_to_snowflake
-  type: executor
-  plugin: snowflake
-  operation: load_to_snowflake
-  config:
-    snowflake_config:
-      account: "your_account.snowflakecomputing.com"
-      user: "your_user"
-      password: "your_password"
-      warehouse: "your_warehouse"
-      database: "your_database"
-      schema: "your_schema"
-    table_name: "department_analytics"
-    if_exists: "replace"  # or "append"
-  depends_on:
-    - generate_aggregates  # Task that returns data
+config:
+  connection:
+    host: localhost
+    port: 5432
+    database: mydb
+    user: user
+    password: "${POSTGRES_PASSWORD}"
+  sql: "SELECT * FROM users WHERE active = true"
 ```
 
-### Data Flow Between Tasks
-
-Tasks can pass data to dependent tasks:
-
+**API — GET with auth**
 ```yaml
-- name: generate_report
-  type: executor
-  plugin: duckdb
-  operation: query
-  config:
-    sql: "SELECT * FROM analytics_table"
-    return_data: true  # Return query results
-  depends_on: [create_analytics]
-
-- name: load_to_snowflake
-  type: executor
-  plugin: snowflake
-  operation: load_to_snowflake
-  config:
-    table_name: "final_analytics"
-  depends_on: [generate_report]  # Receives data from generate_report
-```
-- **query**: Custom SQL queries
-- **transform**: Add derived columns
-
-## 📁 Project Structure
-
-```
-data-platform/
-├── dataplatform/     # Core framework
-├── data/            # Your data files
-├── sample_pipeline.yaml    # Example config
-└── README.md        # This file
+config:
+  method: GET
+  url: https://api.example.com/orders
+  headers:
+    Authorization: "Bearer ${API_TOKEN}"
+  params:
+    page: 1
+    limit: 1000
+  retry_count: 3
 ```
 
-## 🎯 Key Features
-
-- **YAML Configuration**: No code changes needed
-- **Plugin Architecture**: Extensible with new data sources
-- **DAG Execution**: Handles task dependencies
-- **Error Handling**: Automatic retries and logging
-- **Data Validation**: Built-in quality checks
-- **Export Support**: Save results to files
-
-## 📈 Use Cases
-
-- ETL pipelines
-- Data validation
-- Business analytics
-- Report generation
-- Data transformation
-- Quality assurance
-
----
-
-**Ready? Run `python3 -m dataplatform.cli.main run sample_pipeline.yaml` to see it in action!** 🚀
-        ↓
-Storage + Logs
-        ↓
-Deployment (Docker + Kubernetes)
-```
-
----
-
-# 🧩 Core Components
-
-## 1. CLI Layer
-
-### Commands:
-
-```
-dataplatform init <project>
-dataplatform run <config>
-dataplatform install <plugin>
-```
-
-### Responsibilities:
-
-* Project initialization
-* Pipeline execution trigger
-* Plugin installation
-
----
-
-## 2. Config-Driven Pipelines
-
-### Example: `pipeline.yaml`
-
+**dbt — run with select**
 ```yaml
-pipeline_name: sample_pipeline
-
-file_path: data/sample.csv
-
-tasks:
-  - name: ingest
-    type: executor
-    plugin: duckdb
-    retries: 2
-
-  - name: transform
-    type: transformer
-    plugin: dbt
-    depends_on:
-      - ingest
-    retries: 1
-
-schedule:
-  minute: "0"
-  hour: "*/2"
+config:
+  project_dir: dbt_project
+  profiles_dir: ~/.dbt
+  operation: run
+  select: tag:daily
 ```
 
----
-
-## 3. Plugin Architecture (Key Innovation)
-
-### Types:
-
-* Executors → Run data processing
-* Transformers → Apply transformations
-
-### Example:
-
-```
-plugins/
-├── executors/
-│   └── duckdb_executor.py
-├── transformers/
-│   └── dbt_transformer.py
-```
-
-### Benefits:
-
-* Replace tools without changing core logic
-* Extend platform easily
-* Cloud-agnostic design
-
----
-
-## 4. DAG Engine
-
-### Features:
-
-* Task dependency management
-* Execution ordering
-* Supports Directed Acyclic Graph (DAG)
-
-### Example Flow:
-
-```
-ingest → transform → validate
-```
-
-### Components:
-
-* Task model
-* DAG builder
-* DAG executor
-
----
-
-## 5. Execution Engine
-
-### Responsibilities:
-
-* Load plugins dynamically
-* Execute tasks in dependency order
-* Handle failures and retries
-
----
-
-## 6. Retry & Failure Handling
-
-### Features:
-
-* Configurable retries per task
-* Fail-fast pipeline execution
-* Error logging
-
-### Example:
-
+**Email notification**
 ```yaml
-retries: 2
+config:
+  smtp_server: smtp.gmail.com
+  smtp_port: 587
+  sender_email: "${EMAIL_SENDER}"
+  sender_password: "${EMAIL_PASSWORD}"
+  recipients: [team@company.com]
+  subject: "Pipeline complete"
+  body: "Daily ETL finished successfully."
 ```
 
 ---
 
-## 7. Logging System
+## REST API
 
-### Features:
+All endpoints require a session cookie obtained from `POST /login` (except `/health`).
 
-* Centralized logging
-* Task-level logs
-* Stored in `logs/pipeline.log`
+### Authentication
 
-### Tracks:
+```bash
+# Login
+curl -c cookies.txt -X POST http://localhost:8000/login \
+  -d "username=admin&password=changeme"
 
-* Task start/end
-* Errors
-* Retry attempts
+# Use session cookie in subsequent requests
+curl -b cookies.txt http://localhost:8000/pipelines
+```
+
+### Endpoint reference
+
+| Method | Endpoint | Role required | Description |
+|--------|----------|--------------|-------------|
+| `GET` | `/health` | — | Liveness check |
+| `GET` | `/pipelines` | viewer | List all discovered pipelines |
+| `GET` | `/pipeline-config?name=<n>` | viewer | Get raw YAML for a pipeline |
+| `POST` | `/run` | editor | Run pipeline (async, returns run ID) |
+| `POST` | `/run/sync` | editor | Run pipeline (blocking, returns result) |
+| `POST` | `/validate` | editor | Validate config without running |
+| `POST` | `/generate-pipeline` | editor | Generate YAML from text |
+| `POST` | `/save-pipeline` | editor | Save generated YAML to disk |
+| `GET` | `/status` | viewer | Execution status for all pipelines |
+| `GET` | `/history/{name}` | viewer | Last N runs for a pipeline |
+| `GET` | `/dag?name=<n>` | viewer | DAG structure (nodes + edges) |
+| `GET` | `/dashboard-summary` | viewer | Aggregated stats |
+| `POST` | `/schedule` | editor | Set cron schedule |
+| `DELETE` | `/schedule/{name}` | editor | Remove schedule |
+| `GET` | `/scheduled` | viewer | List all active schedules |
+| `POST` | `/triggers` | editor | Create webhook/event trigger |
+| `GET` | `/triggers` | viewer | List triggers |
+| `DELETE` | `/triggers/{id}` | editor | Delete trigger |
+| `POST` | `/triggers/webhook/{name}` | editor | Fire webhook trigger |
+| `GET` | `/versions/{name}` | viewer | Pipeline version history |
+| `GET` | `/versions/{name}/{id}` | viewer | Get specific version |
+| `GET` | `/versions/{name}/{a}/diff/{b}` | viewer | Diff two versions |
+| `GET` | `/lineage` | viewer | Full lineage graph |
+| `GET` | `/lineage/asset` | viewer | Lineage for a specific asset |
+| `GET` | `/catalog/assets` | viewer | All catalog assets |
+| `GET` | `/catalog/pipelines` | viewer | Pipeline-level catalog entries |
+| `GET` | `/quality/{name}` | viewer | Quality check results |
+| `GET` | `/sla/violations` | viewer | SLA breach report |
+| `GET` | `/metrics` | viewer | Execution metrics |
+| `GET` | `/metrics/definitions` | viewer | Semantic metric definitions |
+| `POST` | `/metrics/{name}/compute` | editor | Compute a semantic metric |
+| `GET` | `/costs/summary` | viewer | Platform-wide cost summary |
+| `GET` | `/costs/{name}` | viewer | Cost breakdown for a pipeline |
+| `GET` | `/templates` | viewer | Available pipeline templates |
+| `POST` | `/templates/{id}/use` | editor | Instantiate a template |
+| `GET` | `/admin/users` | admin | List all users |
+| `POST` | `/admin/users` | admin | Create user |
+| `PATCH` | `/admin/users/{u}/role` | admin | Change user role |
+| `DELETE` | `/admin/users/{u}` | admin | Delete user |
+| `GET` | `/me` | viewer | Current user info |
 
 ---
 
-## 8. Scheduler (Cron-Based)
+## Access control
 
-### Implementation:
+Three roles, each inheriting all permissions of the roles below it:
 
-* Background scheduler
+| Role | Permissions |
+|------|-------------|
+| `admin` | Everything — user management, all endpoints |
+| `editor` | Run, schedule, validate, generate, and save pipelines |
+| `viewer` | Read-only — list, status, history, DAG, metrics |
 
-### Example:
-
-```yaml
-schedule:
-  minute: "0"
-  hour: "*/2"
-```
-
-### Capabilities:
-
-* Automated execution
-* Recurring pipelines
+The admin account is bootstrapped from environment variables (`DATAPLATFORM_USERNAME` / `DATAPLATFORM_PASSWORD`) and always has admin role regardless of the user database.
 
 ---
 
-## 9. UI Layer (React + D3)
+## Pipeline templates
 
-### Features:
+Four built-in templates are available in the `templates/` folder and through the `/templates-ui` page:
 
-* DAG visualization
-* Pipeline trigger
-* Status monitoring
+| Template | Description |
+|----------|-------------|
+| `etl_postgres_to_duckdb` | Extract from Postgres, validate, load to DuckDB |
+| `dbt_run_and_test` | Run and test a dbt project |
+| `api_ingest_and_validate` | Fetch from REST API, validate, store |
+| `daily_python_etl` | Run a Python script on a daily schedule |
 
-### Graph Representation:
+Instantiate via UI or API:
 
-* Nodes → Tasks
-* Edges → Dependencies
-
----
-
-## 10. Backend API
-
-### Built using:
-
-* FastAPI
-
-### Endpoints:
-
-```
-GET /dag
-GET /run
-GET /status
-```
-
-### Frontend UI
-
-* A React-based DAG visualizer is available in the `frontend/` folder
-* It uses the backend `/dag` endpoint to render pipeline graphs
-* Serve it as static content with `python3 -m http.server` or any file server
-
----
-
-## 11. Multi-User System
-
-### Features:
-
-* Authentication (JWT-based)
-* User-specific pipelines
-* Role-based access (future)
-
-### Database Tables:
-
-* users
-* pipelines
-* runs
-
----
-
-## 12. Plugin Marketplace
-
-### Concept:
-
-Install plugins dynamically
-
-### Example:
-
-```
-dataplatform install spark
-```
-
-### Features:
-
-* Plugin registry
-* pip-based installation
-* Dynamic loading
-
----
-
-## 13. Packaging (pip)
-
-### Installation:
-
-```
-pip install dataplatform
-```
-
-### Structure:
-
-```
-dataplatform/
-  ├── cli/
-  ├── core/
-  ├── plugins/
-  ├── templates/
+```bash
+curl -b cookies.txt -X POST http://localhost:8000/templates/etl_postgres_to_duckdb/use \
+  -H "Content-Type: application/json" \
+  -d '{"pipeline_name": "my_etl"}'
 ```
 
 ---
 
-## 14. Deployment
-
-## 🐳 Docker
+## Project structure
 
 ```
+dataplatform-modern-dbt/
+├── dataplatform/
+│   ├── core/
+│   │   ├── api.py               # FastAPI server — all routes and middleware
+│   │   ├── config.py            # Pydantic pipeline/task config models
+│   │   ├── dag.py               # NetworkX DAG builder + wave scheduler
+│   │   ├── executor.py          # Task + pipeline execution engine (parallel)
+│   │   ├── scheduler.py         # APScheduler cron integration
+│   │   ├── auth.py              # JWT auth + RBAC
+│   │   ├── database.py          # SQLite user store
+│   │   ├── pipeline_generator.py# NLP entry point + legacy regex fallback
+│   │   ├── nlp_generator.py     # NLP engine (50+ verb mappings)
+│   │   ├── alerts.py            # Alert state management
+│   │   ├── catalog.py           # Data asset catalog
+│   │   ├── lineage.py           # Lineage tracking
+│   │   ├── costs.py             # Cost attribution
+│   │   ├── metrics.py           # Execution metrics
+│   │   ├── semantic_metrics.py  # Business metric definitions
+│   │   ├── quality.py           # Data quality checks
+│   │   ├── secrets.py           # Secret management
+│   │   ├── templates.py         # Template marketplace logic
+│   │   ├── triggers.py          # Webhook + event triggers
+│   │   ├── versioning.py        # Pipeline version control + diff
+│   │   └── logging_config.py    # Centralized logging setup
+│   ├── plugins/
+│   │   ├── base.py              # BasePlugin interface
+│   │   ├── registry.py          # Dynamic plugin loader
+│   │   ├── executors/           # 12 executor plugins
+│   │   └── transformers/        # dbt transformer
+│   ├── static/                  # Web dashboard HTML pages (10 pages)
+│   ├── cli/
+│   │   └── main.py              # Typer CLI (dataplatform run / init)
+│   └── templates/               # Jinja2 templates (internal)
+├── pipelines/                   # Your pipeline YAML files (auto-discovered)
+├── templates/                   # Reusable pipeline templates
+├── data/                        # Runtime data (gitignored)
+├── logs/                        # Log files (gitignored)
+├── tests/                       # Pytest test suite (25+ test files)
+├── requirements.txt
+└── pyproject.toml
+```
+
+---
+
+## Deployment
+
+### Process manager (Linux/macOS)
+
+```bash
+# systemd — /etc/systemd/system/dataplatform.service
+[Unit]
+Description=Dataplatform API Server
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/dataplatform-modern-dbt
+EnvironmentFile=/opt/dataplatform-modern-dbt/.env
+ExecStart=/usr/bin/python3 -m dataplatform.core.api
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable dataplatform
+sudo systemctl start dataplatform
+```
+
+### Docker
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["python", "-m", "dataplatform.core.api"]
+```
+
+```bash
 docker build -t dataplatform .
-docker run -p 8000:8000 dataplatform
+docker run -p 8000:8000 \
+  -e DATAPLATFORM_USERNAME=admin \
+  -e DATAPLATFORM_PASSWORD=changeme \
+  -e DATAPLATFORM_SECRET_KEY=my-secret \
+  -v $(pwd)/pipelines:/app/pipelines \
+  -v $(pwd)/data:/app/data \
+  dataplatform
+```
+
+### Nginx reverse proxy
+
+```nginx
+server {
+    listen 80;
+    server_name dataplatform.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+### Environment variables reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATAPLATFORM_USERNAME` | Yes | — | Admin login username |
+| `DATAPLATFORM_PASSWORD` | Yes | — | Admin login password |
+| `DATAPLATFORM_SECRET_KEY` | Yes | — | JWT signing secret |
+| `DATAPLATFORM_PORT` | No | `8000` | Server port |
+| `DATAPLATFORM_HOST` | No | `0.0.0.0` | Bind address |
+| `POSTGRES_PASSWORD` | No | — | Used in Postgres plugin configs |
+| `SNOWFLAKE_USER` | No | — | Snowflake username |
+| `SNOWFLAKE_PASSWORD` | No | — | Snowflake password |
+| `MYSQL_PASSWORD` | No | — | MySQL password |
+| `API_TOKEN` | No | — | Default Bearer token for API plugin |
+| `EMAIL_SENDER` | No | — | SMTP sender email |
+| `EMAIL_PASSWORD` | No | — | SMTP password |
+
+---
+
+## Writing a custom plugin
+
+1. Create `dataplatform/plugins/executors/my_plugin.py`:
+
+```python
+from dataplatform.plugins.base import BasePlugin
+
+class MyPlugin(BasePlugin):
+    def execute(self, config: dict) -> tuple[bool, dict]:
+        # config comes from the task's `config:` block in YAML
+        try:
+            result = do_something(config)
+            return True, {"result": result}
+        except Exception as e:
+            return False, {"error": str(e)}
+```
+
+2. Register it in `dataplatform/plugins/registry.py`:
+
+```python
+"my_plugin": "dataplatform.plugins.executors.my_plugin.MyPlugin",
+```
+
+3. Use it in any pipeline:
+
+```yaml
+- name: my_task
+  type: executor
+  plugin: my_plugin
+  config:
+    my_key: my_value
 ```
 
 ---
 
-## ☸️ Kubernetes
+## Running tests
 
-* Scalable deployment
-* Multi-instance execution
-* Production-ready setup
+```bash
+pip install pytest pytest-asyncio
+pytest tests/
+```
 
----
-
-# 🔥 Key Differentiators
-
-✅ Config-driven pipelines
-✅ Plugin-based architecture
-✅ Cloud-agnostic design
-✅ Local-first execution (DuckDB)
-✅ DAG orchestration engine
-✅ Built-in retries & logging
-✅ Extensible marketplace
+The test suite covers: pipeline execution, DAG building, parallel executor, dbt plugin, config templates, auth/RBAC, API endpoints, catalog, lineage, costs, triggers, versioning, semantic metrics, and more.
 
 ---
 
-# 🚀 MVP vs Advanced Roadmap
+## CLI
 
-## MVP
+```bash
+# Run a pipeline directly from the command line
+dataplatform run pipelines/sample_pipeline.yaml
 
-* CLI
-* Config pipelines
-* DuckDB executor
-* dbt integration
-* Basic DAG
-
----
-
-## Intermediate
-
-* Plugin system
-* Retry + logging
-* Scheduler
-* FastAPI backend
+# Initialize a new project scaffold
+dataplatform init my_project
+```
 
 ---
 
-## Advanced
+## License
 
-* React + D3 UI
-* Multi-user system
-* Plugin marketplace
-* Cloud deployment
-
----
-
-# 💼 Resume Value
-
-> Built a cloud-agnostic, plugin-based data platform with DAG orchestration, scheduling, and interactive UI, enabling config-driven pipeline execution similar to modern data platforms.
-
----
-
-# 🧠 Learning Outcomes
-
-This project demonstrates:
-
-* System design
-* Platform engineering
-* Distributed thinking
-* Extensibility patterns
-* Production-grade practices
-
----
-
-# 🎯 Future Enhancements
-
-* Parallel DAG execution
-* Data lineage integration
-* Cost optimization engine
-* AI-based pipeline recommendations
-* SaaS platform version
-
----
-
-# 🏁 Conclusion
-
-This is not just a project—it is a **data platform foundation** that can evolve into:
-
-* Internal enterprise platform
-* Open-source tool
-* SaaS product
-
----
-
-🚀 You've essentially built a **mini modern data platform ecosystem**
+MIT

@@ -1,0 +1,53 @@
+pipeline_name: etl_postgres_to_duckdb
+description: Extract data from PostgreSQL and load into DuckDB for analytics
+tags:
+  - etl
+  - postgres
+  - duckdb
+  - analytics
+
+tasks:
+  - name: extract_from_postgres
+    type: executor
+    plugin: postgres
+    operation: query
+    config:
+      connection:
+        host: localhost
+        port: 5432
+        database: mydb
+        user: user
+        password: "${POSTGRES_PASSWORD}"
+      sql: "SELECT * FROM orders WHERE updated_at >= CURRENT_DATE - INTERVAL '1 day'"
+    lineage:
+      reads_from:
+        - "postgres://localhost/mydb/orders"
+
+  - name: load_to_duckdb
+    type: executor
+    plugin: duckdb
+    operation: load
+    depends_on:
+      - extract_from_postgres
+    config:
+      file_path: data/orders_daily.csv
+      show_columns: true
+    lineage:
+      reads_from:
+        - "file://data/orders_daily.csv"
+      writes_to:
+        - "duckdb://data/analytics.db/orders_daily"
+
+  - name: validate_row_count
+    type: executor
+    plugin: duckdb
+    operation: validate
+    depends_on:
+      - load_to_duckdb
+    config:
+      file_path: data/orders_daily.csv
+    quality:
+      checks:
+        - name: has_rows
+          sql: "SELECT COUNT(*) FROM read_csv_auto('data/orders_daily.csv')"
+          expect_min: 1

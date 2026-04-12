@@ -1,5 +1,6 @@
 import logging
 import json
+import uuid
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -10,6 +11,8 @@ from dataplatform.core.config import load_config
 from dataplatform.core.dag import DAGBuilder
 from dataplatform.core.executor import PipelineExecutor
 from dataplatform.core.logging_config import log_pipeline_start, log_pipeline_success, log_pipeline_failure
+from dataplatform.core.database import save_run_status
+from dataplatform.core.alerts import check_sla_and_alert
 import time
 
 logger = logging.getLogger(__name__)
@@ -156,34 +159,45 @@ class PipelineScheduler:
         """Execute a scheduled pipeline run."""
         try:
             config = load_config(config_path)
-            logger.info(f"Running scheduled pipeline: {config.pipeline_name}")
+            run_id = str(uuid.uuid4())
+            logger.info(f"Running scheduled pipeline: {config.pipeline_name} (run_id={run_id})")
 
-            # Log pipeline start
             log_pipeline_start(config.pipeline_name, len(config.tasks))
+            save_run_status(config.pipeline_name, run_id, "started", "Scheduled run started")
             start_time = time.time()
 
             dag_builder = DAGBuilder(config.tasks)
-            dag = dag_builder.build()
-            execution_order = dag_builder.get_execution_order()
+            dag_builder.build()
+            execution_waves = dag_builder.get_execution_waves()
+            execution_order = [t for wave in execution_waves for t in wave]
 
             executor = PipelineExecutor()
-            success, results, errors = executor.execute_pipeline(
+            success, results, errors = executor.execute_pipeline_parallel(
                 tasks={task.name: task for task in config.tasks},
-                execution_order=execution_order,
-                config={"file_path": config.file_path}
+                execution_waves=execution_waves,
+                config={"file_path": config.file_path},
+                pipeline_name=config.pipeline_name,
+                run_id=run_id,
             )
 
             duration = time.time() - start_time
 
+            sla_violated = False
+            if config.sla:
+                sla_violated = check_sla_and_alert(config.pipeline_name, run_id, duration, config.sla)
+
             if success:
                 log_pipeline_success(config.pipeline_name, duration)
+                save_run_status(config.pipeline_name, run_id, "completed", "Scheduled run completed",
+                                {"duration_seconds": round(duration, 2), "sla_violated": sla_violated})
             else:
-                # Log which task failed
-                failed_tasks = [task for task, result in results.items() if not result]
+                failed_tasks = [t for t, r in results.items() if not r]
                 error_msg = f"Failed at tasks: {failed_tasks}"
                 if errors:
                     error_msg += f" - Errors: {errors}"
                 log_pipeline_failure(config.pipeline_name, error_msg, duration)
+                save_run_status(config.pipeline_name, run_id, "failed", error_msg,
+                                {"duration_seconds": round(duration, 2), "sla_violated": sla_violated})
 
         except Exception as e:
             logger.error(f"Scheduled pipeline execution failed for {config_path}: {e}", exc_info=True)

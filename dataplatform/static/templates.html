@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template Marketplace — Data Platform Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- Sidebar -->
+<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
+    <div class="px-4 py-5 border-b border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+                <i class="fas fa-layer-group text-white text-xs"></i>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
+                <p class="text-slate-400 text-[11px]">Suite</p>
+            </div>
+        </div>
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
+        </a>
+        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
+        </a>
+        <a href="/generator" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-wand-magic-sparkles w-4 text-center shrink-0"></i><span>Generator</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p></div>
+        <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
+        </a>
+        <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p></div>
+        <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
+        </a>
+        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p></div>
+        <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
+            <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
+        </a>
+            <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
+        <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+            <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
+        </a>
+    </nav>
+    <div class="px-4 py-4 border-t border-slate-700/50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                <i class="fas fa-user text-indigo-300 text-xs"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
+                <p class="text-slate-500 text-xs">Data Platform</p>
+            </div>
+            <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
+                <i class="fas fa-arrow-right-from-bracket text-sm"></i>
+            </button>
+        </div>
+    </div>
+</aside>
+
+<!-- Page wrapper -->
+<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+
+    <!-- Top bar -->
+    <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30">
+        <nav class="flex items-center gap-2 text-sm">
+            <a href="/" class="text-slate-500 hover:text-slate-800 transition-colors">Home</a>
+            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+            <a href="/templates-ui" class="text-slate-500 hover:text-slate-800 transition-colors">Dev Tools</a>
+            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
+            <span class="text-slate-900 font-semibold">Templates</span>
+        </nav>
+        <div class="flex items-center gap-3">
+            <!-- right side reserved -->
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="flex-1 p-6 space-y-6">
+
+        <!-- Page header -->
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-3 mb-1">
+                    <h1 class="text-xl font-bold text-slate-900">Template Marketplace</h1>
+                    <span id="templateCountBadge" class="hidden text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700"></span>
+                </div>
+                <p class="text-slate-500 text-sm">Start from a proven pattern — browse, preview, and deploy in one click</p>
+            </div>
+            <p id="templateCountDisplay" class="text-sm text-slate-400 shrink-0 mt-1"></p>
+        </div>
+
+        <!-- Template grid -->
+        <div id="templateGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+
+        <!-- Empty state -->
+        <div id="emptyState" class="hidden flex flex-col items-center justify-center py-24 gap-4">
+            <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+                <i class="fas fa-store text-slate-400 text-2xl"></i>
+            </div>
+            <div class="text-center">
+                <p class="text-slate-700 font-semibold">No templates available</p>
+                <p class="text-slate-400 text-sm max-w-sm mt-1">Add YAML files to the <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-500 text-xs">templates/</code> directory to populate the marketplace</p>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- Use Template Modal -->
+<div id="useModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-sm w-full max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h2 class="font-bold text-slate-900">Deploy Template</h2>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+            <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <div class="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                    <i class="fas fa-file-code text-violet-500 text-sm"></i>
+                </div>
+                <p class="text-sm font-semibold text-slate-800" id="modalTemplateName"></p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1.5">New pipeline name</label>
+                <input id="newPipelineName" type="text" placeholder="my_pipeline_name"
+                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300">
+                <p class="text-xs text-slate-400 mt-1.5">Lowercase letters, numbers, and underscores only</p>
+            </div>
+            <div id="useError" class="hidden text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2.5"></div>
+        </div>
+        <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
+            <button onclick="closeModal()"
+                class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium">
+                Cancel
+            </button>
+            <button onclick="submitUse()" id="useBtn"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-semibold">
+                Create Pipeline
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div id="previewModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                    <i class="fas fa-file-code text-violet-500 text-sm"></i>
+                </div>
+                <h2 class="font-bold text-slate-900 truncate" id="previewTitle">Template YAML</h2>
+            </div>
+            <button onclick="closePreview()" class="text-slate-400 hover:text-slate-600 transition-colors shrink-0 ml-3">
+                <i class="fas fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <pre id="previewContent" class="flex-1 overflow-x-auto overflow-y-auto text-xs font-mono leading-relaxed bg-slate-950 text-slate-100 p-5 rounded-b-2xl"></pre>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
+
+<script>
+let _currentTemplateId = '';
+
+function showToast(msg, type = 'info') {
+    const c = document.getElementById('toastContainer');
+    const cfg = {
+        success: ['bg-emerald-600', 'fa-circle-check'],
+        error:   ['bg-red-600',     'fa-circle-xmark'],
+        warning: ['bg-amber-500',   'fa-triangle-exclamation'],
+        info:    ['bg-indigo-600',  'fa-circle-info']
+    }[type] || ['bg-slate-700', 'fa-circle-info'];
+    const t = document.createElement('div');
+    t.className = `${cfg[0]} text-white px-4 py-3 rounded-xl shadow-xl border border-white/20 flex items-start gap-3 pointer-events-auto`;
+    t.innerHTML = `<i class="fas ${cfg[1]} mt-0.5 shrink-0 text-sm"></i><span class="text-sm flex-1 leading-snug">${msg}</span><button class="shrink-0 text-white/60 hover:text-white ml-1"><i class="fas fa-xmark text-xs"></i></button>`;
+    t.querySelector('button').onclick = () => t.remove();
+    c.appendChild(t);
+    setTimeout(() => t && t.remove(), 5000);
+}
+
+const TAG_COLORS = {
+    'etl':        'bg-blue-100 text-blue-700',
+    'dbt':        'bg-orange-100 text-orange-700',
+    'api':        'bg-purple-100 text-purple-700',
+    'kafka':      'bg-red-100 text-red-700',
+    'python':     'bg-yellow-100 text-yellow-700',
+    'daily':      'bg-emerald-100 text-emerald-700',
+    'testing':    'bg-sky-100 text-sky-700',
+    'analytics':  'bg-indigo-100 text-indigo-700',
+    'quality':    'bg-teal-100 text-teal-700',
+    'validation': 'bg-rose-100 text-rose-700',
+    'shell':      'bg-slate-100 text-slate-700',
+};
+
+function tagColor(t) {
+    return TAG_COLORS[t] || 'bg-violet-100 text-violet-700';
+}
+
+const PLUGIN_ICONS = {
+    'postgres':  'fa-database',
+    'duckdb':    'fa-table',
+    'dbt':       'fa-layer-group',
+    'api':       'fa-globe',
+    'kafka':     'fa-stream',
+    'python':    'fa-code',
+    'shell':     'fa-terminal',
+    'email':     'fa-envelope',
+    'snowflake': 'fa-snowflake',
+    'bigquery':  'fa-cloud',
+    'mysql':     'fa-database',
+};
+
+async function loadTemplates() {
+    const data = await fetch('/templates').then(r => r.json()).catch(() => {
+        showToast('Failed to load templates', 'error');
+        return { templates: [] };
+    });
+    const templates = data.templates || [];
+    const grid  = document.getElementById('templateGrid');
+    const empty = document.getElementById('emptyState');
+    const badge = document.getElementById('templateCountBadge');
+    const count = document.getElementById('templateCountDisplay');
+
+    if (!templates.length) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+        badge.classList.add('hidden');
+        count.textContent = '';
+        return;
+    }
+
+    empty.classList.add('hidden');
+    badge.textContent = `${templates.length} template${templates.length !== 1 ? 's' : ''}`;
+    badge.classList.remove('hidden');
+    count.textContent = `${templates.length} template${templates.length !== 1 ? 's' : ''}`;
+
+    grid.innerHTML = templates.map(t => `
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col hover:border-indigo-300 hover:shadow-lg transition-all">
+            <div class="flex items-start gap-3 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
+                    <i class="fas fa-file-code text-violet-500"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <h2 class="font-bold text-slate-900 text-lg leading-snug truncate">${t.pipeline_name}</h2>
+                    <p class="text-slate-500 text-sm leading-relaxed mt-1">${t.description || 'No description'}</p>
+                </div>
+            </div>
+
+            <!-- Plugins -->
+            ${(t.plugins || []).length ? `
+            <div class="flex flex-wrap gap-1.5 mb-3">
+                ${(t.plugins || []).map(p => `
+                    <span class="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                        <i class="fas ${PLUGIN_ICONS[p] || 'fa-plug'} text-[10px]"></i>${p}
+                    </span>
+                `).join('')}
+            </div>` : ''}
+
+            <!-- Tags -->
+            ${(t.tags || []).length ? `
+            <div class="flex flex-wrap gap-1.5 mb-4">
+                ${(t.tags || []).map(tag => `
+                    <span class="text-xs px-2 py-0.5 rounded-full font-medium ${tagColor(tag)}">${tag}</span>
+                `).join('')}
+            </div>` : '<div class="mb-4"></div>'}
+
+            <div class="mt-auto pt-4 border-t border-slate-100 flex gap-2">
+                <button onclick="previewTemplate('${t.template_id}', '${t.pipeline_name.replace(/'/g, "\\'")}')"
+                    class="flex-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium">
+                    <i class="fas fa-eye mr-1.5"></i>Preview
+                </button>
+                <button onclick="openUseModal('${t.template_id}', '${t.pipeline_name.replace(/'/g, "\\'")}')"
+                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-semibold">
+                    <i class="fas fa-rocket mr-1.5"></i>Use Template
+                </button>
+            </div>
+            <p class="text-xs text-slate-400 mt-2 text-center">${t.task_count || 0} task${(t.task_count || 0) !== 1 ? 's' : ''}</p>
+        </div>
+    `).join('');
+}
+
+function openUseModal(templateId, templateName) {
+    _currentTemplateId = templateId;
+    document.getElementById('modalTemplateName').textContent = templateName;
+    document.getElementById('newPipelineName').value = `my_${templateId}`;
+    document.getElementById('useError').classList.add('hidden');
+    document.getElementById('useModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('newPipelineName').focus(), 50);
+}
+
+function closeModal() {
+    document.getElementById('useModal').classList.add('hidden');
+}
+
+async function previewTemplate(templateId, name) {
+    const data = await fetch(`/templates/${templateId}`).then(r => r.json()).catch(() => null);
+    if (!data) {
+        showToast('Failed to load template preview', 'error');
+        return;
+    }
+    document.getElementById('previewTitle').textContent = name;
+    document.getElementById('previewContent').textContent = data.content;
+    document.getElementById('previewModal').classList.remove('hidden');
+}
+
+function closePreview() {
+    document.getElementById('previewModal').classList.add('hidden');
+}
+
+async function submitUse() {
+    const name   = document.getElementById('newPipelineName').value.trim();
+    const errEl  = document.getElementById('useError');
+    errEl.classList.add('hidden');
+
+    if (!name) {
+        errEl.textContent = 'Please enter a pipeline name';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    if (!/^[a-z0-9_]+$/.test(name)) {
+        errEl.textContent = 'Pipeline name must be lowercase letters, numbers, and underscores only';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    const btn = document.getElementById('useBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Creating…';
+
+    const resp = await fetch(`/templates/${_currentTemplateId}/use`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_pipeline_name: name }),
+    });
+
+    btn.disabled = false;
+    btn.innerHTML = 'Create Pipeline';
+
+    if (resp.ok) {
+        const result = await resp.json();
+        closeModal();
+        showToast(`Pipeline "${result.pipeline_name}" created successfully`, 'success');
+        setTimeout(() => { window.location.href = '/dashboard'; }, 1500);
+    } else {
+        const err = await resp.json().catch(() => ({}));
+        errEl.textContent = err.detail || 'Failed to create pipeline';
+        errEl.classList.remove('hidden');
+    }
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); closePreview(); }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await fetch('/logout', { method: 'POST' });
+    window.location.href = '/login';
+});
+
+loadTemplates();
+fetch('/me').then(r => r.ok ? r.json() : null).then(data => { if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username; }).catch(() => {});
+</script>
+</body>
+</html>
