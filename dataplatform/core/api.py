@@ -1430,6 +1430,14 @@ async def monitoring_page(request: Request):
     raise HTTPException(status_code=404, detail="Monitoring page not found")
 
 
+@app.get("/job-builder")
+async def job_builder_page(request: Request):
+    page = Path(__file__).resolve().parent.parent / "static" / "job_builder.html"
+    if page.exists():
+        return FileResponse(str(page), media_type="text/html")
+    raise HTTPException(status_code=404, detail="Job Builder page not found")
+
+
 # ---------------------------------------------------------------------------
 # Phase 4 — data catalog API
 # ---------------------------------------------------------------------------
