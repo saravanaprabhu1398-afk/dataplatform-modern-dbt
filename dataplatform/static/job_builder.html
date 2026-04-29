@@ -10,14 +10,12 @@
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .animate-fadeIn{animation:fadeIn .15s ease-out}
 
-/* Canvas */
 #canvas-wrapper{position:relative;overflow:auto;flex:1;background:#f8fafc;
   background-image:radial-gradient(circle,#cbd5e1 1px,transparent 1px);
   background-size:24px 24px;}
-#canvas-inner{position:relative;min-width:1500px;min-height:760px;}
+#canvas-inner{position:relative;min-width:1500px;min-height:760px;transform-origin:top left;}
 #edge-svg{position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible;z-index:5;}
 
-/* Nodes */
 .task-node{position:absolute;width:210px;z-index:10;user-select:none;}
 .node-card{background:white;border-radius:10px;
   box-shadow:0 2px 8px rgba(0,0,0,.09);border:1.5px solid #e2e8f0;
@@ -30,7 +28,6 @@
   display:flex;align-items:center;gap:8px;cursor:move;}
 .node-body{padding:9px 12px;cursor:pointer;}
 
-/* Ports */
 .port{position:absolute;width:14px;height:14px;border-radius:50%;
   border:2.5px solid white;top:50%;transform:translateY(-50%);
   z-index:20;transition:transform .12s;cursor:crosshair;}
@@ -38,7 +35,6 @@
 .port-input{left:-7px;background:#6366f1;}
 .port-output{right:-7px;}
 
-/* Palette */
 .pal-item{display:flex;align-items:center;gap:10px;padding:9px 12px;
   border-radius:8px;cursor:pointer;border:1.5px solid transparent;
   transition:all .13s;margin-bottom:2px;}
@@ -46,7 +42,6 @@
   box-shadow:0 2px 8px rgba(0,0,0,.07);}
 .pal-item:active{transform:scale(.97);}
 
-/* Config panel */
 #config-panel{width:0;min-width:0;overflow:hidden;
   background:white;border-left:1px solid #e2e8f0;
   transition:width .2s ease,min-width .2s ease;
@@ -54,7 +49,6 @@
 #config-panel.open{width:320px;min-width:320px;}
 #config-scroll{flex:1;overflow-y:auto;padding:16px;}
 
-/* Form */
 .flabel{display:block;font-size:11px;font-weight:600;color:#6b7280;
   text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
 .finput{width:100%;padding:6px 10px;border:1px solid #d1d5db;
@@ -65,18 +59,61 @@ textarea.finput{resize:vertical;font-family:'Monaco','Menlo',monospace;font-size
 select.finput{appearance:auto;}
 .frow{margin-bottom:12px;}
 
-/* YAML */
 .yaml-code{font-family:'Monaco','Menlo',monospace;font-size:12px;line-height:1.65;
   background:#0f172a;color:#e2e8f0;padding:16px;border-radius:8px;
   overflow:auto;white-space:pre;max-height:65vh;}
-.yk{color:#93c5fd}.yv{color:#86efac}.ya{color:#c4b5fd}
 
-/* Scrollbar */
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
 
 .drawing-mode,.drawing-mode *{cursor:crosshair!important;}
+
+.tbtn{display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:6px;border:1px solid #e2e8f0;
+  background:white;color:#64748b;cursor:pointer;transition:all .13s;}
+.tbtn:hover:not(:disabled){background:#f1f5f9;color:#374151;}
+.tbtn:disabled{opacity:.35;cursor:not-allowed;}
+
+#zoom-bar{position:absolute;bottom:12px;right:12px;z-index:30;
+  display:flex;align-items:center;gap:2px;background:white;
+  border:1px solid #e2e8f0;border-radius:8px;padding:3px 6px;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);font-size:11px;}
+
+.space-pan{cursor:grab!important;}
+.space-pan *{cursor:grab!important;}
+.panning,.panning *{cursor:grabbing!important;}
+
+.tmpl-dd{position:absolute;right:0;top:20px;background:white;
+  border:1px solid #e2e8f0;border-radius:10px;
+  box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:40;width:210px;padding:4px 0;}
+.tmpl-dd-item{padding:7px 12px;font-size:11px;color:#374151;
+  cursor:pointer;transition:background .1s;}
+.tmpl-dd-item:hover{background:#eef2ff;color:#4f46e5;}
+
+/* Left panel tabs */
+.tab-btn{flex:1;padding:8px 4px;font-size:10px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:#94a3b8;border-bottom:2px solid transparent;
+  cursor:pointer;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;}
+.tab-btn.active{color:#6366f1;border-bottom-color:#6366f1;}
+.tab-btn:hover:not(.active){color:#64748b;}
+
+/* Variable / Connection items */
+.var-item,.conn-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+  padding:10px;margin-bottom:8px;}
+.var-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;
+  border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;
+  background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;
+  transition:background .1s;margin:2px;}
+.var-badge:hover{background:#e0e7ff;}
+.conn-type-badge{display:inline-block;padding:1px 6px;border-radius:4px;
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+
+/* Error/failure edge */
+.edge-failure{stroke:#ef4444!important;}
+
+/* Variable reference helper */
+#var-ref-helper{border-top:1px solid #f1f5f9;padding:10px 16px;background:#fafafa;}
 </style>
 </head>
 <body class="bg-slate-50 min-h-screen flex">
@@ -138,7 +175,7 @@ select.finput{appearance:auto;}
     </a>
   </nav>
   <div class="px-4 py-3 border-t border-slate-700/50">
-    <p class="text-slate-500 text-[11px]">Job Builder v1</p>
+    <p class="text-slate-500 text-[11px]">Job Builder v2</p>
   </div>
 </aside>
 
@@ -156,7 +193,15 @@ select.finput{appearance:auto;}
         class="text-slate-500 text-sm border-b border-transparent focus:border-slate-300 outline-none bg-transparent px-1 py-0.5 flex-1 min-w-0 transition-colors"
         oninput="updateYAMLPreview()">
     </div>
-    <div class="flex items-center gap-2 shrink-0">
+    <div class="flex items-center gap-1.5 shrink-0">
+      <!-- Undo / Redo -->
+      <button id="undo-btn" onclick="undo()" disabled title="Undo (Ctrl+Z)" class="tbtn">
+        <i class="fas fa-rotate-left text-xs"></i>
+      </button>
+      <button id="redo-btn" onclick="redo()" disabled title="Redo (Ctrl+Y)" class="tbtn">
+        <i class="fas fa-rotate-right text-xs"></i>
+      </button>
+      <div class="w-px h-5 bg-slate-200 mx-1"></div>
       <button onclick="showScheduleModal()"
         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
         <i class="fas fa-clock"></i>
@@ -191,13 +236,43 @@ select.finput{appearance:auto;}
   <!-- WORKSPACE -->
   <div class="flex flex-1 overflow-hidden">
 
-    <!-- PALETTE -->
-    <div class="w-60 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
-      <div class="px-4 py-3 border-b border-slate-100">
-        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Task Types</p>
-        <p class="text-[11px] text-slate-400 mt-0.5">Click to add to canvas</p>
+    <!-- LEFT PANEL (tabbed) -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
+      <div class="flex border-b border-slate-200 shrink-0">
+        <button class="tab-btn active" id="tab-tasks"  onclick="switchTab('tasks')">Tasks</button>
+        <button class="tab-btn"        id="tab-vars"   onclick="switchTab('vars')">Variables</button>
+        <button class="tab-btn"        id="tab-conns"  onclick="switchTab('conns')">Connections</button>
       </div>
-      <div class="flex-1 overflow-y-auto p-3" id="palette"></div>
+      <!-- Tasks -->
+      <div id="panel-tasks" class="flex-1 overflow-y-auto p-3">
+        <div id="palette"></div>
+      </div>
+      <!-- Variables -->
+      <div id="panel-vars" class="hidden flex-1 overflow-y-auto flex flex-col">
+        <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
+          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pipeline Variables</p>
+          <button onclick="addVar()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200 transition-colors" title="Add variable">
+            <i class="fas fa-plus text-[9px]"></i>
+          </button>
+        </div>
+        <div id="vars-list" class="flex-1 overflow-y-auto px-3 pb-3"></div>
+        <div class="px-3 py-2 border-t border-slate-100 shrink-0">
+          <p class="text-[10px] text-slate-400 leading-relaxed">Reference anywhere with <code class="bg-slate-100 px-1 rounded">${var.name}</code></p>
+        </div>
+      </div>
+      <!-- Connections -->
+      <div id="panel-conns" class="hidden flex-1 overflow-y-auto flex flex-col">
+        <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
+          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Connections</p>
+          <button onclick="addConn()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200 transition-colors" title="Add connection">
+            <i class="fas fa-plus text-[9px]"></i>
+          </button>
+        </div>
+        <div id="conns-list" class="flex-1 overflow-y-auto px-3 pb-3"></div>
+        <div class="px-3 py-2 border-t border-slate-100 shrink-0">
+          <p class="text-[10px] text-slate-400 leading-relaxed">Reference with <code class="bg-slate-100 px-1 rounded">${conn.name}</code></p>
+        </div>
+      </div>
     </div>
 
     <!-- CANVAS -->
@@ -208,7 +283,15 @@ select.finput{appearance:auto;}
           <i class="fas fa-diagram-project text-slate-200 text-6xl mb-4"></i>
           <p class="text-slate-400 text-sm font-medium">Click a task type to add it</p>
           <p class="text-slate-300 text-xs mt-1">Connect tasks by dragging from <span class="font-semibold">right port → left port</span></p>
+          <p class="text-slate-300 text-xs mt-0.5">Ctrl+Wheel to zoom · Space+drag to pan · Ctrl+D to duplicate</p>
         </div>
+      </div>
+      <!-- Zoom bar -->
+      <div id="zoom-bar">
+        <button onclick="adjustZoom(-0.1)" class="tbtn border-0 w-6 h-6" title="Zoom out"><i class="fas fa-minus text-[9px]"></i></button>
+        <span id="zoom-label" class="font-semibold text-slate-500 w-9 text-center select-none">100%</span>
+        <button onclick="adjustZoom(0.1)" class="tbtn border-0 w-6 h-6" title="Zoom in"><i class="fas fa-plus text-[9px]"></i></button>
+        <button onclick="resetZoom()" class="tbtn border-0 px-1 w-auto h-6 text-[10px] font-semibold text-slate-400" title="Reset zoom">fit</button>
       </div>
     </div>
 
@@ -298,7 +381,7 @@ select.finput{appearance:auto;}
       <div><label class="flabel">Hour</label><input id="sched-hr" class="finput" placeholder="6" value="6"></div>
       <div><label class="flabel">Day of month</label><input id="sched-dom" class="finput" placeholder="*" value="*"></div>
       <div><label class="flabel">Month</label><input id="sched-mo" class="finput" placeholder="*" value="*"></div>
-      <div><label class="flabel">Day of week</label><input id="sched-dow" class="finput" placeholder="* (0=Sun,1=Mon...)" value="*"></div>
+      <div><label class="flabel">Day of week</label><input id="sched-dow" class="finput" placeholder="* (0=Sun)" value="*"></div>
     </div>
     <div class="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
       <button onclick="closeScheduleModal()" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
@@ -312,17 +395,21 @@ select.finput{appearance:auto;}
 // TASK TYPE DEFINITIONS
 // ─────────────────────────────────────────
 const TT = {
-  sql:        {label:'SQL Query',    icon:'fa-database',        color:'#3b82f6', desc:'Query any database',       plugin:null},
-  python:     {label:'Python',       icon:'fa-code',            color:'#f59e0b', desc:'Run Python code or script', plugin:'python'},
-  shell:      {label:'Shell',        icon:'fa-terminal',        color:'#64748b', desc:'Execute shell commands',    plugin:'shell'},
-  dbt:        {label:'dbt',          icon:'fa-gear',            color:'#f97316', desc:'Run dbt transformations',   plugin:'dbt'},
-  spark:      {label:'Spark',        icon:'fa-bolt',            color:'#ef4444', desc:'Submit Spark jobs',         plugin:'spark'},
-  api:        {label:'REST API',     icon:'fa-cloud',           color:'#14b8a6', desc:'Make HTTP API calls',       plugin:'api'},
-  kafka:      {label:'Kafka',        icon:'fa-arrows-spin',     color:'#8b5cf6', desc:'Publish or subscribe',      plugin:'kafka'},
-  file:       {label:'File',         icon:'fa-folder-open',     color:'#6366f1', desc:'Read, write, merge files',  plugin:'file'},
-  email:      {label:'Email',        icon:'fa-envelope',        color:'#ec4899', desc:'Send notifications',        plugin:'email'},
-  validation: {label:'Validation',   icon:'fa-circle-check',    color:'#10b981', desc:'Data quality checks',       plugin:'duckdb'},
-  pipeline:   {label:'Run Pipeline', icon:'fa-diagram-project', color:'#06b6d4', desc:'Trigger another pipeline',  plugin:'python'},
+  sql:        {label:'SQL Query',    icon:'fa-database',              color:'#3b82f6', desc:'Query any database',        plugin:null},
+  python:     {label:'Python',       icon:'fa-code',                  color:'#f59e0b', desc:'Run Python code or script',  plugin:'python'},
+  shell:      {label:'Shell',        icon:'fa-terminal',              color:'#64748b', desc:'Execute shell commands',     plugin:'shell'},
+  dbt:        {label:'dbt',          icon:'fa-gear',                  color:'#f97316', desc:'Run dbt transformations',    plugin:'dbt'},
+  spark:      {label:'Spark',        icon:'fa-bolt',                  color:'#ef4444', desc:'Submit Spark jobs',          plugin:'spark'},
+  api:        {label:'REST API',     icon:'fa-cloud',                 color:'#14b8a6', desc:'Make HTTP API calls',        plugin:'api'},
+  kafka:      {label:'Kafka',        icon:'fa-arrows-spin',           color:'#8b5cf6', desc:'Publish or subscribe',       plugin:'kafka'},
+  file:       {label:'File',         icon:'fa-folder-open',           color:'#6366f1', desc:'Read, write, merge files',   plugin:'file'},
+  email:      {label:'Email',        icon:'fa-envelope',              color:'#ec4899', desc:'Send notifications',         plugin:'email'},
+  validation: {label:'Validation',   icon:'fa-circle-check',          color:'#10b981', desc:'Data quality checks',        plugin:'duckdb'},
+  pipeline:   {label:'Run Pipeline', icon:'fa-diagram-project',       color:'#06b6d4', desc:'Trigger another pipeline',   plugin:'python'},
+  loop:       {label:'ForEach Loop', icon:'fa-repeat',                color:'#7c3aed', desc:'Iterate over a collection',  plugin:'python'},
+  condition:  {label:'If Condition', icon:'fa-code-branch',           color:'#d97706', desc:'Branch on expression',       plugin:'python'},
+  set_var:    {label:'Set Variable', icon:'fa-sliders',               color:'#0369a1', desc:'Assign a pipeline variable', plugin:'python'},
+  on_error:   {label:'On Error',     icon:'fa-triangle-exclamation',  color:'#dc2626', desc:'Handle upstream failures',   plugin:'python'},
 };
 
 const DEFAULT_CONFIGS = {
@@ -337,24 +424,295 @@ const DEFAULT_CONFIGS = {
   email:      {smtp_server:'smtp.gmail.com', smtp_port:587, sender_email:'${EMAIL_SENDER}', sender_password:'${EMAIL_PASSWORD}', recipients:['team@example.com'], subject:'Pipeline Complete', body:'Your pipeline has finished successfully.'},
   validation: {file_path:'data/input.csv', checks:[{name:'no_nulls', sql:'SELECT COUNT(*) FROM data WHERE id IS NULL', expect:0}]},
   pipeline:   {pipeline_name:'', wait_for_completion:true},
+  loop:       {iterate_over:'${var.items}', item_variable:'item', max_concurrency:1},
+  condition:  {expression:'${var.status} == "success"', description:''},
+  set_var:    {variable_name:'', value:'', value_type:'static'},
+  on_error:   {action:'continue', log_message:'Task failed: ${task.name}', notify:false},
 };
+
+const CHECK_TEMPLATES = [
+  {name:'no_nulls',           label:'No nulls in column',    sql:'SELECT COUNT(*) FROM data WHERE {column} IS NULL',                          expect:0},
+  {name:'unique_values',      label:'Unique values',         sql:'SELECT COUNT(*) - COUNT(DISTINCT {column}) FROM data',                      expect:0},
+  {name:'row_count_positive', label:'Row count > 0',         sql:'SELECT CASE WHEN COUNT(*) > 0 THEN 0 ELSE 1 END FROM data',                 expect:0},
+  {name:'no_negatives',       label:'No negative values',    sql:'SELECT COUNT(*) FROM data WHERE {column} < 0',                              expect:0},
+  {name:'value_in_range',     label:'Value in range',        sql:'SELECT COUNT(*) FROM data WHERE {column} NOT BETWEEN {min} AND {max}',      expect:0},
+  {name:'no_duplicates',      label:'No duplicate rows',     sql:'SELECT COUNT(*) FROM (SELECT *, COUNT(*) OVER() c FROM data GROUP BY ALL HAVING COUNT(*)>1)', expect:0},
+  {name:'not_blank',          label:'No blank strings',      sql:"SELECT COUNT(*) FROM data WHERE TRIM({column}) = ''",                       expect:0},
+  {name:'future_dates',       label:'No future dates',       sql:'SELECT COUNT(*) FROM data WHERE {date_col} > CURRENT_DATE',                 expect:0},
+];
 
 // ─────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────
 const state = {tasks:[], edges:[], selected:null, schedule:null, nextId:1};
-let dragState = null;   // {taskId, offX, offY}
-let edgeDraw  = null;   // {fromId, x1, y1, mouseX, mouseY}
+let dragState = null;
+let edgeDraw  = null;
 const NODE_W = 210, NODE_H = 80;
+
+// ── Undo / Redo ──
+const hist = {undo:[], redo:[]};
+const MAX_HIST = 50;
+
+// ── Pipeline-level variables & connections ──
+const pipeline = {variables: [], connections: []};
+let varIdCtr = 1, connIdCtr = 1;
+
+const CONN_META = {
+  postgres:  {icon:'fa-database', color:'#3b82f6', fields:['host','port','database','user','password']},
+  mysql:     {icon:'fa-database', color:'#f97316', fields:['host','port','database','user','password']},
+  bigquery:  {icon:'fa-database', color:'#4285f4', fields:['project_id','dataset_id','credentials_file']},
+  snowflake: {icon:'fa-snowflake',color:'#29b5e8', fields:['account','warehouse','database','user','password']},
+  spark:     {icon:'fa-bolt',     color:'#ef4444', fields:['spark_master','deploy_mode']},
+  kafka:     {icon:'fa-arrows-spin',color:'#8b5cf6',fields:['brokers','security_protocol']},
+  http:      {icon:'fa-cloud',    color:'#14b8a6', fields:['base_url','auth_type','token']},
+};
+
+const CONN_DEFAULTS = {
+  postgres:  {host:'localhost', port:5432, database:'mydb', user:'${DB_USER}', password:'${DB_PASSWORD}'},
+  mysql:     {host:'localhost', port:3306, database:'mydb', user:'${DB_USER}', password:'${DB_PASSWORD}'},
+  bigquery:  {project_id:'my-project', dataset_id:'my_dataset', credentials_file:'${GOOGLE_APPLICATION_CREDENTIALS}'},
+  snowflake: {account:'myaccount.us-east-1', warehouse:'COMPUTE_WH', database:'mydb', user:'${SF_USER}', password:'${SF_PASSWORD}'},
+  spark:     {spark_master:'spark://localhost:7077', deploy_mode:'client'},
+  kafka:     {brokers:'localhost:9092', security_protocol:'PLAINTEXT'},
+  http:      {base_url:'https://api.example.com', auth_type:'bearer', token:'${API_TOKEN}'},
+};
+
+// ── Current left tab ──
+let activeTab = 'tasks';
+
+// ── Copy/Paste ──
+let clipboard = null;
+
+// ── Zoom ──
+let zoom = 1;
+
+// ── Pan ──
+let spaceDown = false;
+let panState  = null;
+
+// ─────────────────────────────────────────
+// HISTORY
+// ─────────────────────────────────────────
+function snap() {
+  return JSON.stringify({
+    tasks:  state.tasks.map(t => ({...t, config: JSON.parse(JSON.stringify(t.config))})),
+    edges:  state.edges.map(e => ({...e})),
+    nextId: state.nextId,
+  });
+}
+
+function saveSnap() {
+  hist.undo.push(snap());
+  if (hist.undo.length > MAX_HIST) hist.undo.shift();
+  hist.redo = [];
+  syncHistBtns();
+}
+
+function undo() {
+  if (!hist.undo.length) return;
+  hist.redo.push(snap());
+  restoreSnap(JSON.parse(hist.undo.pop()));
+  syncHistBtns();
+}
+
+function redo() {
+  if (!hist.redo.length) return;
+  hist.undo.push(snap());
+  restoreSnap(JSON.parse(hist.redo.pop()));
+  syncHistBtns();
+}
+
+function restoreSnap(s) {
+  state.tasks  = s.tasks;
+  state.edges  = s.edges;
+  state.nextId = s.nextId;
+  state.selected = null;
+  document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
+  document.getElementById('config-panel').classList.remove('open');
+  state.tasks.forEach(t => mountNode(t));
+  renderSVG();
+  updateEmpty();
+  updateYAMLPreview();
+}
+
+function syncHistBtns() {
+  document.getElementById('undo-btn').disabled = !hist.undo.length;
+  document.getElementById('redo-btn').disabled = !hist.redo.length;
+}
+
+// ─────────────────────────────────────────
+// ZOOM
+// ─────────────────────────────────────────
+function setZoom(z) {
+  zoom = Math.min(2, Math.max(0.25, z));
+  document.getElementById('canvas-inner').style.transform = `scale(${zoom})`;
+  document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
+}
+function adjustZoom(delta) { setZoom(zoom + delta); }
+function resetZoom() { setZoom(1); }
 
 // ─────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   renderPalette();
+  renderVarsPanel();
+  renderConnsPanel();
   bindCanvasEvents();
   renderSVG();
+  syncHistBtns();
 });
+
+// ─────────────────────────────────────────
+// TAB SWITCHING
+// ─────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  ['tasks','vars','conns'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
+  });
+}
+
+// ─────────────────────────────────────────
+// VARIABLES PANEL
+// ─────────────────────────────────────────
+function addVar() {
+  pipeline.variables.push({id:'v'+varIdCtr++, name:'var_'+pipeline.variables.length, type:'string', default_value:'', description:''});
+  renderVarsPanel();
+  updateYAMLPreview();
+}
+
+function deleteVar(id) {
+  pipeline.variables = pipeline.variables.filter(v => v.id !== id);
+  renderVarsPanel();
+  updateYAMLPreview();
+}
+
+function updateVar(id, field, value) {
+  const v = pipeline.variables.find(v => v.id === id);
+  if (v) { v[field] = value; updateYAMLPreview(); }
+}
+
+function renderVarsPanel() {
+  const list = document.getElementById('vars-list');
+  if (!pipeline.variables.length) {
+    list.innerHTML = `<div class="text-center py-8">
+      <i class="fas fa-sliders text-slate-200 text-3xl mb-2"></i>
+      <p class="text-[11px] text-slate-400">No variables yet</p>
+      <p class="text-[10px] text-slate-300 mt-0.5">Click + to declare one</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = pipeline.variables.map(v => `
+    <div class="var-item">
+      <div class="flex items-center gap-1.5 mb-2">
+        <input class="finput text-xs font-semibold flex-1" value="${esc(v.name)}" placeholder="variable_name"
+               oninput="updateVar('${v.id}','name',this.value)">
+        <button onclick="deleteVar('${v.id}')" class="text-slate-300 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+      </div>
+      <div class="flex gap-1.5 mb-1.5">
+        <select class="finput text-[11px]" style="width:88px;flex-shrink:0" onchange="updateVar('${v.id}','type',this.value)">
+          ${['string','integer','boolean','list','secret'].map(t => `<option value="${t}" ${v.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <input class="finput text-[11px] flex-1" value="${esc(v.default_value)}" placeholder="Default value"
+               oninput="updateVar('${v.id}','default_value',this.value)">
+      </div>
+      <p class="text-[10px] text-slate-400">Use: <code class="bg-white px-1 rounded border border-slate-200">\${var.${esc(v.name)}}</code></p>
+    </div>
+  `).join('');
+}
+
+// ─────────────────────────────────────────
+// CONNECTIONS PANEL
+// ─────────────────────────────────────────
+function addConn() {
+  const type = 'postgres';
+  pipeline.connections.push({
+    id: 'c'+connIdCtr++, name:'conn_'+pipeline.connections.length,
+    conn_type: type, expanded: true,
+    ...JSON.parse(JSON.stringify(CONN_DEFAULTS[type]))
+  });
+  renderConnsPanel();
+  updateYAMLPreview();
+}
+
+function deleteConn(id) {
+  pipeline.connections = pipeline.connections.filter(c => c.id !== id);
+  renderConnsPanel();
+  updateYAMLPreview();
+}
+
+function updateConn(id, field, value) {
+  const c = pipeline.connections.find(c => c.id === id);
+  if (!c) return;
+  if (field === 'conn_type') {
+    const defaults = JSON.parse(JSON.stringify(CONN_DEFAULTS[value] || {}));
+    Object.keys(CONN_DEFAULTS).forEach(t => CONN_META[t].fields.forEach(f => delete c[f]));
+    Object.assign(c, defaults);
+    c.conn_type = value;
+  } else {
+    c[field] = value;
+  }
+  renderConnsPanel();
+  updateYAMLPreview();
+}
+
+function toggleConnExpand(id) {
+  const c = pipeline.connections.find(c => c.id === id);
+  if (c) { c.expanded = !c.expanded; renderConnsPanel(); }
+}
+
+function renderConnsPanel() {
+  const list = document.getElementById('conns-list');
+  if (!pipeline.connections.length) {
+    list.innerHTML = `<div class="text-center py-8">
+      <i class="fas fa-plug text-slate-200 text-3xl mb-2"></i>
+      <p class="text-[11px] text-slate-400">No connections yet</p>
+      <p class="text-[10px] text-slate-300 mt-0.5">Click + to add one</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = pipeline.connections.map(c => {
+    const meta = CONN_META[c.conn_type] || CONN_META.postgres;
+    const fields = meta.fields || [];
+    return `
+    <div class="conn-item">
+      <div class="flex items-center gap-2 cursor-pointer" onclick="toggleConnExpand('${c.id}')">
+        <div class="w-6 h-6 rounded flex items-center justify-center shrink-0" style="background:${meta.color}22;border:1px solid ${meta.color}44">
+          <i class="fas ${meta.icon} text-[9px]" style="color:${meta.color}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[11px] font-semibold text-slate-700 truncate">${esc(c.name)}</p>
+          <span class="conn-type-badge" style="background:${meta.color}18;color:${meta.color}">${c.conn_type}</span>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button onclick="event.stopPropagation();deleteConn('${c.id}')" class="text-slate-300 hover:text-red-400 text-[10px] transition-colors">✕</button>
+          <i class="fas fa-chevron-${c.expanded?'up':'down'} text-[8px] text-slate-400"></i>
+        </div>
+      </div>
+      ${c.expanded ? `
+      <div class="mt-2 pt-2 border-t border-slate-200 space-y-1.5">
+        <div>
+          <label class="flabel" style="font-size:9px">Name</label>
+          <input class="finput text-[11px]" value="${esc(c.name)}" oninput="updateConn('${c.id}','name',this.value)">
+        </div>
+        <div>
+          <label class="flabel" style="font-size:9px">Type</label>
+          <select class="finput text-[11px]" onchange="updateConn('${c.id}','conn_type',this.value)">
+            ${Object.keys(CONN_META).map(t => `<option value="${t}" ${c.conn_type===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        ${fields.map(f => `
+        <div>
+          <label class="flabel" style="font-size:9px">${f.replace(/_/g,' ')}</label>
+          <input class="finput text-[11px]" value="${esc(String(c[f]||''))}" oninput="updateConn('${c.id}','${f}',this.value)">
+        </div>`).join('')}
+        <p class="text-[10px] text-slate-400 pt-1">Ref: <code class="bg-white px-1 rounded border border-slate-200">\${conn.${esc(c.name)}}</code></p>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
 
 // ─────────────────────────────────────────
 // PALETTE
@@ -376,16 +734,17 @@ function renderPalette() {
 }
 
 // ─────────────────────────────────────────
-// ADD / DELETE TASK
+// ADD / DELETE / DUPLICATE TASK
 // ─────────────────────────────────────────
 function addTask(typeKey) {
-  const id = 'task_' + state.nextId++;
+  saveSnap();
+  const id    = 'task_' + state.nextId++;
   const count = state.tasks.filter(t => t.typeKey === typeKey).length + 1;
   const label = TT[typeKey].label.toLowerCase().replace(/\s+/g,'_');
-  const name = `${label}_${count}`;
+  const name  = `${label}_${count}`;
   const x = 80 + (state.tasks.length % 4) * 260;
   const y = 80 + Math.floor(state.tasks.length / 4) * 160;
-  const task = {id, typeKey, name, x, y, config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey]))};
+  const task = {id, typeKey, name, x, y, retries:0, config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey]))};
   state.tasks.push(task);
   mountNode(task);
   selectTask(id);
@@ -394,6 +753,7 @@ function addTask(typeKey) {
 }
 
 function deleteTask(id) {
+  saveSnap();
   state.tasks = state.tasks.filter(t => t.id !== id);
   state.edges = state.edges.filter(e => e.from !== id && e.to !== id);
   document.getElementById('node-' + id)?.remove();
@@ -403,12 +763,32 @@ function deleteTask(id) {
   updateYAMLPreview();
 }
 
+function duplicateTask(id) {
+  const src = getTask(id);
+  if (!src) return;
+  saveSnap();
+  const newId = 'task_' + state.nextId++;
+  const task = {
+    ...JSON.parse(JSON.stringify(src)),
+    id:   newId,
+    x:    Math.min(src.x + 240, 1280),
+    y:    src.y + 30,
+    name: src.name + '_copy',
+  };
+  state.tasks.push(task);
+  mountNode(task);
+  selectTask(newId);
+  updateEmpty();
+  updateYAMLPreview();
+  showStatus('Duplicated — Ctrl+D to duplicate again', 'green');
+}
+
 // ─────────────────────────────────────────
 // NODE RENDERING
 // ─────────────────────────────────────────
 function mountNode(task) {
   const inner = document.getElementById('canvas-inner');
-  const div = document.createElement('div');
+  const div   = document.createElement('div');
   div.className = 'task-node';
   div.id = 'node-' + task.id;
   div.style.left = task.x + 'px';
@@ -470,10 +850,29 @@ function taskSummary(task) {
 // CANVAS EVENTS
 // ─────────────────────────────────────────
 function bindCanvasEvents() {
-  const inner = document.getElementById('canvas-inner');
+  const wrapper = document.getElementById('canvas-wrapper');
+  const inner   = document.getElementById('canvas-inner');
+
+  // Ctrl+Wheel zoom
+  wrapper.addEventListener('wheel', e => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      adjustZoom(e.deltaY < 0 ? 0.1 : -0.1);
+    }
+  }, {passive: false});
+
+  // Space+drag pan (start on wrapper)
+  wrapper.addEventListener('mousedown', e => {
+    if (spaceDown && !edgeDraw) {
+      panState = {startX: e.clientX, startY: e.clientY, scrollLeft: wrapper.scrollLeft, scrollTop: wrapper.scrollTop};
+      wrapper.classList.add('panning');
+      e.preventDefault();
+    }
+  });
 
   inner.addEventListener('mousedown', e => {
-    // In edge-draw mode: only input-port completes, anything else cancels
+    if (spaceDown) return; // pan mode, let wrapper handle
+
     if (edgeDraw) {
       const port = e.target.closest('[data-port="input"]');
       if (port) completeEdge(port.dataset.node);
@@ -502,8 +901,13 @@ function bindCanvasEvents() {
   });
 
   document.addEventListener('mousemove', e => {
+    if (panState) {
+      wrapper.scrollLeft = panState.scrollLeft - (e.clientX - panState.startX);
+      wrapper.scrollTop  = panState.scrollTop  - (e.clientY - panState.startY);
+      return;
+    }
     if (dragState) {
-      const pos = canvasPos(e);
+      const pos  = canvasPos(e);
       const task = getTask(dragState.id);
       if (!task) return;
       task.x = Math.max(0, pos.x - dragState.offX);
@@ -520,14 +924,57 @@ function bindCanvasEvents() {
     }
   });
 
-  document.addEventListener('mouseup', () => { dragState = null; });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') cancelEdgeDraw(); });
+  document.addEventListener('mouseup', () => {
+    if (panState) {
+      panState = null;
+      document.getElementById('canvas-wrapper').classList.remove('panning');
+    }
+    if (dragState) {
+      dragState = null;
+      updateYAMLPreview();
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    const inInput = e.target.matches('input, textarea, select');
+
+    // Space pan
+    if (e.key === ' ' && !inInput) {
+      e.preventDefault();
+      if (!spaceDown) {
+        spaceDown = true;
+        document.getElementById('canvas-wrapper').classList.add('space-pan');
+      }
+    }
+
+    if (e.key === 'Escape') cancelEdgeDraw();
+
+    if ((e.ctrlKey || e.metaKey) && !inInput) {
+      if (e.key === 'z' && !e.shiftKey) { undo(); e.preventDefault(); }
+      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { redo(); e.preventDefault(); }
+      if (e.key === 'd' && state.selected) { duplicateTask(state.selected); e.preventDefault(); }
+    }
+    // Zoom keyboard shortcuts
+    if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) { adjustZoom(0.1); e.preventDefault(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === '-') { adjustZoom(-0.1); e.preventDefault(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === '0') { resetZoom(); e.preventDefault(); }
+  });
+
+  document.addEventListener('keyup', e => {
+    if (e.key === ' ') {
+      spaceDown = false;
+      document.getElementById('canvas-wrapper').classList.remove('space-pan', 'panning');
+    }
+  });
 }
 
 function canvasPos(e) {
   const w = document.getElementById('canvas-wrapper');
   const r = w.getBoundingClientRect();
-  return {x: e.clientX - r.left + w.scrollLeft, y: e.clientY - r.top + w.scrollTop};
+  return {
+    x: (e.clientX - r.left + w.scrollLeft) / zoom,
+    y: (e.clientY - r.top  + w.scrollTop)  / zoom,
+  };
 }
 
 // ─────────────────────────────────────────
@@ -535,9 +982,10 @@ function canvasPos(e) {
 // ─────────────────────────────────────────
 function startDrag(e, taskId) {
   e.preventDefault();
-  const pos = canvasPos(e);
+  saveSnap();
+  const pos  = canvasPos(e);
   const task = getTask(taskId);
-  dragState = {id: taskId, offX: pos.x - task.x, offY: pos.y - task.y};
+  dragState  = {id: taskId, offX: pos.x - task.x, offY: pos.y - task.y};
 }
 
 // ─────────────────────────────────────────
@@ -558,6 +1006,7 @@ function completeEdge(toId) {
   if (fromId === toId) return;
   if (state.edges.some(e => e.from === fromId && e.to === toId)) return;
   if (wouldCycle(fromId, toId)) { showStatus('Circular dependency detected — connection not allowed.', 'red'); return; }
+  saveSnap();
   state.edges.push({from: fromId, to: toId});
   renderSVG();
   updateYAMLPreview();
@@ -586,10 +1035,10 @@ function wouldCycle(fromId, toId) {
 function renderSVG() {
   const svg = document.getElementById('edge-svg');
   let h = `<defs>
-    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <polygon points="0 0,8 3,0 6" fill="#6366f1"/></marker>
-    <marker id="arr-t" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-      <polygon points="0 0,8 3,0 6" fill="#94a3b8"/></marker>
+    <marker id="arr"      markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#6366f1"/></marker>
+    <marker id="arr-t"    markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#94a3b8"/></marker>
+    <marker id="arr-fail" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#ef4444"/></marker>
+    <marker id="arr-loop" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#7c3aed"/></marker>
   </defs>`;
 
   for (const edge of state.edges) {
@@ -599,10 +1048,17 @@ function renderSVG() {
     const x2 = t.x,          y2 = t.y + NODE_H/2;
     const cx1 = x1 + 70, cx2 = x2 - 70;
     const mx = (x1+x2)/2, my = (y1+y2)/2;
+    // Failure edge: target is on_error; Loop body edge: source is loop
+    const isFailure = t.typeKey === 'on_error';
+    const isLoop    = f.typeKey === 'loop';
+    const edgeColor = isFailure ? '#ef4444' : isLoop ? '#7c3aed' : '#6366f1';
+    const markerId  = isFailure ? 'arr-fail' : isLoop ? 'arr-loop' : 'arr';
+    const dashArray = isFailure ? '5,3' : 'none';
     h += `<g>
       <path d="M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2}"
-            stroke="#6366f1" stroke-width="2" fill="none" opacity=".75"
-            marker-end="url(#arr)"/>
+            stroke="${edgeColor}" stroke-width="2" fill="none" opacity=".8"
+            stroke-dasharray="${dashArray}"
+            marker-end="url(#${markerId})"/>
       <circle cx="${mx}" cy="${my}" r="9" fill="white" stroke="#e2e8f0" stroke-width="1.5"
               style="cursor:pointer;pointer-events:all"
               onclick="removeEdge('${edge.from}','${edge.to}')"/>
@@ -621,6 +1077,7 @@ function renderSVG() {
 }
 
 function removeEdge(from, to) {
+  saveSnap();
   state.edges = state.edges.filter(e => !(e.from === from && e.to === to));
   renderSVG();
   updateYAMLPreview();
@@ -671,17 +1128,46 @@ function renderConfigPanel(task) {
     </div>
     <hr class="border-slate-100 my-3">
     ${buildConfigFields(task)}
-    <div class="mt-4 pt-3 border-t border-slate-100">
-      <button onclick="deleteTask('${task.id}')" class="w-full py-1.5 rounded-lg text-red-500 hover:bg-red-50 text-xs font-medium border border-red-100 transition-colors">
-        <i class="fas fa-trash-can mr-1"></i>Delete Task
+    <div class="mt-4 pt-3 border-t border-slate-100 flex gap-2">
+      <button onclick="duplicateTask('${task.id}')"
+        class="flex-1 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 text-xs font-medium border border-indigo-100 transition-colors">
+        <i class="fas fa-copy mr-1"></i>Duplicate
+      </button>
+      <button onclick="deleteTask('${task.id}')"
+        class="flex-1 py-1.5 rounded-lg text-red-500 hover:bg-red-50 text-xs font-medium border border-red-100 transition-colors">
+        <i class="fas fa-trash-can mr-1"></i>Delete
       </button>
     </div>
   `;
+
+  // Async post-render hooks
+  if (task.typeKey === 'pipeline') populatePipelineSelect(task.id, task.config.pipeline_name);
+
+  // Variable reference helper
+  if (pipeline.variables.length || pipeline.connections.length) {
+    const helper = document.createElement('div');
+    helper.id = 'var-ref-helper';
+    if (pipeline.variables.length) {
+      helper.innerHTML += `<p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Variables</p>
+        <div class="flex flex-wrap">${pipeline.variables.map(v =>
+          `<span class="var-badge" onclick="copyRef('\${var.${v.name}}')" title="Click to copy">\${var.${esc(v.name)}}</span>`
+        ).join('')}</div>`;
+    }
+    if (pipeline.connections.length) {
+      helper.innerHTML += `<p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 mt-2">Connections</p>
+        <div class="flex flex-wrap">${pipeline.connections.map(c =>
+          `<span class="var-badge" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0" onclick="copyRef('\${conn.${c.name}}')" title="Click to copy">\${conn.${esc(c.name)}}</span>`
+        ).join('')}</div>`;
+    }
+    helper.innerHTML += `<p class="text-[10px] text-slate-300 mt-2">Click a badge to copy reference</p>`;
+    scroll.appendChild(helper);
+  }
 }
 
 function buildConfigFields(task) {
   const id = task.id, c = task.config;
   switch (task.typeKey) {
+
     case 'sql': return `
       <div class="frow">
         <label class="flabel">Database</label>
@@ -691,21 +1177,21 @@ function buildConfigFields(task) {
       </div>
       ${c.database !== 'duckdb' && c.database !== 'bigquery' ? `
       <div class="frow"><label class="flabel">Host</label>
-        <input class="finput" value="${c.host||'localhost'}" oninput="updateCfgNested('${id}','host',this.value)"></div>
+        <input class="finput" value="${c.host||'localhost'}" oninput="updateCfg('${id}','host',this.value)"></div>
       <div class="frow"><label class="flabel">Port</label>
-        <input class="finput" type="number" value="${c.port||5432}" oninput="updateCfgNested('${id}','port',parseInt(this.value))"></div>
+        <input class="finput" type="number" value="${c.port||5432}" oninput="updateCfg('${id}','port',parseInt(this.value))"></div>
       <div class="frow"><label class="flabel">Database Name</label>
-        <input class="finput" value="${c.db_name||'mydb'}" oninput="updateCfgNested('${id}','db_name',this.value)"></div>
+        <input class="finput" value="${c.db_name||'mydb'}" oninput="updateCfg('${id}','db_name',this.value)"></div>
       <div class="frow"><label class="flabel">User</label>
-        <input class="finput" value="${c.user||'user'}" oninput="updateCfgNested('${id}','user',this.value)"></div>
+        <input class="finput" value="${c.user||'user'}" oninput="updateCfg('${id}','user',this.value)"></div>
       <div class="frow"><label class="flabel">Password (env var)</label>
-        <input class="finput" value="${c.password||'${POSTGRES_PASSWORD}'}" oninput="updateCfgNested('${id}','password',this.value)"></div>
+        <input class="finput" value="${c.password||'${POSTGRES_PASSWORD}'}" oninput="updateCfg('${id}','password',this.value)"></div>
       ` : ''}
       ${c.database === 'bigquery' ? `
       <div class="frow"><label class="flabel">Project ID</label>
-        <input class="finput" value="${c.project_id||'my-gcp-project'}" oninput="updateCfgNested('${id}','project_id',this.value)"></div>
+        <input class="finput" value="${c.project_id||'my-gcp-project'}" oninput="updateCfg('${id}','project_id',this.value)"></div>
       <div class="frow"><label class="flabel">Dataset ID</label>
-        <input class="finput" value="${c.dataset_id||'my_dataset'}" oninput="updateCfgNested('${id}','dataset_id',this.value)"></div>
+        <input class="finput" value="${c.dataset_id||'my_dataset'}" oninput="updateCfg('${id}','dataset_id',this.value)"></div>
       ` : ''}
       <div class="frow"><label class="flabel">SQL</label>
         <textarea class="finput h-24" oninput="updateCfg('${id}','sql',this.value)">${esc(c.sql||'')}</textarea></div>
@@ -718,7 +1204,7 @@ function buildConfigFields(task) {
       <div class="frow">
         <label class="flabel">Mode</label>
         <select class="finput" onchange="updateCfg('${id}','mode',this.value);renderConfigPanel(getTask('${id}'))">
-          <option value="code" ${c.mode==='code'?'selected':''}>Inline Code</option>
+          <option value="code"   ${c.mode==='code'?'selected':''}>Inline Code</option>
           <option value="script" ${c.mode==='script'?'selected':''}>Script File</option>
         </select>
       </div>
@@ -783,7 +1269,7 @@ function buildConfigFields(task) {
       <div class="frow">
         <label class="flabel">Operation</label>
         <select class="finput" onchange="updateCfg('${id}','operation',this.value);renderConfigPanel(getTask('${id}'))">
-          <option value="publish" ${c.operation==='publish'?'selected':''}>Publish</option>
+          <option value="publish"   ${c.operation==='publish'?'selected':''}>Publish</option>
           <option value="subscribe" ${c.operation==='subscribe'?'selected':''}>Subscribe</option>
         </select>
       </div>
@@ -842,34 +1328,181 @@ function buildConfigFields(task) {
       <div class="frow"><label class="flabel">File Path</label>
         <input class="finput" value="${c.file_path||'data/input.csv'}" oninput="updateCfg('${id}','file_path',this.value)"></div>
       <div class="frow">
-        <label class="flabel">Quality Checks</label>
-        <div id="checks-${id}" class="space-y-2 mt-1">${renderChecks(task)}</div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="flabel" style="margin-bottom:0">Quality Checks</label>
+          <div class="relative">
+            <button onclick="toggleTmplDd('${id}')"
+              class="flex items-center gap-1 text-[11px] text-indigo-500 hover:text-indigo-700 font-semibold">
+              <i class="fas fa-wand-magic-sparkles text-[10px]"></i> Template
+            </button>
+            <div id="tmpl-dd-${id}" class="tmpl-dd hidden">
+              ${CHECK_TEMPLATES.map((t,i) => `
+                <div class="tmpl-dd-item" onclick="addTmplCheck('${id}',${i})">${t.label}</div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+        <div id="checks-${id}" class="space-y-2">${renderChecks(task)}</div>
         <button onclick="addCheck('${id}')" class="mt-2 w-full py-1 rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors">
-          <i class="fas fa-plus mr-1"></i>Add check
+          <i class="fas fa-plus mr-1"></i>Add custom check
         </button>
       </div>`;
 
     case 'pipeline': return `
-      <div class="frow"><label class="flabel">Pipeline Name</label>
-        <input class="finput" value="${c.pipeline_name||''}" placeholder="e.g. daily_orders_etl"
-               oninput="updateCfg('${id}','pipeline_name',this.value)"></div>
+      <div class="frow">
+        <label class="flabel">Pipeline</label>
+        <select class="finput" id="pl-dd-${id}" onchange="updateCfg('${id}','pipeline_name',this.value)">
+          <option value="">Loading…</option>
+        </select>
+      </div>
       <div class="frow flex items-center gap-2">
         <input type="checkbox" id="wait-${id}" ${c.wait_for_completion?'checked':''} onchange="updateCfg('${id}','wait_for_completion',this.checked)">
         <label for="wait-${id}" class="text-xs text-slate-600">Wait for completion</label>
       </div>
-      <p class="text-[11px] text-slate-400 mt-1">The target pipeline must be saved in the <code class="bg-slate-100 px-1 rounded">pipelines/</code> folder.</p>`;
+      <p class="text-[11px] text-slate-400 mt-1">Target pipeline must be saved in the <code class="bg-slate-100 px-1 rounded">pipelines/</code> folder.</p>`;
+
+    case 'loop': return `
+      <div class="frow">
+        <label class="flabel">Iterate Over</label>
+        <input class="finput" value="${esc(c.iterate_over||'')}" placeholder="\${var.items} or [&quot;a&quot;,&quot;b&quot;]"
+               oninput="updateCfg('${id}','iterate_over',this.value)">
+        <p class="text-[10px] text-slate-400 mt-1">Variable reference or inline JSON array</p>
+      </div>
+      <div class="frow">
+        <label class="flabel">Item Variable Name</label>
+        <input class="finput" value="${esc(c.item_variable||'item')}" placeholder="item"
+               oninput="updateCfg('${id}','item_variable',this.value)">
+        <p class="text-[10px] text-slate-400 mt-1">Access current item as <code class="bg-slate-100 px-1 rounded">\${item}</code> in downstream tasks</p>
+      </div>
+      <div class="frow">
+        <label class="flabel">Max Concurrency</label>
+        <input class="finput" type="number" min="1" max="20" value="${c.max_concurrency||1}"
+               oninput="updateCfg('${id}','max_concurrency',parseInt(this.value))">
+        <p class="text-[10px] text-slate-400 mt-1">1 = sequential, &gt;1 = parallel iterations</p>
+      </div>`;
+
+    case 'condition': return `
+      <div class="frow">
+        <label class="flabel">Expression</label>
+        <input class="finput" value="${esc(c.expression||'')}" placeholder="\${var.status} == &quot;success&quot;"
+               oninput="updateCfg('${id}','expression',this.value)">
+        <p class="text-[10px] text-slate-400 mt-1">Python-style boolean expression. Connect downstream tasks — they run only if expression is <code class="bg-slate-100 px-1 rounded">True</code>.</p>
+      </div>
+      <div class="frow">
+        <label class="flabel">Description (optional)</label>
+        <input class="finput" value="${esc(c.description||'')}" placeholder="e.g. Check if extract succeeded"
+               oninput="updateCfg('${id}','description',this.value)">
+      </div>`;
+
+    case 'set_var': {
+      const varOpts = pipeline.variables.map(v =>
+        `<option value="${esc(v.name)}" ${c.variable_name===v.name?'selected':''}>${esc(v.name)} (${v.type})</option>`
+      ).join('');
+      return `
+      <div class="frow">
+        <label class="flabel">Variable</label>
+        <select class="finput" onchange="updateCfg('${id}','variable_name',this.value)">
+          <option value="">— select variable —</option>
+          ${varOpts}
+        </select>
+        ${!pipeline.variables.length ? `<p class="text-[10px] text-amber-500 mt-1">No variables declared. Go to the <strong>Variables</strong> tab to add one.</p>` : ''}
+      </div>
+      <div class="frow">
+        <label class="flabel">Value Type</label>
+        <select class="finput" onchange="updateCfg('${id}','value_type',this.value);renderConfigPanel(getTask('${id}'))">
+          <option value="static"     ${c.value_type==='static'    ?'selected':''}>Static value</option>
+          <option value="expression" ${c.value_type==='expression'?'selected':''}>Expression / reference</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">Value</label>
+        <input class="finput" value="${esc(c.value||'')}"
+               placeholder="${c.value_type==='expression'?'${var.other} + "_suffix"':'my_value'}"
+               oninput="updateCfg('${id}','value',this.value)">
+      </div>`;
+    }
+
+    case 'on_error': return `
+      <div class="frow">
+        <label class="flabel">On Failure Action</label>
+        <select class="finput" onchange="updateCfg('${id}','action',this.value)">
+          <option value="continue" ${c.action==='continue'?'selected':''}>Continue pipeline</option>
+          <option value="fail"     ${c.action==='fail'    ?'selected':''}>Fail pipeline</option>
+          <option value="retry"    ${c.action==='retry'   ?'selected':''}>Retry failed task</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">Log Message</label>
+        <input class="finput" value="${esc(c.log_message||'')}" placeholder="Task failed: \${task.name}"
+               oninput="updateCfg('${id}','log_message',this.value)">
+      </div>
+      <div class="frow flex items-center gap-2">
+        <input type="checkbox" id="notify-${id}" ${c.notify?'checked':''} onchange="updateCfg('${id}','notify',this.checked)">
+        <label for="notify-${id}" class="text-xs text-slate-600">Send email notification</label>
+      </div>
+      <div class="p-2.5 bg-red-50 border border-red-100 rounded-lg mt-1">
+        <p class="text-[10px] text-red-600"><i class="fas fa-info-circle mr-1"></i>Connect the output port of the task you want to monitor to this node's input port. The edge will appear red.</p>
+      </div>`;
 
     default: return '<p class="text-xs text-slate-400">No configuration required.</p>';
   }
 }
 
+// ── Pipeline dropdown loader ──
+async function populatePipelineSelect(taskId, currentName) {
+  const sel = document.getElementById('pl-dd-' + taskId);
+  if (!sel) return;
+  try {
+    const r = await fetch('/pipelines');
+    const d = await r.json();
+    const list = d.pipelines || [];
+    sel.innerHTML = `<option value="">— select pipeline —</option>` +
+      list.map(p => `<option value="${esc(p.display_name)}" ${p.display_name===currentName?'selected':''}>${esc(p.display_name)} (${p.task_count} tasks)</option>`).join('');
+    if (currentName && list.some(p => p.display_name === currentName)) {
+      sel.value = currentName;
+    }
+  } catch {
+    sel.innerHTML = `<option value="${esc(currentName||'')}">${esc(currentName||'— failed to load —')}</option>`;
+  }
+}
+
+// ── Validation check template dropdown ──
+function toggleTmplDd(taskId) {
+  const dd = document.getElementById('tmpl-dd-' + taskId);
+  const hidden = dd.classList.toggle('hidden');
+  if (!hidden) {
+    const close = e => {
+      if (!dd.contains(e.target)) {
+        dd.classList.add('hidden');
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+
+function addTmplCheck(taskId, idx) {
+  const tmpl = CHECK_TEMPLATES[idx];
+  const task  = getTask(taskId);
+  task.config.checks = task.config.checks || [];
+  task.config.checks.push({
+    name:   tmpl.name + '_' + (task.config.checks.length + 1),
+    sql:    tmpl.sql,
+    expect: tmpl.expect,
+  });
+  document.getElementById('tmpl-dd-' + taskId)?.classList.add('hidden');
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+// ── Validation check helpers ──
 function renderChecks(task) {
   return (task.config.checks || []).map((ch, i) => `
     <div class="bg-slate-50 rounded-lg p-2 border border-slate-200">
       <div class="flex items-center justify-between mb-1">
         <input class="finput text-[11px] flex-1 mr-2" value="${esc(ch.name||'')}" placeholder="Check name"
                oninput="updateCheck('${task.id}',${i},'name',this.value)">
-        <button onclick="removeCheck('${task.id}',${i})" class="text-slate-400 hover:text-red-500 text-xs">✕</button>
+        <button onclick="removeCheck('${task.id}',${i})" class="text-slate-400 hover:text-red-500 text-xs shrink-0">✕</button>
       </div>
       <textarea class="finput text-[11px] h-12 mb-1" placeholder="SQL..." oninput="updateCheck('${task.id}',${i},'sql',this.value)">${esc(ch.sql||'')}</textarea>
       <div class="flex items-center gap-2">
@@ -938,22 +1571,56 @@ function updateCfgNested(id, key, value) {
 // ─────────────────────────────────────────
 // YAML GENERATION
 // ─────────────────────────────────────────
-function updateYAMLPreview() {
-  // Background update only — full preview shown on demand
-}
+function updateYAMLPreview() { /* on-demand only */ }
 
 function generateYAML() {
   const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
   const desc = document.getElementById('pipelineDesc').value;
   const lines = [`pipeline_name: ${name}`];
   if (desc) lines.push(`description: "${escY(desc)}"`);
+
+  // Variables section
+  if (pipeline.variables.length) {
+    lines.push('', 'variables:');
+    pipeline.variables.forEach(v => {
+      if (v.type === 'list') {
+        lines.push(`  ${v.name}:`);
+        (v.default_value||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(item => lines.push(`    - ${item}`));
+      } else if (v.type === 'integer') {
+        lines.push(`  ${v.name}: ${parseInt(v.default_value)||0}`);
+      } else if (v.type === 'boolean') {
+        lines.push(`  ${v.name}: ${v.default_value === 'true'}`);
+      } else {
+        lines.push(`  ${v.name}: "${escY(v.default_value||'')}"`);
+      }
+    });
+  }
+
+  // Connections section
+  if (pipeline.connections.length) {
+    lines.push('', 'connections:');
+    pipeline.connections.forEach(c => {
+      const meta = CONN_META[c.conn_type] || {};
+      lines.push(`  - name: ${c.name}`);
+      lines.push(`    type: ${c.conn_type}`);
+      (meta.fields||[]).forEach(f => {
+        if (c[f] !== undefined && c[f] !== '') lines.push(`    ${f}: "${escY(String(c[f]))}"`);
+      });
+    });
+  }
+
   if (state.schedule) {
     lines.push('', 'schedule:');
     Object.entries(state.schedule).forEach(([k,v]) => lines.push(`  ${k}: "${v}"`));
   }
   lines.push('', 'tasks:');
   for (const task of state.tasks) {
-    const deps = state.edges.filter(e => e.to === task.id).map(e => e.from);
+    const allDeps   = state.edges.filter(e => e.to === task.id).map(e => e.from);
+    const isOnError = task.typeKey === 'on_error';
+    // on_error tasks use depends_on_failure; others use depends_on
+    const normalDeps  = isOnError ? [] : allDeps;
+    const failureDeps = isOnError ? allDeps : [];
+
     const isTransformer = task.typeKey === 'dbt';
     const plugin = getPlugin(task);
     lines.push(`  - name: "${escY(task.name)}"`);
@@ -961,7 +1628,8 @@ function generateYAML() {
     lines.push(`    type: ${isTransformer ? 'transformer' : 'executor'}`);
     lines.push(`    plugin: ${plugin}`);
     if ((task.retries||0) > 0) lines.push(`    retries: ${task.retries}`);
-    if (deps.length) lines.push(`    depends_on: [${deps.join(', ')}]`);
+    if (normalDeps.length)  lines.push(`    depends_on: [${normalDeps.join(', ')}]`);
+    if (failureDeps.length) lines.push(`    depends_on_failure: [${failureDeps.join(', ')}]`);
     const cfgLines = buildConfigYAML(task);
     if (cfgLines.length) { lines.push('    config:'); cfgLines.forEach(l => lines.push('      ' + l)); }
     lines.push('');
@@ -972,6 +1640,10 @@ function generateYAML() {
 function getPlugin(task) {
   if (task.typeKey === 'sql') return task.config.database || 'duckdb';
   if (task.typeKey === 'validation') return 'duckdb';
+  if (task.typeKey === 'loop')      return 'loop';
+  if (task.typeKey === 'condition') return 'condition';
+  if (task.typeKey === 'set_var')   return 'set_variable';
+  if (task.typeKey === 'on_error')  return 'on_error';
   return TT[task.typeKey].plugin || 'python';
 }
 
@@ -1095,6 +1767,32 @@ function buildConfigYAML(task) {
       lines.push(`  r = requests.post("http://localhost:8000/run/sync", json={"name":"${c.pipeline_name||'my_pipeline'}"})`);
       lines.push(`  print(r.json())`);
       break;
+
+    case 'loop':
+      if (c.iterate_over)    lines.push(`iterate_over: "${escY(c.iterate_over)}"`);
+      if (c.item_variable)   lines.push(`item_variable: ${c.item_variable}`);
+      if (c.max_concurrency) lines.push(`max_concurrency: ${c.max_concurrency}`);
+      break;
+
+    case 'condition':
+      if (c.expression)  lines.push(`expression: "${escY(c.expression)}"`);
+      if (c.description) lines.push(`description: "${escY(c.description)}"`);
+      break;
+
+    case 'set_var':
+      if (c.variable_name) lines.push(`variable_name: ${c.variable_name}`);
+      if (c.value_type === 'expression') {
+        lines.push(`value_expression: "${escY(c.value||'')}"`);
+      } else {
+        lines.push(`value: "${escY(c.value||'')}"`);
+      }
+      break;
+
+    case 'on_error':
+      lines.push(`action: ${c.action||'continue'}`);
+      if (c.log_message) lines.push(`log_message: "${escY(c.log_message)}"`);
+      if (c.notify) lines.push(`notify: true`);
+      break;
   }
   return lines;
 }
@@ -1109,14 +1807,8 @@ function showYAML() {
   document.getElementById('yaml-output').textContent = yaml;
   document.getElementById('yaml-modal').classList.remove('hidden');
 }
-
-function closeYAML() {
-  document.getElementById('yaml-modal').classList.add('hidden');
-}
-
-function copyYAML() {
-  navigator.clipboard.writeText(generateYAML()).then(() => showStatus('YAML copied to clipboard', 'green'));
-}
+function closeYAML() { document.getElementById('yaml-modal').classList.add('hidden'); }
+function copyYAML()  { navigator.clipboard.writeText(generateYAML()).then(() => showStatus('YAML copied to clipboard', 'green')); }
 
 // ─────────────────────────────────────────
 // SCHEDULE MODAL
@@ -1131,11 +1823,7 @@ function showScheduleModal() {
   }
   document.getElementById('sched-modal').classList.remove('hidden');
 }
-
-function closeScheduleModal() {
-  document.getElementById('sched-modal').classList.add('hidden');
-}
-
+function closeScheduleModal() { document.getElementById('sched-modal').classList.add('hidden'); }
 function setPreset(cron) {
   const [min, hr, dom, mo, dow] = cron.split(' ');
   document.getElementById('sched-min').value = min;
@@ -1144,7 +1832,6 @@ function setPreset(cron) {
   document.getElementById('sched-mo').value  = mo;
   document.getElementById('sched-dow').value = dow;
 }
-
 function applySchedule() {
   state.schedule = {
     minute:      document.getElementById('sched-min').value || '0',
@@ -1157,7 +1844,6 @@ function applySchedule() {
     `${state.schedule.minute} ${state.schedule.hour} ${state.schedule.day} ${state.schedule.month} ${state.schedule.day_of_week}`;
   closeScheduleModal();
 }
-
 function clearSchedule() {
   state.schedule = null;
   document.getElementById('schedBtn').textContent = 'Schedule';
@@ -1209,6 +1895,7 @@ function updateEmpty() {
 
 function clearCanvas() {
   if (state.tasks.length && !confirm('Clear all tasks from the canvas?')) return;
+  saveSnap();
   state.tasks = []; state.edges = []; state.selected = null;
   document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
   document.getElementById('config-panel').classList.remove('open');
@@ -1217,16 +1904,24 @@ function clearCanvas() {
 
 function showStatus(msg, color) {
   const bar = document.getElementById('statusBar');
-  const colors = {green:'bg-green-50 text-green-700 border-green-200', red:'bg-red-50 text-red-700 border-red-200',
-    amber:'bg-amber-50 text-amber-700 border-amber-200', indigo:'bg-indigo-50 text-indigo-700 border-indigo-200'};
+  const colors = {
+    green:  'bg-green-50 text-green-700 border-green-200',
+    red:    'bg-red-50 text-red-700 border-red-200',
+    amber:  'bg-amber-50 text-amber-700 border-amber-200',
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  };
   bar.className = `px-5 py-1.5 text-xs font-medium flex items-center gap-2 border-b ${colors[color]||colors.indigo}`;
   bar.innerHTML = `<i class="fas fa-circle-info"></i> ${esc(msg)}`;
   bar.classList.remove('hidden');
   if (color !== 'indigo') setTimeout(() => bar.classList.add('hidden'), 4000);
 }
 
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s)  { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escY(s) { return String(s||'').replace(/"/g,'\\"'); }
+
+function copyRef(ref) {
+  navigator.clipboard.writeText(ref).then(() => showStatus('Copied: ' + ref, 'green'));
+}
 
 // ─────────────────────────────────────────
 // OPEN PIPELINE MODAL
@@ -1242,14 +1937,12 @@ async function openPipelineModal() {
     const d = await r.json();
     _allPipelines = d.pipelines || [];
     renderOpenList(_allPipelines);
-  } catch(e) {
+  } catch {
     document.getElementById('open-list').innerHTML = '<p class="text-xs text-red-400 text-center py-4">Failed to load pipelines.</p>';
   }
 }
 
-function closeOpenModal() {
-  document.getElementById('open-modal').classList.add('hidden');
-}
+function closeOpenModal() { document.getElementById('open-modal').classList.add('hidden'); }
 
 function filterOpenList(query) {
   const q = query.toLowerCase();
@@ -1294,12 +1987,33 @@ async function loadPipeline(filePath) {
 }
 
 function importParsedConfig(cfg) {
-  // Clear canvas
   state.tasks = []; state.edges = []; state.selected = null; state.nextId = 1;
+  hist.undo = []; hist.redo = [];
+  syncHistBtns();
+
+  // Import pipeline-level variables and connections if present
+  if (cfg.variables) {
+    pipeline.variables = Object.entries(cfg.variables).map(([name, val]) => ({
+      id: 'v' + varIdCtr++, name,
+      type: Array.isArray(val) ? 'list' : typeof val === 'boolean' ? 'boolean' : typeof val === 'number' ? 'integer' : 'string',
+      default_value: Array.isArray(val) ? val.join(', ') : String(val),
+    }));
+  } else {
+    pipeline.variables = [];
+  }
+  if (cfg.connections) {
+    pipeline.connections = (cfg.connections || []).map(c => ({
+      id: 'c' + connIdCtr++, name: c.name, conn_type: c.type, expanded: false,
+      ...(CONN_DEFAULTS[c.type] || {}), ...c,
+    }));
+  } else {
+    pipeline.connections = [];
+  }
+  renderVarsPanel();
+  renderConnsPanel();
   document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
   document.getElementById('config-panel').classList.remove('open');
 
-  // Set pipeline metadata
   document.getElementById('pipelineName').value = cfg.pipeline_name || 'my_pipeline';
   document.getElementById('pipelineDesc').value = cfg.description || '';
   if (cfg.schedule) {
@@ -1309,27 +2023,21 @@ function importParsedConfig(cfg) {
       `${s.minute||'0'} ${s.hour||'6'} ${s.day||'*'} ${s.month||'*'} ${s.day_of_week||'*'}`;
   }
 
-  // Build tasks
   const rawTasks = cfg.tasks || [];
-  const idMap = {}; // original id → new task id
-
+  const idMap = {};
   rawTasks.forEach((rt, i) => {
     const typeKey = guessTypeKey(rt.plugin, rt.config || {}, rt.type);
     const id = 'task_' + state.nextId++;
     idMap[rt.id || rt.name] = id;
-
-    const task = {
-      id,
-      typeKey,
-      name: rt.name || `task_${i+1}`,
-      x: 0, y: 0, // positioned by layout below
+    state.tasks.push({
+      id, typeKey,
+      name:    rt.name || `task_${i+1}`,
+      x: 0, y: 0,
       retries: rt.retries || 0,
-      config: buildImportedConfig(typeKey, rt.plugin, rt.config || {}),
-    };
-    state.tasks.push(task);
+      config:  buildImportedConfig(typeKey, rt.plugin, rt.config || {}),
+    });
   });
 
-  // Build edges from depends_on
   rawTasks.forEach(rt => {
     const toId = idMap[rt.id || rt.name];
     (rt.depends_on || []).forEach(dep => {
@@ -1338,10 +2046,7 @@ function importParsedConfig(cfg) {
     });
   });
 
-  // Auto-layout
   autoLayout();
-
-  // Mount nodes
   state.tasks.forEach(t => mountNode(t));
   renderSVG();
   updateEmpty();
@@ -1356,26 +2061,24 @@ function guessTypeKey(plugin, config, taskType) {
     return 'sql';
   }
   const map = {
-    postgres: 'sql', mysql: 'sql', bigquery: 'sql', snowflake: 'sql',
-    python: 'python', shell: 'shell', spark: 'spark',
-    api: 'api', kafka: 'kafka', file: 'file', email: 'email',
+    postgres:'sql', mysql:'sql', bigquery:'sql', snowflake:'sql',
+    python:'python', shell:'shell', spark:'spark',
+    api:'api', kafka:'kafka', file:'file', email:'email',
+    loop:'loop', condition:'condition', set_variable:'set_var', on_error:'on_error',
   };
   return map[plugin] || 'python';
 }
 
 function buildImportedConfig(typeKey, plugin, rawConfig) {
-  // Start from defaults then overlay actual values
   const base = JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey] || {}));
-  // For SQL tasks, set the correct database
   if (typeKey === 'sql') {
     base.database = plugin || 'duckdb';
-    if (rawConfig.connection) base.connection = rawConfig.connection;
-    if (rawConfig.sql)        base.sql = rawConfig.sql;
+    if (rawConfig.connection)             base.connection = rawConfig.connection;
+    if (rawConfig.sql)                    base.sql = rawConfig.sql;
     if (rawConfig.return_data !== undefined) base.return_data = rawConfig.return_data;
-    if (rawConfig.project_id) base.project_id = rawConfig.project_id;
-    if (rawConfig.dataset_id) base.dataset_id = rawConfig.dataset_id;
+    if (rawConfig.project_id)             base.project_id = rawConfig.project_id;
+    if (rawConfig.dataset_id)             base.dataset_id = rawConfig.dataset_id;
   } else {
-    // Merge all raw config keys onto base
     Object.assign(base, rawConfig);
   }
   return base;
@@ -1383,8 +2086,6 @@ function buildImportedConfig(typeKey, plugin, rawConfig) {
 
 function autoLayout() {
   if (!state.tasks.length) return;
-
-  // Compute wave depth for each task
   const depth = {};
   function getDepth(id) {
     if (depth[id] !== undefined) return depth[id];
@@ -1394,17 +2095,13 @@ function autoLayout() {
     return depth[id];
   }
   state.tasks.forEach(t => getDepth(t.id));
-
-  // Group tasks by depth (wave)
   const waves = {};
   state.tasks.forEach(t => {
     const d = depth[t.id] || 0;
     if (!waves[d]) waves[d] = [];
     waves[d].push(t.id);
   });
-
   const WAVE_W = 280, NODE_H_STEP = 130, START_X = 60, CANVAS_H = 720;
-
   Object.entries(waves).forEach(([d, ids]) => {
     const x = START_X + parseInt(d) * WAVE_W;
     const totalH = ids.length * NODE_H_STEP;
