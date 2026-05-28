@@ -112,6 +112,33 @@ select.finput{appearance:auto;}
 /* Error/failure edge */
 .edge-failure{stroke:#ef4444!important;}
 
+/* Validation error markers on nodes */
+.task-node.node-error .node-card{
+  border-color:#ef4444;
+  box-shadow:0 0 0 1.5px #fca5a5,0 4px 14px rgba(239,68,68,.15);
+}
+.node-err-dot{
+  position:absolute;top:-5px;right:-5px;width:13px;height:13px;
+  border-radius:50%;background:#ef4444;border:2px solid white;
+  z-index:25;box-shadow:0 1px 4px rgba(239,68,68,.6);
+  cursor:help;
+}
+
+/* Run-state markers (Phase C) */
+@keyframes nodePulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,.5)}50%{box-shadow:0 0 0 6px rgba(99,102,241,0)}}
+.task-node.node-running .node-card{
+  border-color:#6366f1;
+  animation: nodePulse 1.6s ease-in-out infinite;
+}
+.task-node.node-ok .node-card{
+  border-color:#22c55e;
+  box-shadow:0 0 0 1.5px #bbf7d0,0 4px 14px rgba(34,197,94,.15);
+}
+.task-node.node-fail .node-card{
+  border-color:#ef4444;
+  box-shadow:0 0 0 1.5px #fca5a5,0 4px 14px rgba(239,68,68,.18);
+}
+
 /* Variable reference helper */
 #var-ref-helper{border-top:1px solid #f1f5f9;padding:10px 16px;background:#fafafa;}
 </style>
@@ -211,6 +238,14 @@ select.finput{appearance:auto;}
         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
         <i class="fas fa-folder-open"></i> Open
       </button>
+      <button onclick="openVersionsModal()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+        <i class="fas fa-clock-rotate-left"></i> Versions
+      </button>
+      <button onclick="arrangeNow()" title="Auto-arrange (Ctrl+L)"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+        <i class="fas fa-sitemap"></i> Arrange
+      </button>
       <button onclick="clearCanvas()"
         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
         <i class="fas fa-trash-can"></i> Clear
@@ -222,6 +257,10 @@ select.finput{appearance:auto;}
       <button onclick="savePipeline()"
         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold transition-colors">
         <i class="fas fa-floppy-disk"></i> Save
+      </button>
+      <button onclick="validatePipeline()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors">
+        <i class="fas fa-circle-check"></i> Validate
       </button>
       <button onclick="runPipeline()"
         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors">
@@ -240,13 +279,16 @@ select.finput{appearance:auto;}
     <div class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
       <div class="flex border-b border-slate-200 shrink-0">
         <button class="tab-btn active" id="tab-tasks"  onclick="switchTab('tasks')">Tasks</button>
-        <button class="tab-btn"        id="tab-vars"   onclick="switchTab('vars')">Variables</button>
-        <button class="tab-btn"        id="tab-conns"  onclick="switchTab('conns')">Connections</button>
+        <button class="tab-btn"        id="tab-meta"   onclick="switchTab('meta')">Pipeline</button>
+        <button class="tab-btn"        id="tab-vars"   onclick="switchTab('vars')">Vars</button>
+        <button class="tab-btn"        id="tab-conns"  onclick="switchTab('conns')">Conns</button>
       </div>
       <!-- Tasks -->
       <div id="panel-tasks" class="flex-1 overflow-y-auto p-3">
         <div id="palette"></div>
       </div>
+      <!-- Pipeline metadata -->
+      <div id="panel-meta" class="hidden flex-1 overflow-y-auto p-3 space-y-4"></div>
       <!-- Variables -->
       <div id="panel-vars" class="hidden flex-1 overflow-y-auto flex flex-col">
         <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
@@ -283,7 +325,7 @@ select.finput{appearance:auto;}
           <i class="fas fa-diagram-project text-slate-200 text-6xl mb-4"></i>
           <p class="text-slate-400 text-sm font-medium">Click a task type to add it</p>
           <p class="text-slate-300 text-xs mt-1">Connect tasks by dragging from <span class="font-semibold">right port → left port</span></p>
-          <p class="text-slate-300 text-xs mt-0.5">Ctrl+Wheel to zoom · Space+drag to pan · Ctrl+D to duplicate</p>
+          <p class="text-slate-300 text-xs mt-0.5">Ctrl+Wheel zoom · Space+drag pan · Ctrl+D duplicate · Ctrl+L arrange · Shift-click multi-select · Delete to remove</p>
         </div>
       </div>
       <!-- Zoom bar -->
@@ -364,6 +406,34 @@ select.finput{appearance:auto;}
   </div>
 </div>
 
+<!-- VERSIONS MODAL -->
+<div id="ver-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onclick="if(event.target===this)closeVersionsModal()">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] animate-fadeIn">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
+          <i class="fas fa-clock-rotate-left text-slate-300 text-xs"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-slate-800">Pipeline Versions</p>
+          <p class="text-xs text-slate-400" id="ver-label">Every Save creates a new version (deduped by content hash)</p>
+        </div>
+      </div>
+      <button onclick="closeVersionsModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="flex flex-1 overflow-hidden">
+      <div id="ver-list" class="w-64 border-r border-slate-100 overflow-y-auto p-3 space-y-1">
+        <p class="text-xs text-slate-400 text-center py-6">Loading…</p>
+      </div>
+      <div class="flex-1 overflow-auto p-4">
+        <pre class="yaml-code" id="ver-yaml" style="max-height:none;height:100%">Select a version on the left to view its YAML.</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- SCHEDULE MODAL -->
 <div id="sched-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onclick="if(event.target===this)closeScheduleModal()">
   <div class="bg-white rounded-2xl shadow-2xl w-80 animate-fadeIn">
@@ -377,11 +447,15 @@ select.finput{appearance:auto;}
         <button onclick="setPreset('0 * * * *')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Hourly</button>
         <button onclick="setPreset('0 6 * * 1-5')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Weekdays</button>
       </div>
-      <div><label class="flabel">Minute</label><input id="sched-min" class="finput" placeholder="0" value="0"></div>
-      <div><label class="flabel">Hour</label><input id="sched-hr" class="finput" placeholder="6" value="6"></div>
-      <div><label class="flabel">Day of month</label><input id="sched-dom" class="finput" placeholder="*" value="*"></div>
-      <div><label class="flabel">Month</label><input id="sched-mo" class="finput" placeholder="*" value="*"></div>
-      <div><label class="flabel">Day of week</label><input id="sched-dow" class="finput" placeholder="* (0=Sun)" value="*"></div>
+<div><label class="flabel">Minute</label><input id="sched-min" class="finput" placeholder="0" value="0" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Hour</label><input id="sched-hr" class="finput" placeholder="6" value="6" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Day of month</label><input id="sched-dom" class="finput" placeholder="*" value="*" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Month</label><input id="sched-mo" class="finput" placeholder="*" value="*" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Day of week</label><input id="sched-dow" class="finput" placeholder="* (0=Sun)" value="*" oninput="renderCronPreview()"></div>
+      <div class="mt-3 p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg">
+        <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Next runs</p>
+        <ul id="cron-preview" class="text-[11px] text-slate-600 space-y-0.5"></ul>
+      </div>
     </div>
     <div class="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
       <button onclick="closeScheduleModal()" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
@@ -394,6 +468,10 @@ select.finput{appearance:auto;}
 // ─────────────────────────────────────────
 // TASK TYPE DEFINITIONS
 // ─────────────────────────────────────────
+// NOTE: 5 task types (pipeline, loop, condition, set_var, on_error) are intentionally
+// omitted from the palette — backend executor plugins for them don't exist yet, and
+// PipelineConfig forbids the extra YAML keys (variables:/connections:/depends_on_failure:)
+// they would need. They'll be reintroduced as a follow-up alongside their plugins.
 const TT = {
   sql:        {label:'SQL Query',    icon:'fa-database',              color:'#3b82f6', desc:'Query any database',        plugin:null},
   python:     {label:'Python',       icon:'fa-code',                  color:'#f59e0b', desc:'Run Python code or script',  plugin:'python'},
@@ -405,11 +483,6 @@ const TT = {
   file:       {label:'File',         icon:'fa-folder-open',           color:'#6366f1', desc:'Read, write, merge files',   plugin:'file'},
   email:      {label:'Email',        icon:'fa-envelope',              color:'#ec4899', desc:'Send notifications',         plugin:'email'},
   validation: {label:'Validation',   icon:'fa-circle-check',          color:'#10b981', desc:'Data quality checks',        plugin:'duckdb'},
-  pipeline:   {label:'Run Pipeline', icon:'fa-diagram-project',       color:'#06b6d4', desc:'Trigger another pipeline',   plugin:'python'},
-  loop:       {label:'ForEach Loop', icon:'fa-repeat',                color:'#7c3aed', desc:'Iterate over a collection',  plugin:'python'},
-  condition:  {label:'If Condition', icon:'fa-code-branch',           color:'#d97706', desc:'Branch on expression',       plugin:'python'},
-  set_var:    {label:'Set Variable', icon:'fa-sliders',               color:'#0369a1', desc:'Assign a pipeline variable', plugin:'python'},
-  on_error:   {label:'On Error',     icon:'fa-triangle-exclamation',  color:'#dc2626', desc:'Handle upstream failures',   plugin:'python'},
 };
 
 const DEFAULT_CONFIGS = {
@@ -423,11 +496,6 @@ const DEFAULT_CONFIGS = {
   file:       {operation:'read', file_path:'data/input.csv', source_files:[], destination:'data/merged.csv'},
   email:      {smtp_server:'smtp.gmail.com', smtp_port:587, sender_email:'${EMAIL_SENDER}', sender_password:'${EMAIL_PASSWORD}', recipients:['team@example.com'], subject:'Pipeline Complete', body:'Your pipeline has finished successfully.'},
   validation: {file_path:'data/input.csv', checks:[{name:'no_nulls', sql:'SELECT COUNT(*) FROM data WHERE id IS NULL', expect:0}]},
-  pipeline:   {pipeline_name:'', wait_for_completion:true},
-  loop:       {iterate_over:'${var.items}', item_variable:'item', max_concurrency:1},
-  condition:  {expression:'${var.status} == "success"', description:''},
-  set_var:    {variable_name:'', value:'', value_type:'static'},
-  on_error:   {action:'continue', log_message:'Task failed: ${task.name}', notify:false},
 };
 
 const CHECK_TEMPLATES = [
@@ -444,7 +512,7 @@ const CHECK_TEMPLATES = [
 // ─────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────
-const state = {tasks:[], edges:[], selected:null, schedule:null, nextId:1};
+const state = {tasks:[], edges:[], selected:null, selection:[], schedule:null, nextId:1};
 let dragState = null;
 let edgeDraw  = null;
 const NODE_W = 210, NODE_H = 80;
@@ -456,6 +524,14 @@ const MAX_HIST = 50;
 // ── Pipeline-level variables & connections ──
 const pipeline = {variables: [], connections: []};
 let varIdCtr = 1, connIdCtr = 1;
+
+// ── Pipeline-level metadata (team, tags, sla, triggers) ──
+const meta = {
+  team: '',
+  tags: [],          // [string]
+  sla: null,         // { max_duration_minutes, alert: {type, email|webhook_url} }
+  triggers: [],      // [{ type, watch_path?, upstream_pipeline?, poll_interval_seconds }]
+};
 
 const CONN_META = {
   postgres:  {icon:'fa-database', color:'#3b82f6', fields:['host','port','database','user','password']},
@@ -558,9 +634,11 @@ document.addEventListener('DOMContentLoaded', () => {
   renderPalette();
   renderVarsPanel();
   renderConnsPanel();
+  renderMetaPanel();
   bindCanvasEvents();
   renderSVG();
   syncHistBtns();
+  restoreAutosave();
 });
 
 // ─────────────────────────────────────────
@@ -568,10 +646,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─────────────────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
-  ['tasks','vars','conns'].forEach(t => {
+  ['tasks','meta','vars','conns'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
   });
+  if (tab === 'meta') renderMetaPanel();
 }
 
 // ─────────────────────────────────────────
@@ -715,6 +794,167 @@ function renderConnsPanel() {
 }
 
 // ─────────────────────────────────────────
+// PIPELINE METADATA PANEL (team, tags, sla, triggers)
+// ─────────────────────────────────────────
+function renderMetaPanel() {
+  const panel = document.getElementById('panel-meta');
+  if (!panel) return;
+  const tagsStr = (meta.tags || []).join(', ');
+  const slaOn   = !!meta.sla;
+  const alertType = (meta.sla && meta.sla.alert && meta.sla.alert.type) || 'email';
+  const alertVal  = meta.sla && meta.sla.alert
+    ? (alertType === 'email' ? (meta.sla.alert.email||'') : (meta.sla.alert.webhook_url||''))
+    : '';
+
+  panel.innerHTML = `
+    <section>
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Ownership</p>
+      <div class="frow">
+        <label class="flabel">Team</label>
+        <input class="finput" placeholder="data-platform" value="${esc(meta.team||'')}"
+               oninput="meta.team = this.value; updateYAMLPreview()">
+      </div>
+      <div class="frow">
+        <label class="flabel">Tags (comma-separated)</label>
+        <input class="finput" placeholder="finance, daily, critical" value="${esc(tagsStr)}"
+               oninput="setMetaTags(this.value)">
+        <p class="text-[10px] text-slate-400 mt-1">Surfaced in /catalog and /templates-ui</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SLA</p>
+        <label class="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <input type="checkbox" ${slaOn?'checked':''} onchange="toggleSLA(this.checked)">
+          Enabled
+        </label>
+      </div>
+      ${slaOn ? `
+        <div class="frow">
+          <label class="flabel">Max duration (minutes)</label>
+          <input class="finput" type="number" min="1" step="1"
+                 value="${meta.sla.max_duration_minutes||30}"
+                 oninput="meta.sla.max_duration_minutes = parseFloat(this.value)||0; updateYAMLPreview()">
+        </div>
+        <div class="frow">
+          <label class="flabel">Alert via</label>
+          <select class="finput" onchange="setAlertType(this.value)">
+            <option value="email"   ${alertType==='email'?'selected':''}>Email</option>
+            <option value="webhook" ${alertType==='webhook'?'selected':''}>Webhook</option>
+          </select>
+        </div>
+        <div class="frow">
+          <label class="flabel">${alertType==='email'?'Email address':'Webhook URL'}</label>
+          <input class="finput" value="${esc(alertVal)}"
+                 placeholder="${alertType==='email'?'oncall@example.com':'https://hooks.slack.com/...'}"
+                 oninput="setAlertTarget(this.value)">
+        </div>
+      ` : `<p class="text-[11px] text-slate-400">Pipelines without SLA never page.</p>`}
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Triggers</p>
+        <button onclick="addTrigger()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200" title="Add trigger">
+          <i class="fas fa-plus text-[9px]"></i>
+        </button>
+      </div>
+      ${meta.triggers.length === 0
+        ? `<p class="text-[11px] text-slate-400">No event triggers. The pipeline runs only on schedule or manual /run.</p>`
+        : meta.triggers.map((t,i) => `
+          <div class="var-item">
+            <div class="flex items-center justify-between mb-2">
+              <select class="finput" style="flex:1;margin-right:6px" onchange="updateTrigger(${i},'type',this.value)">
+                <option value="file_sensor"          ${t.type==='file_sensor'?'selected':''}>File sensor</option>
+                <option value="pipeline_completion"  ${t.type==='pipeline_completion'?'selected':''}>Pipeline completion</option>
+              </select>
+              <button onclick="deleteTrigger(${i})" class="text-red-400 hover:text-red-600 text-xs">
+                <i class="fas fa-trash-can"></i>
+              </button>
+            </div>
+            ${t.type==='file_sensor' ? `
+              <div class="frow">
+                <label class="flabel">Watch path</label>
+                <input class="finput" value="${esc(t.watch_path||'')}" placeholder="/data/dropbox/orders.csv"
+                       oninput="updateTrigger(${i},'watch_path',this.value)">
+              </div>
+              <div class="frow">
+                <label class="flabel">Poll interval (s)</label>
+                <input class="finput" type="number" min="5" value="${t.poll_interval_seconds||30}"
+                       oninput="updateTrigger(${i},'poll_interval_seconds',parseInt(this.value)||30)">
+              </div>
+            ` : `
+              <div class="frow">
+                <label class="flabel">Upstream pipeline</label>
+                <input class="finput" value="${esc(t.upstream_pipeline||'')}" placeholder="extract_orders"
+                       oninput="updateTrigger(${i},'upstream_pipeline',this.value)">
+              </div>
+            `}
+          </div>`).join('')}
+    </section>
+  `;
+}
+
+function setMetaTags(value) {
+  meta.tags = value.split(',').map(s => s.trim()).filter(Boolean);
+  updateYAMLPreview();
+}
+
+function toggleSLA(on) {
+  if (on) {
+    meta.sla = { max_duration_minutes: 30, alert: { type: 'email', email: '' } };
+  } else {
+    meta.sla = null;
+  }
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+function setAlertType(type) {
+  if (!meta.sla) return;
+  meta.sla.alert = type === 'email'
+    ? { type: 'email', email: '' }
+    : { type: 'webhook', webhook_url: '' };
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+function setAlertTarget(value) {
+  if (!meta.sla || !meta.sla.alert) return;
+  if (meta.sla.alert.type === 'email') meta.sla.alert.email = value;
+  else meta.sla.alert.webhook_url = value;
+  updateYAMLPreview();
+}
+
+function addTrigger() {
+  meta.triggers.push({ type: 'file_sensor', watch_path: '', poll_interval_seconds: 30 });
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+function updateTrigger(i, field, value) {
+  const t = meta.triggers[i];
+  if (!t) return;
+  if (field === 'type') {
+    // reset fields on type change
+    meta.triggers[i] = value === 'file_sensor'
+      ? { type: 'file_sensor', watch_path: '', poll_interval_seconds: 30 }
+      : { type: 'pipeline_completion', upstream_pipeline: '' };
+    renderMetaPanel();
+  } else {
+    t[field] = value;
+  }
+  updateYAMLPreview();
+}
+
+function deleteTrigger(i) {
+  meta.triggers.splice(i, 1);
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
 // PALETTE
 // ─────────────────────────────────────────
 function renderPalette() {
@@ -742,14 +982,49 @@ function addTask(typeKey) {
   const count = state.tasks.filter(t => t.typeKey === typeKey).length + 1;
   const label = TT[typeKey].label.toLowerCase().replace(/\s+/g,'_');
   const name  = `${label}_${count}`;
-  const x = 80 + (state.tasks.length % 4) * 260;
-  const y = 80 + Math.floor(state.tasks.length / 4) * 160;
+  // Smart placement (Phase C2): place next to selected node if any, else after the
+  // furthest-right existing node, else at canvas origin. Avoid stacking on top of
+  // an existing node by nudging down 80px until the slot is free.
+  const sel = state.selected ? getTask(state.selected) : null;
+  let x, y;
+  if (sel) {
+    x = sel.x + 260;
+    y = sel.y;
+  } else if (state.tasks.length) {
+    const rightmost = state.tasks.reduce((m,t) => t.x > m.x ? t : m, state.tasks[0]);
+    x = rightmost.x + 260;
+    y = rightmost.y;
+  } else {
+    x = 80; y = 80;
+  }
+  while (state.tasks.some(t => Math.abs(t.x - x) < 20 && Math.abs(t.y - y) < 60)) {
+    y += 130;
+  }
   const task = {id, typeKey, name, x, y, retries:0, config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey]))};
   state.tasks.push(task);
   mountNode(task);
   selectTask(id);
+  // If user added downstream of selection, auto-connect.
+  if (sel) {
+    const noCycle = !wouldCycle(sel.id, id);
+    if (noCycle) state.edges.push({from: sel.id, to: id});
+    renderSVG();
+  }
   updateEmpty();
   updateYAMLPreview();
+}
+
+function arrangeNow() {
+  if (!state.tasks.length) return;
+  saveSnap();
+  autoLayout();
+  state.tasks.forEach(t => {
+    const el = document.getElementById('node-' + t.id);
+    if (el) { el.style.left = t.x + 'px'; el.style.top = t.y + 'px'; }
+  });
+  renderSVG();
+  updateYAMLPreview();
+  showStatus('Auto-arranged by dependency depth.', 'indigo');
 }
 
 function deleteTask(id) {
@@ -757,7 +1032,11 @@ function deleteTask(id) {
   state.tasks = state.tasks.filter(t => t.id !== id);
   state.edges = state.edges.filter(e => e.from !== id && e.to !== id);
   document.getElementById('node-' + id)?.remove();
-  if (state.selected === id) deselectAll();
+  state.selection = state.selection.filter(x => x !== id);
+  if (state.selected === id) {
+    state.selected = state.selection[state.selection.length - 1] || null;
+    if (!state.selected) document.getElementById('config-panel').classList.remove('open');
+  }
   renderSVG();
   updateEmpty();
   updateYAMLPreview();
@@ -800,7 +1079,7 @@ function mountNode(task) {
 function refreshNode(task) {
   const el = document.getElementById('node-' + task.id);
   if (!el) return;
-  el.className = 'task-node' + (state.selected === task.id ? ' selected' : '');
+  el.classList.toggle('selected', state.selection.includes(task.id));
   el.innerHTML = buildNodeHTML(task);
 }
 
@@ -830,6 +1109,14 @@ function buildNodeHTML(task) {
 
 function taskSummary(task) {
   const c = task.config;
+  const badges = [];
+  const reads  = (task.lineage && task.lineage.reads_from)  || [];
+  const writes = (task.lineage && task.lineage.writes_to)   || [];
+  const checks = (task.quality && task.quality.checks)      || [];
+  if (reads.length || writes.length) badges.push(`📊${reads.length}↓${writes.length}↑`);
+  if (checks.length) badges.push(`✓${checks.length}`);
+  const badge = badges.length ? ` · ${badges.join(' ')}` : '';
+  const base = (() => {
   switch (task.typeKey) {
     case 'sql':        return `${(c.database||'duckdb').toUpperCase()} · ${(c.sql||'').substring(0,28).replace(/\s+/g,' ')}`;
     case 'python':     return c.mode === 'script' ? (c.script_path||'script') : 'inline code';
@@ -841,9 +1128,10 @@ function taskSummary(task) {
     case 'file':       return `${c.operation||'read'} ${c.file_path||''}`;
     case 'email':      return `→ ${(c.recipients||[]).join(', ').substring(0,24)}`;
     case 'validation': return `${(c.checks||[]).length} quality check(s)`;
-    case 'pipeline':   return c.pipeline_name || '(select pipeline)';
     default:           return '';
   }
+  })();
+  return base + badge;
 }
 
 // ─────────────────────────────────────────
@@ -889,13 +1177,23 @@ function bindCanvasEvents() {
     const dragHdr = e.target.closest('[data-drag]');
     if (dragHdr) {
       const taskId = dragHdr.dataset.drag;
-      selectTask(taskId);
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+      // If already in multi-selection, keep it for group-drag; otherwise reset.
+      if (!additive && !state.selection.includes(taskId)) {
+        selectTask(taskId);
+      } else if (additive) {
+        selectTask(taskId, true);
+      }
       startDrag(e, taskId);
       return;
     }
 
     const selEl = e.target.closest('[data-select]');
-    if (selEl) { selectTask(selEl.dataset.select); return; }
+    if (selEl) {
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+      selectTask(selEl.dataset.select, additive);
+      return;
+    }
 
     deselectAll();
   });
@@ -908,12 +1206,22 @@ function bindCanvasEvents() {
     }
     if (dragState) {
       const pos  = canvasPos(e);
-      const task = getTask(dragState.id);
-      if (!task) return;
-      task.x = Math.max(0, pos.x - dragState.offX);
-      task.y = Math.max(0, pos.y - dragState.offY);
-      const el = document.getElementById('node-' + task.id);
-      if (el) { el.style.left = task.x + 'px'; el.style.top = task.y + 'px'; }
+      const lead = getTask(dragState.id);
+      if (!lead) return;
+      const nx = Math.max(0, pos.x - dragState.offX);
+      const ny = Math.max(0, pos.y - dragState.offY);
+      const dx = nx - lead.x;
+      const dy = ny - lead.y;
+      // Group move: move all selected if lead is part of the selection.
+      const movers = state.selection.includes(lead.id) ? state.selection : [lead.id];
+      movers.forEach(id => {
+        const t = getTask(id);
+        if (!t) return;
+        t.x = Math.max(0, t.x + dx);
+        t.y = Math.max(0, t.y + dy);
+        const el = document.getElementById('node-' + t.id);
+        if (el) { el.style.left = t.x + 'px'; el.style.top = t.y + 'px'; }
+      });
       renderSVG();
     }
     if (edgeDraw) {
@@ -953,6 +1261,13 @@ function bindCanvasEvents() {
       if (e.key === 'z' && !e.shiftKey) { undo(); e.preventDefault(); }
       if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { redo(); e.preventDefault(); }
       if (e.key === 'd' && state.selected) { duplicateTask(state.selected); e.preventDefault(); }
+      if (e.key === 'l') { arrangeNow(); e.preventDefault(); }
+      if (e.key === 'a') { selectAllTasks(); e.preventDefault(); }
+    }
+    // Delete key removes selected nodes
+    if (!inInput && (e.key === 'Delete' || e.key === 'Backspace') && (state.selection && state.selection.length)) {
+      deleteSelection();
+      e.preventDefault();
     }
     // Zoom keyboard shortcuts
     if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) { adjustZoom(0.1); e.preventDefault(); }
@@ -1037,8 +1352,6 @@ function renderSVG() {
   let h = `<defs>
     <marker id="arr"      markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#6366f1"/></marker>
     <marker id="arr-t"    markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#94a3b8"/></marker>
-    <marker id="arr-fail" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#ef4444"/></marker>
-    <marker id="arr-loop" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#7c3aed"/></marker>
   </defs>`;
 
   for (const edge of state.edges) {
@@ -1048,12 +1361,9 @@ function renderSVG() {
     const x2 = t.x,          y2 = t.y + NODE_H/2;
     const cx1 = x1 + 70, cx2 = x2 - 70;
     const mx = (x1+x2)/2, my = (y1+y2)/2;
-    // Failure edge: target is on_error; Loop body edge: source is loop
-    const isFailure = t.typeKey === 'on_error';
-    const isLoop    = f.typeKey === 'loop';
-    const edgeColor = isFailure ? '#ef4444' : isLoop ? '#7c3aed' : '#6366f1';
-    const markerId  = isFailure ? 'arr-fail' : isLoop ? 'arr-loop' : 'arr';
-    const dashArray = isFailure ? '5,3' : 'none';
+    const edgeColor = '#6366f1';
+    const markerId  = 'arr';
+    const dashArray = 'none';
     h += `<g>
       <path d="M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2}"
             stroke="${edgeColor}" stroke-width="2" fill="none" opacity=".8"
@@ -1086,23 +1396,69 @@ function removeEdge(from, to) {
 // ─────────────────────────────────────────
 // SELECTION
 // ─────────────────────────────────────────
-function selectTask(id) {
-  state.selected = id;
+function selectTask(id, additive) {
+  if (additive) {
+    if (state.selection.includes(id)) {
+      state.selection = state.selection.filter(x => x !== id);
+      if (state.selected === id) state.selected = state.selection[state.selection.length - 1] || null;
+    } else {
+      state.selection.push(id);
+      state.selected = id;
+    }
+  } else {
+    state.selection = [id];
+    state.selected = id;
+  }
+  applySelectionStyles();
+  const panel = document.getElementById('config-panel');
+  if (state.selected) {
+    panel.classList.add('open');
+    renderConfigPanel(getTask(state.selected));
+  } else {
+    panel.classList.remove('open');
+  }
+}
+
+function applySelectionStyles() {
   state.tasks.forEach(t => {
     const el = document.getElementById('node-' + t.id);
-    if (el) el.className = 'task-node' + (t.id === id ? ' selected' : '');
+    if (!el) return;
+    // Preserve existing run/validation marker classes; rebuild only the
+    // "selected" decoration. We do this by stripping known selection
+    // markers, not the entire className.
+    el.classList.toggle('selected', state.selection.includes(t.id));
   });
-  const panel = document.getElementById('config-panel');
-  panel.classList.add('open');
-  renderConfigPanel(getTask(id));
+}
+
+function selectAllTasks() {
+  state.selection = state.tasks.map(t => t.id);
+  state.selected  = state.selection[state.selection.length - 1] || null;
+  applySelectionStyles();
+  if (state.selected) {
+    document.getElementById('config-panel').classList.add('open');
+    renderConfigPanel(getTask(state.selected));
+  }
+}
+
+function deleteSelection() {
+  if (!state.selection.length) return;
+  saveSnap();
+  const dead = new Set(state.selection);
+  state.tasks = state.tasks.filter(t => !dead.has(t.id));
+  state.edges = state.edges.filter(e => !dead.has(e.from) && !dead.has(e.to));
+  dead.forEach(id => document.getElementById('node-' + id)?.remove());
+  state.selection = [];
+  state.selected = null;
+  document.getElementById('config-panel').classList.remove('open');
+  renderSVG();
+  updateEmpty();
+  updateYAMLPreview();
 }
 
 function deselectAll() {
   state.selected = null;
-  state.tasks.forEach(t => {
-    const el = document.getElementById('node-' + t.id);
-    if (el) el.className = 'task-node';
-  });
+  state.selection = [];
+  applySelectionStyles();
   document.getElementById('config-panel').classList.remove('open');
 }
 
@@ -1128,6 +1484,10 @@ function renderConfigPanel(task) {
     </div>
     <hr class="border-slate-100 my-3">
     ${buildConfigFields(task)}
+    <hr class="border-slate-100 my-3">
+    ${buildLineageFields(task)}
+    <hr class="border-slate-100 my-3">
+    ${buildQualityFields(task)}
     <div class="mt-4 pt-3 border-t border-slate-100 flex gap-2">
       <button onclick="duplicateTask('${task.id}')"
         class="flex-1 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 text-xs font-medium border border-indigo-100 transition-colors">
@@ -1139,9 +1499,6 @@ function renderConfigPanel(task) {
       </button>
     </div>
   `;
-
-  // Async post-render hooks
-  if (task.typeKey === 'pipeline') populatePipelineSelect(task.id, task.config.pipeline_name);
 
   // Variable reference helper
   if (pipeline.variables.length || pipeline.connections.length) {
@@ -1168,37 +1525,59 @@ function buildConfigFields(task) {
   const id = task.id, c = task.config;
   switch (task.typeKey) {
 
-    case 'sql': return `
-      <div class="frow">
-        <label class="flabel">Database</label>
-        <select class="finput" onchange="updateCfg('${id}','database',this.value);renderConfigPanel(getTask('${id}'))">
-          ${['duckdb','postgres','mysql','bigquery'].map(db => `<option value="${db}" ${c.database===db?'selected':''}>${db==='duckdb'?'DuckDB (local)':db==='postgres'?'PostgreSQL':db==='mysql'?'MySQL':'BigQuery'}</option>`).join('')}
-        </select>
+    case 'sql': {
+      const usesConn = !!c.use_connection;
+      // Filter saved connections to those that look like a SQL backend.
+      const sqlConns = pipeline.connections.filter(cn => ['postgres','mysql','bigquery','snowflake'].includes(cn.conn_type));
+      const connDropdown = sqlConns.length
+        ? `<select class="finput" onchange="onSqlConnChange('${id}',this.value)">
+             <option value="">— select connection —</option>
+             ${sqlConns.map(cn => `<option value="${esc(cn.name)}" ${c.connection_name===cn.name?'selected':''}>${esc(cn.name)} (${cn.conn_type})</option>`).join('')}
+           </select>`
+        : `<p class="text-[11px] text-amber-500">No SQL connections defined. Add one in the <strong>Conns</strong> tab.</p>`;
+      return `
+      <div class="frow flex items-center gap-2">
+        <input type="checkbox" id="uc-${id}" ${usesConn?'checked':''} onchange="toggleSqlUseConn('${id}',this.checked)">
+        <label for="uc-${id}" class="text-xs text-slate-600">Use saved connection</label>
       </div>
-      ${c.database !== 'duckdb' && c.database !== 'bigquery' ? `
-      <div class="frow"><label class="flabel">Host</label>
-        <input class="finput" value="${c.host||'localhost'}" oninput="updateCfg('${id}','host',this.value)"></div>
-      <div class="frow"><label class="flabel">Port</label>
-        <input class="finput" type="number" value="${c.port||5432}" oninput="updateCfg('${id}','port',parseInt(this.value))"></div>
-      <div class="frow"><label class="flabel">Database Name</label>
-        <input class="finput" value="${c.db_name||'mydb'}" oninput="updateCfg('${id}','db_name',this.value)"></div>
-      <div class="frow"><label class="flabel">User</label>
-        <input class="finput" value="${c.user||'user'}" oninput="updateCfg('${id}','user',this.value)"></div>
-      <div class="frow"><label class="flabel">Password (env var)</label>
-        <input class="finput" value="${c.password||'${POSTGRES_PASSWORD}'}" oninput="updateCfg('${id}','password',this.value)"></div>
-      ` : ''}
-      ${c.database === 'bigquery' ? `
-      <div class="frow"><label class="flabel">Project ID</label>
-        <input class="finput" value="${c.project_id||'my-gcp-project'}" oninput="updateCfg('${id}','project_id',this.value)"></div>
-      <div class="frow"><label class="flabel">Dataset ID</label>
-        <input class="finput" value="${c.dataset_id||'my_dataset'}" oninput="updateCfg('${id}','dataset_id',this.value)"></div>
-      ` : ''}
+      ${usesConn ? `
+        <div class="frow">
+          <label class="flabel">Connection</label>
+          ${connDropdown}
+        </div>
+      ` : `
+        <div class="frow">
+          <label class="flabel">Database</label>
+          <select class="finput" onchange="updateCfg('${id}','database',this.value);renderConfigPanel(getTask('${id}'))">
+            ${['duckdb','postgres','mysql','bigquery'].map(db => `<option value="${db}" ${c.database===db?'selected':''}>${db==='duckdb'?'DuckDB (local)':db==='postgres'?'PostgreSQL':db==='mysql'?'MySQL':'BigQuery'}</option>`).join('')}
+          </select>
+        </div>
+        ${c.database !== 'duckdb' && c.database !== 'bigquery' ? `
+        <div class="frow"><label class="flabel">Host</label>
+          <input class="finput" value="${c.host||'localhost'}" oninput="updateCfg('${id}','host',this.value)"></div>
+        <div class="frow"><label class="flabel">Port</label>
+          <input class="finput" type="number" value="${c.port||5432}" oninput="updateCfg('${id}','port',parseInt(this.value))"></div>
+        <div class="frow"><label class="flabel">Database Name</label>
+          <input class="finput" value="${c.db_name||'mydb'}" oninput="updateCfg('${id}','db_name',this.value)"></div>
+        <div class="frow"><label class="flabel">User</label>
+          <input class="finput" value="${c.user||'user'}" oninput="updateCfg('${id}','user',this.value)"></div>
+        <div class="frow"><label class="flabel">Password (env var)</label>
+          <input class="finput" value="${c.password||'${POSTGRES_PASSWORD}'}" oninput="updateCfg('${id}','password',this.value)"></div>
+        ` : ''}
+        ${c.database === 'bigquery' ? `
+        <div class="frow"><label class="flabel">Project ID</label>
+          <input class="finput" value="${c.project_id||'my-gcp-project'}" oninput="updateCfg('${id}','project_id',this.value)"></div>
+        <div class="frow"><label class="flabel">Dataset ID</label>
+          <input class="finput" value="${c.dataset_id||'my_dataset'}" oninput="updateCfg('${id}','dataset_id',this.value)"></div>
+        ` : ''}
+      `}
       <div class="frow"><label class="flabel">SQL</label>
         <textarea class="finput h-24" oninput="updateCfg('${id}','sql',this.value)">${esc(c.sql||'')}</textarea></div>
       <div class="frow flex items-center gap-2">
         <input type="checkbox" id="rd-${id}" ${c.return_data?'checked':''} onchange="updateCfg('${id}','return_data',this.checked)">
         <label for="rd-${id}" class="text-xs text-slate-600">Return data to next task</label>
       </div>`;
+    }
 
     case 'python': return `
       <div class="frow">
@@ -1348,122 +1727,167 @@ function buildConfigFields(task) {
         </button>
       </div>`;
 
-    case 'pipeline': return `
-      <div class="frow">
-        <label class="flabel">Pipeline</label>
-        <select class="finput" id="pl-dd-${id}" onchange="updateCfg('${id}','pipeline_name',this.value)">
-          <option value="">Loading…</option>
-        </select>
-      </div>
-      <div class="frow flex items-center gap-2">
-        <input type="checkbox" id="wait-${id}" ${c.wait_for_completion?'checked':''} onchange="updateCfg('${id}','wait_for_completion',this.checked)">
-        <label for="wait-${id}" class="text-xs text-slate-600">Wait for completion</label>
-      </div>
-      <p class="text-[11px] text-slate-400 mt-1">Target pipeline must be saved in the <code class="bg-slate-100 px-1 rounded">pipelines/</code> folder.</p>`;
-
-    case 'loop': return `
-      <div class="frow">
-        <label class="flabel">Iterate Over</label>
-        <input class="finput" value="${esc(c.iterate_over||'')}" placeholder="\${var.items} or [&quot;a&quot;,&quot;b&quot;]"
-               oninput="updateCfg('${id}','iterate_over',this.value)">
-        <p class="text-[10px] text-slate-400 mt-1">Variable reference or inline JSON array</p>
-      </div>
-      <div class="frow">
-        <label class="flabel">Item Variable Name</label>
-        <input class="finput" value="${esc(c.item_variable||'item')}" placeholder="item"
-               oninput="updateCfg('${id}','item_variable',this.value)">
-        <p class="text-[10px] text-slate-400 mt-1">Access current item as <code class="bg-slate-100 px-1 rounded">\${item}</code> in downstream tasks</p>
-      </div>
-      <div class="frow">
-        <label class="flabel">Max Concurrency</label>
-        <input class="finput" type="number" min="1" max="20" value="${c.max_concurrency||1}"
-               oninput="updateCfg('${id}','max_concurrency',parseInt(this.value))">
-        <p class="text-[10px] text-slate-400 mt-1">1 = sequential, &gt;1 = parallel iterations</p>
-      </div>`;
-
-    case 'condition': return `
-      <div class="frow">
-        <label class="flabel">Expression</label>
-        <input class="finput" value="${esc(c.expression||'')}" placeholder="\${var.status} == &quot;success&quot;"
-               oninput="updateCfg('${id}','expression',this.value)">
-        <p class="text-[10px] text-slate-400 mt-1">Python-style boolean expression. Connect downstream tasks — they run only if expression is <code class="bg-slate-100 px-1 rounded">True</code>.</p>
-      </div>
-      <div class="frow">
-        <label class="flabel">Description (optional)</label>
-        <input class="finput" value="${esc(c.description||'')}" placeholder="e.g. Check if extract succeeded"
-               oninput="updateCfg('${id}','description',this.value)">
-      </div>`;
-
-    case 'set_var': {
-      const varOpts = pipeline.variables.map(v =>
-        `<option value="${esc(v.name)}" ${c.variable_name===v.name?'selected':''}>${esc(v.name)} (${v.type})</option>`
-      ).join('');
-      return `
-      <div class="frow">
-        <label class="flabel">Variable</label>
-        <select class="finput" onchange="updateCfg('${id}','variable_name',this.value)">
-          <option value="">— select variable —</option>
-          ${varOpts}
-        </select>
-        ${!pipeline.variables.length ? `<p class="text-[10px] text-amber-500 mt-1">No variables declared. Go to the <strong>Variables</strong> tab to add one.</p>` : ''}
-      </div>
-      <div class="frow">
-        <label class="flabel">Value Type</label>
-        <select class="finput" onchange="updateCfg('${id}','value_type',this.value);renderConfigPanel(getTask('${id}'))">
-          <option value="static"     ${c.value_type==='static'    ?'selected':''}>Static value</option>
-          <option value="expression" ${c.value_type==='expression'?'selected':''}>Expression / reference</option>
-        </select>
-      </div>
-      <div class="frow">
-        <label class="flabel">Value</label>
-        <input class="finput" value="${esc(c.value||'')}"
-               placeholder="${c.value_type==='expression'?'${var.other} + "_suffix"':'my_value'}"
-               oninput="updateCfg('${id}','value',this.value)">
-      </div>`;
-    }
-
-    case 'on_error': return `
-      <div class="frow">
-        <label class="flabel">On Failure Action</label>
-        <select class="finput" onchange="updateCfg('${id}','action',this.value)">
-          <option value="continue" ${c.action==='continue'?'selected':''}>Continue pipeline</option>
-          <option value="fail"     ${c.action==='fail'    ?'selected':''}>Fail pipeline</option>
-          <option value="retry"    ${c.action==='retry'   ?'selected':''}>Retry failed task</option>
-        </select>
-      </div>
-      <div class="frow">
-        <label class="flabel">Log Message</label>
-        <input class="finput" value="${esc(c.log_message||'')}" placeholder="Task failed: \${task.name}"
-               oninput="updateCfg('${id}','log_message',this.value)">
-      </div>
-      <div class="frow flex items-center gap-2">
-        <input type="checkbox" id="notify-${id}" ${c.notify?'checked':''} onchange="updateCfg('${id}','notify',this.checked)">
-        <label for="notify-${id}" class="text-xs text-slate-600">Send email notification</label>
-      </div>
-      <div class="p-2.5 bg-red-50 border border-red-100 rounded-lg mt-1">
-        <p class="text-[10px] text-red-600"><i class="fas fa-info-circle mr-1"></i>Connect the output port of the task you want to monitor to this node's input port. The edge will appear red.</p>
-      </div>`;
-
     default: return '<p class="text-xs text-slate-400">No configuration required.</p>';
   }
 }
 
-// ── Pipeline dropdown loader ──
-async function populatePipelineSelect(taskId, currentName) {
-  const sel = document.getElementById('pl-dd-' + taskId);
-  if (!sel) return;
-  try {
-    const r = await fetch('/pipelines');
-    const d = await r.json();
-    const list = d.pipelines || [];
-    sel.innerHTML = `<option value="">— select pipeline —</option>` +
-      list.map(p => `<option value="${esc(p.display_name)}" ${p.display_name===currentName?'selected':''}>${esc(p.display_name)} (${p.task_count} tasks)</option>`).join('');
-    if (currentName && list.some(p => p.display_name === currentName)) {
-      sel.value = currentName;
-    }
-  } catch {
-    sel.innerHTML = `<option value="${esc(currentName||'')}">${esc(currentName||'— failed to load —')}</option>`;
+// ─────────────────────────────────────────
+// SQL — connection picker
+// ─────────────────────────────────────────
+function toggleSqlUseConn(taskId, on) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.config.use_connection = !!on;
+  if (!on) { delete task.config.connection_name; }
+  renderConfigPanel(task);
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+function onSqlConnChange(taskId, connName) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.config.connection_name = connName;
+  // Align task.config.database with the connection's type so YAML `plugin:` is correct.
+  const conn = pipeline.connections.find(cn => cn.name === connName);
+  if (conn && ['postgres','mysql','bigquery','snowflake'].includes(conn.conn_type)) {
+    task.config.database = conn.conn_type;
   }
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// PER-TASK LINEAGE (reads_from / writes_to)
+// ─────────────────────────────────────────
+function buildLineageFields(task) {
+  const reads  = (task.lineage && task.lineage.reads_from) || [];
+  const writes = (task.lineage && task.lineage.writes_to)  || [];
+  const chip = (uri, kind, i) => `
+    <span class="var-badge" style="background:${kind==='reads'?'#eff6ff':'#f0fdf4'};color:${kind==='reads'?'#1d4ed8':'#166534'};border-color:${kind==='reads'?'#bfdbfe':'#bbf7d0'}">
+      ${esc(uri)}
+      <button onclick="removeLineage('${task.id}','${kind}',${i})" class="ml-1 text-current opacity-50 hover:opacity-100">×</button>
+    </span>`;
+  return `
+    <div class="frow">
+      <label class="flabel">Reads from</label>
+      <div class="flex flex-wrap mb-1">${reads.map((u,i)=>chip(u,'reads',i)).join('')}</div>
+      <input class="finput" placeholder="postgres://db/public.orders — press Enter"
+             onkeydown="if(event.key==='Enter'){addLineage('${task.id}','reads',this.value);this.value=''}">
+    </div>
+    <div class="frow">
+      <label class="flabel">Writes to</label>
+      <div class="flex flex-wrap mb-1">${writes.map((u,i)=>chip(u,'writes',i)).join('')}</div>
+      <input class="finput" placeholder="s3://bucket/orders.parquet — press Enter"
+             onkeydown="if(event.key==='Enter'){addLineage('${task.id}','writes',this.value);this.value=''}">
+    </div>
+    <p class="text-[10px] text-slate-400">Lineage powers /catalog and /lineage-viz</p>
+  `;
+}
+
+function addLineage(taskId, kind, value) {
+  const v = (value||'').trim();
+  if (!v) return;
+  const task = getTask(taskId);
+  if (!task) return;
+  if (!task.lineage) task.lineage = { reads_from: [], writes_to: [] };
+  const arr = kind === 'reads' ? (task.lineage.reads_from ||= []) : (task.lineage.writes_to ||= []);
+  if (!arr.includes(v)) arr.push(v);
+  refreshNode(task);
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+function removeLineage(taskId, kind, i) {
+  const task = getTask(taskId);
+  if (!task || !task.lineage) return;
+  const arr = kind === 'reads' ? task.lineage.reads_from : task.lineage.writes_to;
+  if (!arr) return;
+  arr.splice(i, 1);
+  if (!(task.lineage.reads_from||[]).length && !(task.lineage.writes_to||[]).length) task.lineage = null;
+  refreshNode(task);
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// PER-TASK QUALITY CHECKS (any task)
+// ─────────────────────────────────────────
+function buildQualityFields(task) {
+  // The validation task type has its own dedicated checks editor in buildConfigFields.
+  if (task.typeKey === 'validation') {
+    return `<p class="text-[10px] text-slate-400">Quality checks are configured above (this is a validation task).</p>`;
+  }
+  const checks = (task.quality && task.quality.checks) || [];
+  return `
+    <div class="flex items-center justify-between mb-2">
+      <label class="flabel mb-0">Quality Checks (post-run)</label>
+      <button onclick="addQualityCheck('${task.id}')" class="text-indigo-500 hover:text-indigo-700 text-xs font-semibold">
+        <i class="fas fa-plus mr-1"></i>Add
+      </button>
+    </div>
+    ${checks.length === 0
+      ? `<p class="text-[10px] text-slate-400">SQL assertions run against the task's result. Fails the task on mismatch.</p>`
+      : checks.map((ch, i) => `
+        <div class="var-item">
+          <div class="flex items-center justify-between mb-1">
+            <input class="finput" style="flex:1;margin-right:6px" placeholder="check name"
+                   value="${esc(ch.name||'')}"
+                   oninput="updateQualityCheck('${task.id}',${i},'name',this.value)">
+            <button onclick="removeQualityCheck('${task.id}',${i})" class="text-red-400 hover:text-red-600 text-xs">
+              <i class="fas fa-trash-can"></i>
+            </button>
+          </div>
+          <textarea class="finput" rows="2" placeholder="SELECT COUNT(*) FROM data WHERE col IS NULL"
+                    oninput="updateQualityCheck('${task.id}',${i},'sql',this.value)">${esc(ch.sql||'')}</textarea>
+          <div class="flex gap-1 mt-1">
+            <input class="finput" placeholder="expect" value="${ch.expect!==undefined?esc(String(ch.expect)):''}"
+                   oninput="updateQualityCheck('${task.id}',${i},'expect',this.value)">
+            <input class="finput" placeholder="≥ min" value="${ch.expect_min!==undefined?esc(String(ch.expect_min)):''}"
+                   oninput="updateQualityCheck('${task.id}',${i},'expect_min',this.value)">
+            <input class="finput" placeholder="≤ max" value="${ch.expect_max!==undefined?esc(String(ch.expect_max)):''}"
+                   oninput="updateQualityCheck('${task.id}',${i},'expect_max',this.value)">
+          </div>
+        </div>`).join('')
+    }
+  `;
+}
+
+function addQualityCheck(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  if (!task.quality) task.quality = { checks: [] };
+  if (!task.quality.checks) task.quality.checks = [];
+  task.quality.checks.push({ name: 'check_' + (task.quality.checks.length + 1), sql: '', expect: 0 });
+  renderConfigPanel(task);
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+function updateQualityCheck(taskId, i, field, value) {
+  const task = getTask(taskId);
+  if (!task || !task.quality || !task.quality.checks || !task.quality.checks[i]) return;
+  if (['expect','expect_min','expect_max'].includes(field)) {
+    if (value === '' || value === null) {
+      delete task.quality.checks[i][field];
+    } else {
+      const num = Number(value);
+      task.quality.checks[i][field] = Number.isFinite(num) ? num : value;
+    }
+  } else {
+    task.quality.checks[i][field] = value;
+  }
+  updateYAMLPreview();
+}
+
+function removeQualityCheck(taskId, i) {
+  const task = getTask(taskId);
+  if (!task || !task.quality || !task.quality.checks) return;
+  task.quality.checks.splice(i, 1);
+  if (!task.quality.checks.length) task.quality = null;
+  renderConfigPanel(task);
+  refreshNode(task);
+  updateYAMLPreview();
 }
 
 // ── Validation check template dropdown ──
@@ -1571,7 +1995,74 @@ function updateCfgNested(id, key, value) {
 // ─────────────────────────────────────────
 // YAML GENERATION
 // ─────────────────────────────────────────
-function updateYAMLPreview() { /* on-demand only */ }
+// ─────────────────────────────────────────
+// AUTOSAVE (localStorage)
+// ─────────────────────────────────────────
+const AUTOSAVE_KEY = 'jobBuilder.autosave.v1';
+let autosaveTimer = null;
+
+function writeAutosave() {
+  try {
+    const payload = {
+      pipelineName: document.getElementById('pipelineName')?.value || '',
+      pipelineDesc: document.getElementById('pipelineDesc')?.value || '',
+      tasks:        state.tasks,
+      edges:        state.edges,
+      nextId:       state.nextId,
+      schedule:     state.schedule,
+      meta,
+      pipeline:     { variables: pipeline.variables, connections: pipeline.connections },
+      savedAt:      Date.now(),
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+  } catch (_) { /* quota or privacy mode — ignore */ }
+}
+
+function clearAutosave() {
+  try { localStorage.removeItem(AUTOSAVE_KEY); } catch (_) {}
+}
+
+function restoreAutosave() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (!d || !Array.isArray(d.tasks) || !d.tasks.length) return false;
+    if (!confirm(`Restore unsaved canvas from ${new Date(d.savedAt).toLocaleString()}?`)) {
+      clearAutosave();
+      return false;
+    }
+    state.tasks    = d.tasks;
+    state.edges    = d.edges || [];
+    state.nextId   = d.nextId || (d.tasks.length + 1);
+    state.schedule = d.schedule || null;
+    Object.assign(meta, { team:'', tags:[], sla:null, triggers:[] }, d.meta || {});
+    pipeline.variables   = (d.pipeline && d.pipeline.variables)   || [];
+    pipeline.connections = (d.pipeline && d.pipeline.connections) || [];
+    if (d.pipelineName) document.getElementById('pipelineName').value = d.pipelineName;
+    if (d.pipelineDesc) document.getElementById('pipelineDesc').value = d.pipelineDesc;
+    if (state.schedule) {
+      const s = state.schedule;
+      document.getElementById('schedBtn').textContent =
+        `${s.minute||'0'} ${s.hour||'6'} ${s.day||'*'} ${s.month||'*'} ${s.day_of_week||'*'}`;
+    }
+    document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
+    state.tasks.forEach(t => mountNode(t));
+    renderSVG();
+    renderVarsPanel();
+    renderConnsPanel();
+    renderMetaPanel();
+    updateEmpty();
+    showStatus('Restored unsaved canvas from local draft.', 'indigo');
+    return true;
+  } catch (_) { return false; }
+}
+
+function updateYAMLPreview() {
+  // Schedule a debounced autosave so any state-mutating action persists.
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(writeAutosave, 400);
+}
 
 function generateYAML() {
   const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
@@ -1579,33 +2070,42 @@ function generateYAML() {
   const lines = [`pipeline_name: ${name}`];
   if (desc) lines.push(`description: "${escY(desc)}"`);
 
-  // Variables section
-  if (pipeline.variables.length) {
-    lines.push('', 'variables:');
-    pipeline.variables.forEach(v => {
-      if (v.type === 'list') {
-        lines.push(`  ${v.name}:`);
-        (v.default_value||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(item => lines.push(`    - ${item}`));
-      } else if (v.type === 'integer') {
-        lines.push(`  ${v.name}: ${parseInt(v.default_value)||0}`);
-      } else if (v.type === 'boolean') {
-        lines.push(`  ${v.name}: ${v.default_value === 'true'}`);
-      } else {
-        lines.push(`  ${v.name}: "${escY(v.default_value||'')}"`);
-      }
-    });
+  // NOTE: pipeline-level variables/connections are intentionally NOT emitted as
+  // top-level YAML keys — PipelineConfig has extra='forbid'. The Variables and
+  // Connections tabs exist only as a clipboard helper for ${var.x} / ${conn.x}
+  // references typed into individual task config fields. When the backend gains
+  // first-class support for these blocks, re-enable emission here.
+
+  if (meta.team) lines.push(`team: "${escY(meta.team)}"`);
+  if (meta.tags && meta.tags.length) {
+    lines.push('tags:');
+    meta.tags.forEach(tag => lines.push(`  - "${escY(tag)}"`));
   }
 
-  // Connections section
-  if (pipeline.connections.length) {
-    lines.push('', 'connections:');
-    pipeline.connections.forEach(c => {
-      const meta = CONN_META[c.conn_type] || {};
-      lines.push(`  - name: ${c.name}`);
-      lines.push(`    type: ${c.conn_type}`);
-      (meta.fields||[]).forEach(f => {
-        if (c[f] !== undefined && c[f] !== '') lines.push(`    ${f}: "${escY(String(c[f]))}"`);
-      });
+  if (meta.sla && meta.sla.max_duration_minutes > 0) {
+    lines.push('', 'sla:');
+    lines.push(`  max_duration_minutes: ${meta.sla.max_duration_minutes}`);
+    if (meta.sla.alert) {
+      lines.push('  alert:');
+      lines.push(`    type: ${meta.sla.alert.type}`);
+      if (meta.sla.alert.type === 'email' && meta.sla.alert.email) {
+        lines.push(`    email: "${escY(meta.sla.alert.email)}"`);
+      } else if (meta.sla.alert.type === 'webhook' && meta.sla.alert.webhook_url) {
+        lines.push(`    webhook_url: "${escY(meta.sla.alert.webhook_url)}"`);
+      }
+    }
+  }
+
+  if (meta.triggers && meta.triggers.length) {
+    lines.push('', 'triggers:');
+    meta.triggers.forEach(t => {
+      lines.push(`  - type: ${t.type}`);
+      if (t.type === 'file_sensor') {
+        if (t.watch_path)            lines.push(`    watch_path: "${escY(t.watch_path)}"`);
+        if (t.poll_interval_seconds) lines.push(`    poll_interval_seconds: ${t.poll_interval_seconds}`);
+      } else {
+        if (t.upstream_pipeline)     lines.push(`    upstream_pipeline: "${escY(t.upstream_pipeline)}"`);
+      }
     });
   }
 
@@ -1615,12 +2115,7 @@ function generateYAML() {
   }
   lines.push('', 'tasks:');
   for (const task of state.tasks) {
-    const allDeps   = state.edges.filter(e => e.to === task.id).map(e => e.from);
-    const isOnError = task.typeKey === 'on_error';
-    // on_error tasks use depends_on_failure; others use depends_on
-    const normalDeps  = isOnError ? [] : allDeps;
-    const failureDeps = isOnError ? allDeps : [];
-
+    const deps = state.edges.filter(e => e.to === task.id).map(e => e.from);
     const isTransformer = task.typeKey === 'dbt';
     const plugin = getPlugin(task);
     lines.push(`  - name: "${escY(task.name)}"`);
@@ -1628,8 +2123,37 @@ function generateYAML() {
     lines.push(`    type: ${isTransformer ? 'transformer' : 'executor'}`);
     lines.push(`    plugin: ${plugin}`);
     if ((task.retries||0) > 0) lines.push(`    retries: ${task.retries}`);
-    if (normalDeps.length)  lines.push(`    depends_on: [${normalDeps.join(', ')}]`);
-    if (failureDeps.length) lines.push(`    depends_on_failure: [${failureDeps.join(', ')}]`);
+    if (deps.length) lines.push(`    depends_on: [${deps.join(', ')}]`);
+
+    // Per-task lineage (Phase B2)
+    const reads  = (task.lineage && task.lineage.reads_from) || [];
+    const writes = (task.lineage && task.lineage.writes_to)  || [];
+    if (reads.length || writes.length) {
+      lines.push('    lineage:');
+      if (reads.length) {
+        lines.push('      reads_from:');
+        reads.forEach(u => lines.push(`        - "${escY(u)}"`));
+      }
+      if (writes.length) {
+        lines.push('      writes_to:');
+        writes.forEach(u => lines.push(`        - "${escY(u)}"`));
+      }
+    }
+
+    // Per-task quality checks (Phase B2 — any task)
+    const qChecks = (task.quality && task.quality.checks) || [];
+    if (qChecks.length) {
+      lines.push('    quality:');
+      lines.push('      checks:');
+      qChecks.forEach(ch => {
+        lines.push(`        - name: ${ch.name||'check'}`);
+        if (ch.sql) lines.push(`          sql: "${escY(ch.sql)}"`);
+        if (ch.expect !== undefined && ch.expect !== '') lines.push(`          expect: ${ch.expect}`);
+        if (ch.expect_min !== undefined && ch.expect_min !== '' && ch.expect_min !== null) lines.push(`          expect_min: ${ch.expect_min}`);
+        if (ch.expect_max !== undefined && ch.expect_max !== '' && ch.expect_max !== null) lines.push(`          expect_max: ${ch.expect_max}`);
+      });
+    }
+
     const cfgLines = buildConfigYAML(task);
     if (cfgLines.length) { lines.push('    config:'); cfgLines.forEach(l => lines.push('      ' + l)); }
     lines.push('');
@@ -1640,10 +2164,6 @@ function generateYAML() {
 function getPlugin(task) {
   if (task.typeKey === 'sql') return task.config.database || 'duckdb';
   if (task.typeKey === 'validation') return 'duckdb';
-  if (task.typeKey === 'loop')      return 'loop';
-  if (task.typeKey === 'condition') return 'condition';
-  if (task.typeKey === 'set_var')   return 'set_variable';
-  if (task.typeKey === 'on_error')  return 'on_error';
   return TT[task.typeKey].plugin || 'python';
 }
 
@@ -1651,20 +2171,35 @@ function buildConfigYAML(task) {
   const c = task.config, lines = [];
   switch (task.typeKey) {
     case 'sql':
-      if (c.database && c.database !== 'duckdb') {
+      if (c.use_connection && c.connection_name) {
+        // Resolve the saved connection by name and inline its fields.
+        // (The backend doesn't yet have first-class ${conn.x} resolution at load time.)
+        const conn = pipeline.connections.find(cn => cn.name === c.connection_name);
+        if (conn) {
+          if (conn.conn_type === 'bigquery') {
+            if (conn.project_id) lines.push(`project_id: ${conn.project_id}`);
+            if (conn.dataset_id) lines.push(`dataset_id: ${conn.dataset_id}`);
+          } else {
+            lines.push('connection:');
+            if (conn.host)     lines.push(`  host: ${conn.host}`);
+            if (conn.port)     lines.push(`  port: ${conn.port}`);
+            if (conn.database) lines.push(`  database: ${conn.database}`);
+            if (conn.user)     lines.push(`  user: ${conn.user}`);
+            if (conn.password) lines.push(`  password: "${escY(conn.password)}"`);
+          }
+        }
+        lines.push(`# connection: \${conn.${c.connection_name}}`);
+      } else if (c.database && c.database !== 'duckdb') {
         if (c.database === 'bigquery') {
           if (c.project_id) lines.push(`project_id: ${c.project_id}`);
           if (c.dataset_id) lines.push(`dataset_id: ${c.dataset_id}`);
         } else {
           lines.push('connection:');
-          if (c.connection) {
-            const cn = c.connection;
-            if (cn.host)     lines.push(`  host: ${cn.host}`);
-            if (cn.port)     lines.push(`  port: ${cn.port}`);
-            if (cn.db_name)  lines.push(`  database: ${cn.db_name}`);
-            if (cn.user)     lines.push(`  user: ${cn.user}`);
-            if (cn.password) lines.push(`  password: "${cn.password}"`);
-          }
+          if (c.host)     lines.push(`  host: ${c.host}`);
+          if (c.port)     lines.push(`  port: ${c.port}`);
+          if (c.db_name)  lines.push(`  database: ${c.db_name}`);
+          if (c.user)     lines.push(`  user: ${c.user}`);
+          if (c.password) lines.push(`  password: "${escY(c.password)}"`);
         }
       }
       if (c.sql) { lines.push('sql: |'); c.sql.split('\n').forEach(l => lines.push('  ' + l)); }
@@ -1760,39 +2295,6 @@ function buildConfigYAML(task) {
       }
       break;
 
-    case 'pipeline':
-      if (c.pipeline_name) lines.push(`# Triggers pipeline: ${c.pipeline_name}`);
-      lines.push(`code: |`);
-      lines.push(`  import requests`);
-      lines.push(`  r = requests.post("http://localhost:8000/run/sync", json={"name":"${c.pipeline_name||'my_pipeline'}"})`);
-      lines.push(`  print(r.json())`);
-      break;
-
-    case 'loop':
-      if (c.iterate_over)    lines.push(`iterate_over: "${escY(c.iterate_over)}"`);
-      if (c.item_variable)   lines.push(`item_variable: ${c.item_variable}`);
-      if (c.max_concurrency) lines.push(`max_concurrency: ${c.max_concurrency}`);
-      break;
-
-    case 'condition':
-      if (c.expression)  lines.push(`expression: "${escY(c.expression)}"`);
-      if (c.description) lines.push(`description: "${escY(c.description)}"`);
-      break;
-
-    case 'set_var':
-      if (c.variable_name) lines.push(`variable_name: ${c.variable_name}`);
-      if (c.value_type === 'expression') {
-        lines.push(`value_expression: "${escY(c.value||'')}"`);
-      } else {
-        lines.push(`value: "${escY(c.value||'')}"`);
-      }
-      break;
-
-    case 'on_error':
-      lines.push(`action: ${c.action||'continue'}`);
-      if (c.log_message) lines.push(`log_message: "${escY(c.log_message)}"`);
-      if (c.notify) lines.push(`notify: true`);
-      break;
   }
   return lines;
 }
@@ -1822,6 +2324,7 @@ function showScheduleModal() {
     document.getElementById('sched-dow').value = state.schedule.day_of_week || '*';
   }
   document.getElementById('sched-modal').classList.remove('hidden');
+  renderCronPreview();
 }
 function closeScheduleModal() { document.getElementById('sched-modal').classList.add('hidden'); }
 function setPreset(cron) {
@@ -1831,6 +2334,63 @@ function setPreset(cron) {
   document.getElementById('sched-dom').value = dom;
   document.getElementById('sched-mo').value  = mo;
   document.getElementById('sched-dow').value = dow;
+  renderCronPreview();
+}
+
+// ── Cron field matchers (supports *, n, a-b, */n, a,b,c) ──
+function _matchCron(field, value, valid) {
+  field = (field || '*').trim();
+  if (field === '*') return true;
+  for (const part of field.split(',')) {
+    let step = 1, body = part;
+    if (part.includes('/')) { const [b, s] = part.split('/'); body = b || '*'; step = parseInt(s, 10) || 1; }
+    let lo, hi;
+    if (body === '*') { lo = valid[0]; hi = valid[1]; }
+    else if (body.includes('-')) { const [a, b] = body.split('-').map(Number); lo = a; hi = b; }
+    else { const n = Number(body); lo = n; hi = n; }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) continue;
+    if (value < lo || value > hi) continue;
+    if ((value - lo) % step === 0) return true;
+  }
+  return false;
+}
+
+function _cronMatches(dt, sched) {
+  return _matchCron(sched.minute, dt.getMinutes(),  [0, 59])
+      && _matchCron(sched.hour,   dt.getHours(),    [0, 23])
+      && _matchCron(sched.dom,    dt.getDate(),     [1, 31])
+      && _matchCron(sched.month,  dt.getMonth() + 1, [1, 12])
+      && _matchCron(sched.dow,    dt.getDay(),      [0, 6]);
+}
+
+function renderCronPreview() {
+  const sched = {
+    minute: document.getElementById('sched-min')?.value || '0',
+    hour:   document.getElementById('sched-hr')?.value  || '0',
+    dom:    document.getElementById('sched-dom')?.value || '*',
+    month:  document.getElementById('sched-mo')?.value  || '*',
+    dow:    document.getElementById('sched-dow')?.value || '*',
+  };
+  const out = document.getElementById('cron-preview');
+  if (!out) return;
+  const hits = [];
+  const start = new Date();
+  start.setSeconds(0, 0);
+  // Round forward to the next minute and scan up to 14 days.
+  start.setMinutes(start.getMinutes() + 1);
+  const MAX_SCAN = 14 * 24 * 60; // minutes
+  const dt = new Date(start.getTime());
+  let i = 0;
+  while (hits.length < 3 && i < MAX_SCAN) {
+    if (_cronMatches(dt, sched)) hits.push(new Date(dt.getTime()));
+    dt.setMinutes(dt.getMinutes() + 1);
+    i++;
+  }
+  if (!hits.length) {
+    out.innerHTML = `<li class="text-slate-400">No matching runs in the next 14 days.</li>`;
+    return;
+  }
+  out.innerHTML = hits.map(d => `<li><i class="far fa-clock text-indigo-400 mr-1"></i>${d.toLocaleString()}</li>`).join('');
 }
 function applySchedule() {
   state.schedule = {
@@ -1853,35 +2413,133 @@ function clearSchedule() {
 // ─────────────────────────────────────────
 // SAVE / RUN
 // ─────────────────────────────────────────
+// Tracks the last saved file_path so Run can pass it to /run/sync.
+let lastSavedPath = null;
+
 async function savePipeline() {
-  if (!state.tasks.length) { showStatus('Add at least one task before saving.', 'amber'); return; }
+  if (!state.tasks.length) { showStatus('Add at least one task before saving.', 'amber'); return null; }
   const yaml = generateYAML();
   const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
   try {
     const r = await fetch('/save-pipeline', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({yaml_content: yaml, pipeline_name: name})});
+      body: JSON.stringify({yaml_content: yaml, filename: name})});
     const d = await r.json();
-    if (r.ok) showStatus('Pipeline saved → ' + (d.file_path || name + '.yaml'), 'green');
-    else showStatus('Save failed: ' + (d.detail || 'unknown error'), 'red');
-  } catch(e) { showStatus('Save failed: ' + e.message, 'red'); }
+    if (r.ok) {
+      lastSavedPath = d.file_path || null;
+      showStatus('Pipeline saved → ' + (d.file_path || name + '.yaml'), 'green');
+      clearAutosave();
+      // Phase B5 — run validation in the background so users see DAG/plugin issues
+      // as red node borders without an extra click.
+      runValidationGate(d.file_path);
+      return d.file_path || null;
+    }
+    showStatus('Save failed: ' + (d.detail || 'unknown error'), 'red');
+    return null;
+  } catch(e) { showStatus('Save failed: ' + e.message, 'red'); return null; }
+}
+
+async function runValidationGate(configPath) {
+  if (!configPath) return;
+  try {
+    const r = await fetch('/validate', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({config_path: configPath})});
+    if (!r.ok) return;
+    const d = await r.json();
+    applyValidationMarkers(d);
+  } catch (_) { /* non-blocking */ }
+}
+
+function applyValidationMarkers(d) {
+  // Clear previous markers.
+  document.querySelectorAll('.task-node').forEach(el => {
+    el.classList.remove('node-error');
+    const dot = el.querySelector('.node-err-dot');
+    if (dot) dot.remove();
+  });
+  if (!d || d.is_valid) return;
+  // Map task_name -> task.id via state.tasks (names are unique by PipelineConfig validator).
+  const nameToId = {};
+  state.tasks.forEach(t => { nameToId[t.name] = t.id; });
+  (d.task_results || []).filter(tr => !tr.plugin_loadable).forEach(tr => {
+    const taskId = nameToId[tr.task_name];
+    const el = taskId ? document.getElementById('node-' + taskId) : null;
+    if (!el) return;
+    el.classList.add('node-error');
+    const dot = document.createElement('div');
+    dot.className = 'node-err-dot';
+    dot.title = tr.error || 'plugin not loadable';
+    el.querySelector('.node-card')?.appendChild(dot);
+  });
+}
+
+async function validatePipeline() {
+  if (!state.tasks.length) { showStatus('Add at least one task before validating.', 'amber'); return; }
+  const savedPath = await savePipeline();
+  if (!savedPath) return;
+  try {
+    showStatus('Validating…', 'indigo');
+    const r = await fetch('/validate', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({config_path: savedPath})});
+    const d = await r.json();
+    if (!r.ok) { showStatus('Validate failed: ' + (d.detail || 'unknown error'), 'red'); return; }
+    if (d.is_valid) {
+      showStatus(`Valid — ${d.task_count} task(s), all plugins loadable.`, 'green');
+    } else {
+      const firstErr = (d.errors||[])[0] || 'see task results';
+      showStatus(`Invalid: ${firstErr}`, 'red');
+    }
+  } catch(e) { showStatus('Validate error: ' + e.message, 'red'); }
 }
 
 async function runPipeline() {
   if (!state.tasks.length) { showStatus('Add at least one task before running.', 'amber'); return; }
-  await savePipeline();
-  const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
+  const savedPath = await savePipeline();
+  if (!savedPath) return;
+  clearRunMarkers();
+  state.tasks.forEach(t => { const el = document.getElementById('node-'+t.id); if (el) el.classList.add('node-running'); });
   try {
     showStatus('Running pipeline…', 'indigo');
     const r = await fetch('/run/sync', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name})});
+      body: JSON.stringify({config_path: savedPath})});
     const d = await r.json();
+    clearRunMarkers();
     if (r.ok) {
-      const ok = d.tasks_succeeded || 0, fail = d.tasks_failed || 0;
-      showStatus(`Run complete — ${ok} succeeded, ${fail} failed.`, fail ? 'red' : 'green');
+      applyRunResults(d.results || {}, d.execution_order || []);
+      const ok = Object.values(d.results || {}).filter(v => v).length;
+      const fail = Object.values(d.results || {}).filter(v => !v).length;
+      const pname = d.pipeline_name || '';
+      const link = ` <a href="/dashboard" class="underline">view runs</a>`;
+      const msg = d.status === 'completed'
+        ? `Run complete — ${ok} task(s) succeeded.${link}`
+        : `Run ${d.status} — ${ok} ok, ${fail} failed. ${d.message||''}${link}`;
+      showStatusHTML(msg, d.status === 'completed' ? 'green' : 'red');
     } else {
       showStatus('Run failed: ' + (d.detail || 'unknown error'), 'red');
     }
-  } catch(e) { showStatus('Run error: ' + e.message, 'red'); }
+  } catch(e) {
+    clearRunMarkers();
+    showStatus('Run error: ' + e.message, 'red');
+  }
+}
+
+function applyRunResults(results, execOrder) {
+  // results is { task_name: bool }. Match by name; on /run/sync currently every
+  // listed task is present only on success path, so we treat absent-after-completion
+  // as "did not run" (no marker).
+  const nameToId = {};
+  state.tasks.forEach(t => { nameToId[t.name] = t.id; });
+  Object.entries(results).forEach(([name, ok]) => {
+    const id = nameToId[name];
+    const el = id ? document.getElementById('node-' + id) : null;
+    if (!el) return;
+    el.classList.add(ok ? 'node-ok' : 'node-fail');
+  });
+}
+
+function clearRunMarkers() {
+  document.querySelectorAll('.task-node').forEach(el => {
+    el.classList.remove('node-ok','node-fail','node-running');
+  });
 }
 
 // ─────────────────────────────────────────
@@ -1897,12 +2555,19 @@ function clearCanvas() {
   if (state.tasks.length && !confirm('Clear all tasks from the canvas?')) return;
   saveSnap();
   state.tasks = []; state.edges = []; state.selected = null;
+  state.schedule = null;
+  meta.team = ''; meta.tags = []; meta.sla = null; meta.triggers = [];
+  document.getElementById('schedBtn').textContent = 'Schedule';
   document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
   document.getElementById('config-panel').classList.remove('open');
   renderSVG(); updateEmpty();
+  renderMetaPanel();
+  clearAutosave();
 }
 
-function showStatus(msg, color) {
+function showStatus(msg, color) { _renderStatus(esc(msg), color); }
+function showStatusHTML(html, color) { _renderStatus(html, color); }
+function _renderStatus(innerHTML, color) {
   const bar = document.getElementById('statusBar');
   const colors = {
     green:  'bg-green-50 text-green-700 border-green-200',
@@ -1911,9 +2576,9 @@ function showStatus(msg, color) {
     indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   };
   bar.className = `px-5 py-1.5 text-xs font-medium flex items-center gap-2 border-b ${colors[color]||colors.indigo}`;
-  bar.innerHTML = `<i class="fas fa-circle-info"></i> ${esc(msg)}`;
+  bar.innerHTML = `<i class="fas fa-circle-info"></i> ${innerHTML}`;
   bar.classList.remove('hidden');
-  if (color !== 'indigo') setTimeout(() => bar.classList.add('hidden'), 4000);
+  if (color !== 'indigo') setTimeout(() => bar.classList.add('hidden'), 6000);
 }
 
 function esc(s)  { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1943,6 +2608,65 @@ async function openPipelineModal() {
 }
 
 function closeOpenModal() { document.getElementById('open-modal').classList.add('hidden'); }
+
+// ─────────────────────────────────────────
+// VERSIONS DRAWER
+// ─────────────────────────────────────────
+async function openVersionsModal() {
+  const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
+  document.getElementById('ver-modal').classList.remove('hidden');
+  document.getElementById('ver-label').textContent = name + ' — every Save snapshots (deduped by SHA-256)';
+  document.getElementById('ver-list').innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Loading…</p>';
+  document.getElementById('ver-yaml').textContent = 'Select a version on the left to view its YAML.';
+  try {
+    const r = await fetch('/versions/' + encodeURIComponent(name));
+    if (!r.ok) {
+      document.getElementById('ver-list').innerHTML = `<p class="text-xs text-amber-500 text-center py-6">No versions yet. Save the pipeline first.</p>`;
+      return;
+    }
+    const versions = await r.json();
+    renderVersionList(name, versions);
+  } catch (e) {
+    document.getElementById('ver-list').innerHTML = `<p class="text-xs text-red-400 text-center py-6">Failed to load: ${esc(e.message)}</p>`;
+  }
+}
+
+function closeVersionsModal() { document.getElementById('ver-modal').classList.add('hidden'); }
+
+function renderVersionList(pipelineName, versions) {
+  const list = document.getElementById('ver-list');
+  if (!versions || !versions.length) {
+    list.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">No versions yet.</p>`;
+    return;
+  }
+  list.innerHTML = versions.map((v, i) => {
+    const ts = v.saved_at ? new Date(v.saved_at).toLocaleString() : '';
+    const isHead = i === 0;
+    const shortHash = (v.version_hash || '').substring(0, 8);
+    return `
+      <div onclick="loadVersion('${esc(pipelineName)}','${esc(v.version_id)}',this)"
+           class="px-3 py-2 rounded-lg hover:bg-indigo-50 cursor-pointer border border-transparent hover:border-indigo-200 transition-colors">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-700">${esc(ts || ('v' + v.version_id))}</span>
+          ${isHead ? '<span class="text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">HEAD</span>' : ''}
+        </div>
+        <p class="text-[10px] text-slate-400 mt-0.5">${esc(v.saved_by||'unknown')} · <code>${shortHash}</code></p>
+      </div>`;
+  }).join('');
+}
+
+async function loadVersion(pipelineName, versionId, el) {
+  document.querySelectorAll('#ver-list > div').forEach(d => d.classList.remove('bg-indigo-100'));
+  if (el) el.classList.add('bg-indigo-100');
+  try {
+    const r = await fetch(`/versions/${encodeURIComponent(pipelineName)}/${encodeURIComponent(versionId)}`);
+    if (!r.ok) throw new Error('Version not found');
+    const v = await r.json();
+    document.getElementById('ver-yaml').textContent = v.content || v.yaml_content || '(empty)';
+  } catch (e) {
+    document.getElementById('ver-yaml').textContent = 'Error: ' + e.message;
+  }
+}
 
 function filterOpenList(query) {
   const q = query.toLowerCase();
@@ -2011,6 +2735,14 @@ function importParsedConfig(cfg) {
   }
   renderVarsPanel();
   renderConnsPanel();
+
+  // Pipeline-level metadata (team, tags, sla, triggers)
+  meta.team     = cfg.team || '';
+  meta.tags     = Array.isArray(cfg.tags) ? cfg.tags.slice() : [];
+  meta.sla      = cfg.sla ? JSON.parse(JSON.stringify(cfg.sla)) : null;
+  meta.triggers = Array.isArray(cfg.triggers) ? cfg.triggers.map(t => ({...t})) : [];
+  renderMetaPanel();
+
   document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
   document.getElementById('config-panel').classList.remove('open');
 
@@ -2021,6 +2753,9 @@ function importParsedConfig(cfg) {
     const s = cfg.schedule;
     document.getElementById('schedBtn').textContent =
       `${s.minute||'0'} ${s.hour||'6'} ${s.day||'*'} ${s.month||'*'} ${s.day_of_week||'*'}`;
+  } else {
+    state.schedule = null;
+    document.getElementById('schedBtn').textContent = 'Schedule';
   }
 
   const rawTasks = cfg.tasks || [];
@@ -2035,6 +2770,13 @@ function importParsedConfig(cfg) {
       x: 0, y: 0,
       retries: rt.retries || 0,
       config:  buildImportedConfig(typeKey, rt.plugin, rt.config || {}),
+      lineage: rt.lineage ? {
+        reads_from: Array.isArray(rt.lineage.reads_from) ? rt.lineage.reads_from.slice() : [],
+        writes_to:  Array.isArray(rt.lineage.writes_to)  ? rt.lineage.writes_to.slice()  : [],
+      } : null,
+      quality: rt.quality && Array.isArray(rt.quality.checks) ? {
+        checks: rt.quality.checks.map(c => ({...c})),
+      } : null,
     });
   });
 
@@ -2064,7 +2806,6 @@ function guessTypeKey(plugin, config, taskType) {
     postgres:'sql', mysql:'sql', bigquery:'sql', snowflake:'sql',
     python:'python', shell:'shell', spark:'spark',
     api:'api', kafka:'kafka', file:'file', email:'email',
-    loop:'loop', condition:'condition', set_variable:'set_var', on_error:'on_error',
   };
   return map[plugin] || 'python';
 }
