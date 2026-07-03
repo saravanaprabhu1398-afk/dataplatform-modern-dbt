@@ -1,5 +1,56 @@
+import re
+import logging
 import duckdb
 from dataplatform.plugins.base import ExecutorPlugin
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_sql_lineage(sql: str) -> dict[str, list[str]]:
+    """Parse SQL text and return tables read from and written to.
+
+    Uses lightweight regex — no external SQL parser required.
+
+    Returns:
+        {"reads_from": [...], "writes_to": [...]}
+        All URIs are formatted as ``duckdb://local/{table_name}``.
+    """
+    _sql = re.sub(r'--[^\n]*', ' ', sql)          # strip line comments
+    _sql = re.sub(r'/\*.*?\*/', ' ', _sql, flags=re.DOTALL)  # strip block comments
+
+    writes: list[str] = []
+    reads: list[str] = []
+
+    # writes_to: INSERT INTO <table>, CREATE [OR REPLACE] TABLE <table> AS …
+    for m in re.finditer(
+        r'\bINSERT\s+INTO\s+([`"\[]?[\w.]+[`"\]]?)', _sql, re.IGNORECASE
+    ):
+        writes.append(m.group(1).strip('`"[]'))
+
+    for m in re.finditer(
+        r'\bCREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`"\[]?[\w.]+[`"\]]?)\s+AS\b',
+        _sql, re.IGNORECASE,
+    ):
+        writes.append(m.group(1).strip('`"[]'))
+
+    # reads_from: FROM <table> and JOIN <table>
+    for m in re.finditer(
+        r'\b(?:FROM|JOIN)\s+([`"\[]?[\w.]+[`"\]]?)(?:\s+(?:AS\s+)?\w+)?',
+        _sql, re.IGNORECASE,
+    ):
+        reads.append(m.group(1).strip('`"[]'))
+
+    def _to_uri(name: str) -> str:
+        return f"duckdb://local/{name}"
+
+    # Deduplicate while preserving order; exclude write targets from reads
+    write_set = list(dict.fromkeys(writes))
+    read_set = [t for t in list(dict.fromkeys(reads)) if t not in write_set]
+
+    return {
+        "reads_from": [_to_uri(t) for t in read_set],
+        "writes_to":  [_to_uri(t) for t in write_set],
+    }
 
 
 class DuckdbExecutor(ExecutorPlugin):
@@ -63,6 +114,37 @@ class DuckdbExecutor(ExecutorPlugin):
         finally:
             conn.close()
 
+    def _record_sql_lineage(self, sql: str, config: dict) -> None:
+        """Extract table-level lineage from *sql* and persist it (best-effort).
+
+        Context is read from *config* keys injected by the executor
+        (``task_name``) or falls back to empty strings so the caller is
+        never blocked by missing metadata.
+        """
+        try:
+            lineage = _extract_sql_lineage(sql)
+            if not lineage["reads_from"] and not lineage["writes_to"]:
+                return
+
+            from dataplatform.core.database import init_db, save_lineage_record
+            init_db()
+
+            task_name = config.get("task_name", "duckdb_task")
+            run_id = config.get("_run_id", "")
+            pipeline_name = config.get("_pipeline_name", "")
+
+            for uri in lineage["reads_from"]:
+                save_lineage_record(run_id, pipeline_name, task_name, "reads_from", uri)
+            for uri in lineage["writes_to"]:
+                save_lineage_record(run_id, pipeline_name, task_name, "writes_to", uri)
+
+            logger.debug(
+                "Auto-lineage recorded for task '%s': %d reads, %d writes",
+                task_name, len(lineage["reads_from"]), len(lineage["writes_to"]),
+            )
+        except Exception as exc:
+            logger.warning("Auto-lineage extraction failed (non-fatal): %s", exc)
+
     def _execute_load(self, conn, config: dict) -> tuple[bool, None]:
         """
         Default operation: Load and display data summary.
@@ -99,7 +181,7 @@ class DuckdbExecutor(ExecutorPlugin):
     def _execute_query(self, conn, config: dict) -> tuple[bool, list]:
         """
         Execute arbitrary SQL query.
-        
+
         Config format:
         {
             "sql": "SELECT * FROM data WHERE amount > 100",
@@ -108,7 +190,7 @@ class DuckdbExecutor(ExecutorPlugin):
         """
         sql = config.get("sql")
         return_data = config.get("return_data", False)
-        
+
         if not sql:
             print("❌ Error: 'sql' field required for query operation")
             return False, None
@@ -119,14 +201,17 @@ class DuckdbExecutor(ExecutorPlugin):
         try:
             result = conn.execute(sql).fetchall()
             print(f"✓ Query returned {len(result)} rows")
-            
+
             # Show results
             if result:
                 for row in result[:5]:
                     print(f"  {row}")
                 if len(result) > 5:
                     print(f"  ... and {len(result) - 5} more rows")
-            
+
+            # Auto-record lineage extracted from the SQL (best-effort, never fails the task)
+            self._record_sql_lineage(sql, config)
+
             if return_data:
                 return True, result
             else:

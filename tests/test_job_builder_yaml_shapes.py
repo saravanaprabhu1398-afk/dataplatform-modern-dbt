@@ -284,8 +284,9 @@ tasks:
     builder = DAGBuilder(cfg.tasks)
     builder.build()
     waves = builder.get_execution_waves()
-    # waves is [['task_1'], ['task_2']] because depends_on uses ids
-    assert waves == [["task_1"], ["task_2"]]
+    # DAG keys by task.name; depends_on ids are resolved via alias map.
+    # sql_1 (id=task_1) has no deps; py_1 (id=task_2) depends on task_1.
+    assert waves == [["sql_1"], ["py_1"]]
 
 
 # ---------------------------------------------------------------------------

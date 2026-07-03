@@ -1,17 +1,16 @@
 import logging
-import json
+import os
 import uuid
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
 from typing import Dict, Any, Optional
-from pathlib import Path
 from dataplatform.core.config import load_config
 from dataplatform.core.dag import DAGBuilder
 from dataplatform.core.executor import PipelineExecutor
 from dataplatform.core.logging_config import log_pipeline_start, log_pipeline_success, log_pipeline_failure
-from dataplatform.core.database import save_run_status
+from dataplatform.core.database import save_run_status, save_schedule, list_schedules, delete_schedule
 from dataplatform.core.alerts import check_sla_and_alert
 import time
 
@@ -22,7 +21,6 @@ class PipelineScheduler:
     """Scheduler for running pipelines based on cron schedules."""
 
     def __init__(self):
-        self.state_file = Path(__file__).parent.parent.parent / "data" / "scheduler_state.json"
         self.scheduler = BackgroundScheduler(
             jobstores={
                 'default': MemoryJobStore()
@@ -39,35 +37,32 @@ class PipelineScheduler:
         self.scheduled_pipelines = {}
 
     def _persist_schedules(self) -> None:
-        self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        persisted = {
-            name: {
-                "config_path": info["config_path"],
-                "schedule": info["schedule"],
-            }
-            for name, info in self.scheduled_pipelines.items()
-        }
-        self.state_file.write_text(json.dumps(persisted, indent=2), encoding="utf-8")
+        """Write all active schedules to the DB (upserts each pipeline)."""
+        for name, info in self.scheduled_pipelines.items():
+            try:
+                save_schedule(name, info["config_path"], info["schedule"])
+            except Exception as exc:
+                logger.warning("Failed to persist schedule for '%s': %s", name, exc)
 
     def _restore_schedules(self) -> None:
-        if not self.state_file.exists():
+        """Reload schedules from the DB on startup."""
+        try:
+            rows = list_schedules()
+        except Exception as exc:
+            logger.error("Failed to load persisted schedules from DB: %s", exc)
             return
 
-        try:
-            restored = json.loads(self.state_file.read_text(encoding="utf-8"))
-            if not isinstance(restored, dict):
-                logger.warning("Ignoring invalid scheduler state file format")
-                return
-
-            for pipeline_name, payload in restored.items():
-                config_path = payload.get("config_path")
-                schedule = payload.get("schedule")
-                if not config_path or not isinstance(schedule, dict):
-                    logger.warning(f"Skipping invalid scheduler state entry for {pipeline_name}")
-                    continue
+        for row in rows:
+            pipeline_name = row["pipeline_name"]
+            config_path = row.get("config_path")
+            schedule = row.get("schedule")
+            if not config_path or not isinstance(schedule, dict):
+                logger.warning("Skipping invalid schedule record for '%s'", pipeline_name)
+                continue
+            try:
                 self.schedule_pipeline(config_path, custom_schedule=schedule)
-        except Exception as e:
-            logger.error(f"Failed to restore persisted schedules: {e}")
+            except Exception as exc:
+                logger.warning("Failed to restore schedule for '%s': %s", pipeline_name, exc)
 
     def schedule_pipeline(self, config_path: str, custom_schedule: dict = None) -> bool:
         """Schedule a pipeline based on its cron configuration or custom schedule."""
@@ -121,7 +116,7 @@ class PipelineScheduler:
             try:
                 self.scheduled_pipelines[pipeline_name]['job'].remove()
                 del self.scheduled_pipelines[pipeline_name]
-                self._persist_schedules()
+                delete_schedule(pipeline_name)
                 logger.info(f"Unscheduled pipeline {pipeline_name}")
                 return True
             except Exception as e:

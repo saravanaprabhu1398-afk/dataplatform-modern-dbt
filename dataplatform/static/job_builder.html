@@ -402,6 +402,11 @@ select.finput{appearance:auto;}
     </div>
     <div class="p-6 overflow-auto flex-1">
       <pre class="yaml-code" id="yaml-output"></pre>
+      <div id="credential-warning" style="display:none"
+           class="mt-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-xs leading-relaxed">
+        <strong>Warning:</strong> Your YAML contains sensitive values (passwords, tokens, keys).
+        Use environment variable references like <code class="bg-amber-100 px-1 rounded">${MY_SECRET}</code> instead of hardcoded values.
+      </div>
     </div>
   </div>
 </div>
@@ -1580,6 +1585,10 @@ function buildConfigFields(task) {
     }
 
     case 'python': return `
+      <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 mb-2 text-xs text-amber-800 flex gap-2">
+        <i class="fas fa-triangle-exclamation mt-0.5 shrink-0"></i>
+        <span><strong>Security:</strong> Python code runs unsandboxed in the server process with full OS privileges. Only admin/editor users can save pipelines, but treat inline code as trusted operator input — not end-user input.</span>
+      </div>
       <div class="frow">
         <label class="flabel">Mode</label>
         <select class="finput" onchange="updateCfg('${id}','mode',this.value);renderConfigPanel(getTask('${id}'))">
@@ -2302,12 +2311,19 @@ function buildConfigYAML(task) {
 // ─────────────────────────────────────────
 // YAML MODAL
 // ─────────────────────────────────────────
+function _checkCredentialWarning() {
+  const yaml = document.getElementById('yaml-output').textContent;
+  const sensitive = /(password|token|secret|api_key|private_key|credentials)\s*:/i.test(yaml);
+  document.getElementById('credential-warning').style.display = sensitive ? '' : 'none';
+}
+
 function showYAML() {
   const yaml = generateYAML();
   const name = document.getElementById('pipelineName').value || 'my_pipeline';
   document.getElementById('yaml-pipeline-label').textContent = name + '.yaml · ' + state.tasks.length + ' task(s)';
   document.getElementById('yaml-output').textContent = yaml;
   document.getElementById('yaml-modal').classList.remove('hidden');
+  _checkCredentialWarning();
 }
 function closeYAML() { document.getElementById('yaml-modal').classList.add('hidden'); }
 function copyYAML()  { navigator.clipboard.writeText(generateYAML()).then(() => showStatus('YAML copied to clipboard', 'green')); }
@@ -2853,6 +2869,14 @@ function autoLayout() {
     });
   });
 }
+
+// Re-run credential check whenever any input changes and the YAML modal is open
+document.addEventListener('input', function() {
+  if (!document.getElementById('yaml-modal').classList.contains('hidden')) {
+    document.getElementById('yaml-output').textContent = generateYAML();
+    _checkCredentialWarning();
+  }
+});
 </script>
 </body>
 </html>

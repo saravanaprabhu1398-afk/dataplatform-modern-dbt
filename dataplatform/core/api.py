@@ -1,11 +1,18 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
+import asyncio
 import uvicorn
 import logging
 import os
@@ -28,8 +35,15 @@ from dataplatform.core.database import (
     save_run_status,
     get_latest_run,
     get_run_history,
+    get_run_by_id,
     get_all_pipeline_names,
     get_sla_violations,
+    append_audit_event,
+    get_audit_log,
+    enqueue_run,
+    set_run_status_in_queue,
+    get_queue_runs,
+    recover_orphaned_runs,
 )
 from dataplatform.core.lineage import build_lineage_graph, get_asset_lineage
 from dataplatform.core.metrics import generate_prometheus_text, _CONTENT_TYPE as _METRICS_CONTENT_TYPE
@@ -41,6 +55,17 @@ from dataplatform.core.semantic_metrics import list_metrics as list_metric_defin
 from dataplatform.core.costs import record_run_cost, get_cost_summary, get_team_cost_summary, get_pipeline_cost_history
 from dataplatform.core.catalog import search_assets, get_asset_detail, get_pipeline_catalog
 from dataplatform.core.templates import list_templates, get_template_content, use_template
+from dataplatform.core.git_integration import (
+    register_remote,
+    list_remotes,
+    get_remote,
+    delete_remote,
+    test_connection as git_test_connection,
+    push_pipeline as git_push_pipeline,
+    pull_pipelines as git_pull_pipelines,
+    get_status as git_get_status,
+    get_push_log as git_get_push_log,
+)
 from dataplatform.core.database import (
     save_trigger as db_save_trigger,
     get_triggers as db_get_triggers,
@@ -48,6 +73,7 @@ from dataplatform.core.database import (
     delete_trigger as db_delete_trigger,
     update_trigger_last_fired,
 )
+from dataplatform.core.worker import get_worker_pool
 from dataplatform.core.auth import (
     verify_user,
     create_user,
@@ -76,6 +102,9 @@ app = FastAPI(title="Data Platform API", version="0.2.0")
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    recovered = recover_orphaned_runs()
+    if recovered:
+        logger.warning("Startup: marked %d orphaned run(s) as failed", recovered)
     scheduler = get_scheduler()
     scheduler.start()
     restore_triggers_from_db(get_trigger_manager())
@@ -202,6 +231,12 @@ def _require_permission(request: Request, action: str) -> Dict[str, Any]:
     return user
 
 
+def _get_request_username(request: Request) -> Optional[str]:
+    """Extract the authenticated username from the session cookie, or None."""
+    user = _get_current_user(request)
+    return user.get("username") if user else None
+
+
 # ---------------------------------------------------------------------------
 # Auth middleware
 # ---------------------------------------------------------------------------
@@ -251,6 +286,7 @@ def update_pipeline_status(
 
 class PipelineRunRequest(BaseModel):
     config_path: str
+    dry_run: bool = False
 
 
 class PipelineScheduleRequest(BaseModel):
@@ -413,9 +449,18 @@ async def login_page(request: Request):
 
 @app.post("/login")
 async def login(request: LoginRequest):
-    user = verify_user(request.username, request.password)
+    username = request.username
+    user = verify_user(username, request.password)
     if user is None:
+        try:
+            append_audit_event("auth", "login_failed", actor=username)
+        except Exception as _ae:
+            logger.warning("Audit log failed (login_failed): %s", _ae)
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    try:
+        append_audit_event("auth", "login_success", actor=username)
+    except Exception as _ae:
+        logger.warning("Audit log failed (login_success): %s", _ae)
     response = JSONResponse({"message": "Login successful", "role": user["role"]})
     _set_session_cookie(response, user["username"], user["role"], user.get("team"))
     return response
@@ -626,8 +671,59 @@ async def validate_pipeline(request_body: PipelineValidationRequest, request: Re
 # Pipeline execution (editor+)
 # ---------------------------------------------------------------------------
 
+@app.post("/run/dry-run")
+async def dry_run_pipeline(request_body: PipelineRunRequest, request: Request):
+    """Validate config and preview execution without running any tasks."""
+    _require_permission(request, "run")
+    try:
+        config = load_config(request_body.config_path)
+        dag_builder = DAGBuilder(config.tasks)
+        dag_builder.build()
+        execution_waves = dag_builder.get_execution_waves()
+        execution_order = [t for wave in execution_waves for t in wave]
+
+        task_executor = TaskExecutor()
+        task_previews = []
+        plugin_errors = []
+
+        for task in config.tasks:
+            preview = {
+                "name": task.name,
+                "plugin": task.plugin,
+                "type": task.type,
+                "depends_on": task.depends_on or [],
+                "timeout": task.timeout,
+                "retries": task.retries,
+                "status": "would_run",
+                "plugin_loadable": False,
+                "error": None,
+            }
+            try:
+                task_executor.load_plugin(task.plugin, task.type)
+                preview["plugin_loadable"] = True
+            except Exception as e:
+                preview["status"] = "plugin_error"
+                preview["error"] = str(e)
+                plugin_errors.append({"task": task.name, "error": str(e)})
+            task_previews.append(preview)
+
+        return {
+            "pipeline_name": config.pipeline_name,
+            "dry_run": True,
+            "valid": len(plugin_errors) == 0,
+            "task_count": len(config.tasks),
+            "execution_order": execution_order,
+            "execution_waves": execution_waves,
+            "tasks": task_previews,
+            "plugin_errors": plugin_errors,
+        }
+    except Exception as e:
+        logger.error(f"Dry-run failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/run", response_model=PipelineResponse)
-async def run_pipeline(request_body: PipelineRunRequest, background_tasks: BackgroundTasks, request: Request):
+async def run_pipeline(request_body: PipelineRunRequest, request: Request):
     _require_permission(request, "run")
     try:
         config = load_config(request_body.config_path)
@@ -636,19 +732,34 @@ async def run_pipeline(request_body: PipelineRunRequest, background_tasks: Backg
         execution_order = dag_builder.get_execution_order()
 
         run_id = str(_uuid.uuid4())
+        actor = _get_request_username(request)
+
+        # Write to both run history (legacy) and persistent queue
         update_pipeline_status(
             config.pipeline_name,
-            "started",
-            "Pipeline execution started",
+            "queued",
+            "Pipeline queued for execution",
             {"execution_order": execution_order},
             run_id=run_id,
         )
-        background_tasks.add_task(execute_pipeline_background, config, execution_order, run_id)
+        enqueue_run(run_id, config.pipeline_name, request_body.config_path, actor=actor)
+
+        try:
+            append_audit_event(
+                "pipeline", "run_queued",
+                actor=actor,
+                resource=config.pipeline_name,
+                details={"run_id": run_id},
+            )
+        except Exception as _ae:
+            logger.warning("Audit log failed (run_queued): %s", _ae)
+
+        get_worker_pool().submit(run_id, execute_pipeline_background, config, run_id)
 
         return PipelineResponse(
             pipeline_name=config.pipeline_name,
-            status="started",
-            message="Pipeline execution started",
+            status="queued",
+            message="Pipeline queued for execution",
             execution_order=execution_order,
         )
     except Exception as e:
@@ -662,6 +773,18 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
         _require_permission(request, "run")
     try:
         config = load_config(request_body.config_path)
+        if request_body.dry_run:
+            # Redirect to the dry-run handler — just preview, don't execute
+            dag_builder = DAGBuilder(config.tasks)
+            dag_builder.build()
+            execution_waves = dag_builder.get_execution_waves()
+            execution_order = [t for wave in execution_waves for t in wave]
+            return PipelineResponse(
+                pipeline_name=config.pipeline_name,
+                status="dry_run",
+                message="Dry run completed — no tasks were executed",
+                execution_order=execution_order,
+            )
         dag_builder = DAGBuilder(config.tasks)
         dag_builder.build()
         execution_waves = dag_builder.get_execution_waves()
@@ -671,7 +794,7 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
         t0 = time.time()
         executor = PipelineExecutor()
         success, task_results, errors = executor.execute_pipeline_parallel(
-            tasks={(task.id or task.name): task for task in config.tasks},
+            tasks={task.name: task for task in config.tasks},
             execution_waves=execution_waves,
             config={"file_path": config.file_path},
             pipeline_name=config.pipeline_name,
@@ -714,6 +837,65 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
         )
     except Exception as e:
         logger.error(f"Pipeline execution failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Run lifecycle — cancel / status by run_id (editor+ / viewer+)
+# ---------------------------------------------------------------------------
+
+@app.post("/run/{run_id}/cancel")
+async def cancel_run(run_id: str, request: Request):
+    """Cancel a queued (not yet started) pipeline run."""
+    _require_permission(request, "run")
+    existing = get_run_by_id(run_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"No run found with id '{run_id}'")
+    if not get_worker_pool().cancel(run_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Run cannot be cancelled — it is already running or has completed",
+        )
+    save_run_status(existing["pipeline_name"], run_id, "cancelled", "Cancelled by user")
+    set_run_status_in_queue(run_id, "cancelled")
+    return {"run_id": run_id, "status": "cancelled"}
+
+
+@app.get("/run/{run_id}/status")
+async def get_run_status_by_id(run_id: str, request: Request):
+    """Return the latest status record for a specific run_id."""
+    _require_permission(request, "read")
+    record = get_run_by_id(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"No run found with id '{run_id}'")
+    pool = get_worker_pool()
+    record["is_running"] = pool.is_running(run_id)
+    record["is_pending"] = pool.is_pending(run_id)
+    return record
+
+
+@app.get("/queue")
+async def get_run_queue(
+    status: Optional[str] = None,
+    limit: int = 50,
+    request: Request = None,
+):
+    """Return the persistent pipeline run queue.
+
+    ?status=queued|running|completed|failed|cancelled filters by state.
+    Useful for monitoring what is running or waiting.
+    """
+    if request is not None:
+        _require_permission(request, "read")
+    try:
+        runs = get_queue_runs(status=status, limit=limit)
+        pool = get_worker_pool()
+        for r in runs:
+            r["in_memory_running"] = pool.is_running(r["run_id"])
+            r["in_memory_pending"] = pool.is_pending(r["run_id"])
+        return {"runs": runs, "total": len(runs)}
+    except Exception as e:
+        logger.error("Failed to get queue: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -932,6 +1114,10 @@ async def create_user_endpoint(request_body: UserCreateRequest, request: Request
         raise HTTPException(status_code=400, detail=str(exc))
     if not ok:
         raise HTTPException(status_code=409, detail=f"User '{request_body.username}' already exists")
+    try:
+        append_audit_event("user_mgmt", "user_created", actor=_get_request_username(request), resource=request_body.username, details={"role": request_body.role})
+    except Exception as _ae:
+        logger.warning("Audit log failed (user_created): %s", _ae)
     return {"message": f"User '{request_body.username}' created with role '{request_body.role}'"}
 
 
@@ -944,6 +1130,10 @@ async def update_role_endpoint(username: str, request_body: UserRoleUpdateReques
         raise HTTPException(status_code=400, detail=str(exc))
     if not ok:
         raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+    try:
+        append_audit_event("user_mgmt", "role_changed", actor=_get_request_username(request), resource=username, details={"new_role": request_body.role})
+    except Exception as _ae:
+        logger.warning("Audit log failed (role_changed): %s", _ae)
     return {"message": f"User '{username}' role updated to '{request_body.role}'"}
 
 
@@ -956,7 +1146,28 @@ async def delete_user_endpoint(username: str, request: Request):
         raise HTTPException(status_code=400, detail=str(exc))
     if not ok:
         raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+    try:
+        append_audit_event("user_mgmt", "user_deleted", actor=_get_request_username(request), resource=username)
+    except Exception as _ae:
+        logger.warning("Audit log failed (user_deleted): %s", _ae)
     return {"message": f"User '{username}' deleted"}
+
+
+@app.get("/audit-log")
+async def get_audit_log_endpoint(
+    request: Request,
+    limit: int = 100,
+    actor: Optional[str] = None,
+    resource: Optional[str] = None,
+    event_type: Optional[str] = None,
+):
+    """Return recent audit log entries, newest first. Admin only."""
+    _require_permission(request, "*")
+    try:
+        return {"events": get_audit_log(limit=limit, actor=actor, resource=resource, event_type=event_type)}
+    except Exception as e:
+        logger.error("Failed to fetch audit log: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/me")
@@ -969,29 +1180,107 @@ async def get_current_user(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Error handler dispatch (P0.2)
+# ---------------------------------------------------------------------------
+
+def _dispatch_error_handlers(
+    config: PipelineConfig,
+    run_id: str,
+    error_message: str,
+    errors: Optional[Dict] = None,
+) -> None:
+    """Fire configured error_handlers on pipeline failure."""
+    if not config.error_handlers:
+        return
+
+    from dataplatform.core.alerts import send_webhook, send_email
+
+    for handler in config.error_handlers:
+        h_type = handler.get("type", "")
+        on = handler.get("on", "failure")
+        # 'on' can be "failure", "always", or a list of event names
+        triggers = [on] if isinstance(on, str) else on
+        if "failure" not in triggers and "always" not in triggers:
+            continue
+
+        subject = f"[DataPlatform] Pipeline failed: {config.pipeline_name}"
+        body = (
+            f"Pipeline '{config.pipeline_name}' failed.\n\n"
+            f"Run ID : {run_id}\n"
+            f"Error  : {error_message}\n"
+        )
+        if errors:
+            body += f"\nTask errors:\n" + "\n".join(
+                f"  {k}: {v}" for k, v in errors.items()
+            )
+
+        payload = {
+            "alert": "pipeline_failure",
+            "pipeline": config.pipeline_name,
+            "run_id": run_id,
+            "error": error_message,
+            "task_errors": errors or {},
+        }
+
+        try:
+            if h_type == "webhook" and handler.get("webhook_url"):
+                send_webhook(handler["webhook_url"], payload)
+            elif h_type == "email" and handler.get("email"):
+                send_email(handler["email"], subject, body)
+            else:
+                logger.warning(
+                    "error_handler type '%s' is unknown or missing url/email — skipping", h_type
+                )
+        except Exception as exc:
+            logger.error("error_handler dispatch failed (type=%s): %s", h_type, exc)
+
+
+# ---------------------------------------------------------------------------
 # Background execution helper
 # ---------------------------------------------------------------------------
 
-async def execute_pipeline_background(
-    config: PipelineConfig, execution_order: List[str], run_id: str
-):
+def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
+    """Run a pipeline synchronously inside a worker thread."""
+    # ------------------------------------------------------------------
+    # Per-run log file setup
+    # ------------------------------------------------------------------
+    _run_log_dir = Path("logs/runs")
+    _run_log_dir.mkdir(parents=True, exist_ok=True)
+    _run_log_path = _run_log_dir / f"{run_id}.log"
+
+    _run_handler = logging.FileHandler(str(_run_log_path), encoding="utf-8")
+    _run_handler.setLevel(logging.DEBUG)
+    _run_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s - %(message)s")
+    )
+
+    _watched_loggers = [
+        logging.getLogger("dataplatform"),
+        logging.getLogger("dataplatform.core"),
+        logging.getLogger("dataplatform.plugins"),
+    ]
+    for _lg in _watched_loggers:
+        _lg.addHandler(_run_handler)
+
+    dag_builder = DAGBuilder(config.tasks)
+    dag_builder.build()
+    execution_waves = dag_builder.get_execution_waves()
+    execution_order = [t for wave in execution_waves for t in wave]
+
     try:
+        set_run_status_in_queue(run_id, "running")
         update_pipeline_status(
             config.pipeline_name,
             "running",
-            "Pipeline is running in background",
+            "Pipeline is running",
             {"execution_order": execution_order},
             run_id=run_id,
         )
 
-        dag_builder = DAGBuilder(config.tasks)
-        dag_builder.build()
-        execution_waves = dag_builder.get_execution_waves()
-
         t0 = time.time()
         executor = PipelineExecutor()
         success, results, errors = executor.execute_pipeline_parallel(
-            tasks={(task.id or task.name): task for task in config.tasks},
+            tasks={task.name: task for task in config.tasks},
             execution_waves=execution_waves,
             config={"file_path": config.file_path},
             pipeline_name=config.pipeline_name,
@@ -1003,7 +1292,6 @@ async def execute_pipeline_background(
         if config.sla:
             sla_violated = check_sla_and_alert(config.pipeline_name, run_id, duration, config.sla)
 
-        # Cost attribution
         try:
             record_run_cost(run_id, config.pipeline_name, getattr(config, "team", None),
                             len(config.tasks), duration)
@@ -1011,27 +1299,109 @@ async def execute_pipeline_background(
             logger.warning("Cost recording skipped: %s", _cost_exc)
 
         status = "completed" if success else "failed"
+        set_run_status_in_queue(
+            run_id, status,
+            error="; ".join(f"{k}: {v}" for k, v in errors.items()) if errors and not success else None,
+        )
         update_pipeline_status(
             config.pipeline_name,
             status,
-            f"Background pipeline {status}",
+            f"Pipeline {status}",
             {"execution_order": execution_order, "success": success, "results": results,
              "errors": errors, "duration_seconds": round(duration, 2), "sla_violated": sla_violated},
             run_id=run_id,
         )
+        if not success:
+            error_msg = "; ".join(f"{k}: {v}" for k, v in errors.items()) if errors else "Pipeline failed"
+            _dispatch_error_handlers(config, run_id, error_msg, errors)
         if success:
             get_trigger_manager().notify_pipeline_completed(config.pipeline_name, run_id)
-        logger.info(f"Background pipeline {config.pipeline_name} {status}")
+        logger.info("Pipeline %s %s (run_id=%s)", config.pipeline_name, status, run_id)
 
     except Exception as e:
+        set_run_status_in_queue(run_id, "failed", error=str(e))
         update_pipeline_status(
             config.pipeline_name,
             "failed",
-            f"Background pipeline failed: {e}",
+            f"Pipeline failed: {e}",
             {"execution_order": execution_order},
             run_id=run_id,
         )
-        logger.error(f"Background pipeline execution failed: {e}", exc_info=True)
+        _dispatch_error_handlers(config, run_id, str(e))
+        logger.error("Pipeline %s failed (run_id=%s): %s", config.pipeline_name, run_id, e, exc_info=True)
+
+    finally:
+        # Remove and close the per-run log handler
+        for _lg in _watched_loggers:
+            _lg.removeHandler(_run_handler)
+        _run_handler.flush()
+        _run_handler.close()
+
+
+# ---------------------------------------------------------------------------
+# Observability — SSE log streaming
+# ---------------------------------------------------------------------------
+
+async def _generate_run_log_sse(run_id: str):
+    """Async generator that yields SSE frames for a pipeline run's log file."""
+    log_path = Path("logs/runs") / f"{run_id}.log"
+
+    position = 0
+    no_new_content_ticks = 0  # each tick = 0.5 s; 4 ticks = 2 s
+
+    while True:
+        # Read any new lines written since last check
+        try:
+            with open(str(log_path), "r", encoding="utf-8", errors="replace") as fh:
+                fh.seek(position)
+                chunk = fh.read()
+                position = fh.tell()
+        except OSError:
+            break
+
+        if chunk:
+            no_new_content_ticks = 0
+            for line in chunk.splitlines():
+                line = line.strip()
+                if line:
+                    yield f"data: {line}\n\n"
+        else:
+            no_new_content_ticks += 1
+
+        # Check termination: run finished AND 2 s of silence
+        run_record = get_run_by_id(run_id)
+        terminal_statuses = {"completed", "failed", "cancelled"}
+        if run_record and run_record.get("status") in terminal_statuses:
+            if no_new_content_ticks >= 4:
+                break
+
+        await asyncio.sleep(0.5)
+
+    yield "data: [STREAM_END]\n\n"
+
+
+@app.get("/run/{run_id}/logs/stream")
+async def stream_run_logs(run_id: str, request: Request):
+    """Stream log lines for a pipeline run as Server-Sent Events (SSE).
+
+    The client should consume this as an EventSource or fetch with streaming.
+    The stream closes automatically once the run reaches a terminal state and
+    all buffered output has been flushed.
+    """
+    _require_permission(request, "read")
+
+    log_path = Path("logs/runs") / f"{run_id}.log"
+    if not log_path.exists():
+        raise HTTPException(status_code=404, detail=f"No log file found for run '{run_id}'")
+
+    return StreamingResponse(
+        _generate_run_log_sse(run_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1555,6 +1925,137 @@ async def use_template_endpoint(template_id: str, request_body: UseTemplateReque
     except Exception as exc:
         logger.error("Template use failed for '%s': %s", template_id, exc)
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Git integration — page
+# ---------------------------------------------------------------------------
+
+@app.get("/git-integration")
+async def git_integration_page(request: Request):
+    page = Path(__file__).resolve().parent.parent / "static" / "git_integration.html"
+    if page.exists():
+        return FileResponse(str(page), media_type="text/html")
+    raise HTTPException(status_code=404, detail="Git Integration page not found")
+
+
+# ---------------------------------------------------------------------------
+# Git integration — API
+# ---------------------------------------------------------------------------
+
+class GitRemoteCreate(BaseModel):
+    name: str
+    remote_url: str
+    auth_type: str = "token"
+    token: Optional[str] = None
+    branch: str = "main"
+    pipelines_path: str = "pipelines"
+
+
+class GitPushRequest(BaseModel):
+    pipeline_name: str
+    commit_message: Optional[str] = None
+
+
+@app.post("/git/remotes", status_code=201)
+async def create_git_remote(body: GitRemoteCreate, request: Request):
+    """Register a new Git remote. Requires editor+ role."""
+    user = _require_permission(request, "save")
+    try:
+        remote_id = register_remote(
+            name=body.name,
+            remote_url=body.remote_url,
+            auth_type=body.auth_type,
+            token=body.token,
+            branch=body.branch,
+            pipelines_path=body.pipelines_path,
+            created_by=user.get("username"),
+        )
+        return {"remote_id": remote_id, "name": body.name, "message": f"Remote '{body.name}' registered"}
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        logger.error("Create git remote failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/git/remotes")
+async def list_git_remotes_endpoint(request: Request):
+    """List all registered Git remotes (tokens masked). Requires viewer+ role."""
+    _require_permission(request, "read")
+    try:
+        return {"remotes": list_remotes()}
+    except Exception as exc:
+        logger.error("List git remotes failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/git/remotes/{remote_id}")
+async def delete_git_remote_endpoint(remote_id: str, request: Request):
+    """Delete a Git remote and its local clone. Requires admin role."""
+    _require_permission(request, "*")
+    if not delete_remote(remote_id):
+        raise HTTPException(status_code=404, detail="Remote not found")
+    return {"message": "Remote deleted"}
+
+
+@app.post("/git/remotes/{remote_id}/test")
+async def test_git_remote(remote_id: str, request: Request):
+    """Test connectivity to a Git remote."""
+    _require_permission(request, "read")
+    result = git_test_connection(remote_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result.get("error", "Connection failed"))
+    return result
+
+
+@app.post("/git/remotes/{remote_id}/push")
+async def push_pipeline_to_git(remote_id: str, body: GitPushRequest, request: Request):
+    """Push a pipeline YAML to the configured Git remote. Requires editor+ role."""
+    user = _require_permission(request, "save")
+    pipelines_dir = Path("pipelines")
+    yaml_file = pipelines_dir / f"{body.pipeline_name}.yaml"
+    if not yaml_file.exists():
+        raise HTTPException(status_code=404, detail=f"Pipeline '{body.pipeline_name}' not found")
+    yaml_content = yaml_file.read_text(encoding="utf-8")
+    result = git_push_pipeline(
+        remote_id=remote_id,
+        pipeline_name=body.pipeline_name,
+        yaml_content=yaml_content,
+        commit_message=body.commit_message,
+        pushed_by=user.get("username"),
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Push failed"))
+    return result
+
+
+@app.post("/git/remotes/{remote_id}/pull")
+async def pull_pipelines_from_git(remote_id: str, request: Request):
+    """Pull all pipeline YAMLs from the Git remote into local pipelines/. Requires editor+ role."""
+    user = _require_permission(request, "save")
+    result = git_pull_pipelines(remote_id=remote_id, pulled_by=user.get("username"))
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Pull failed"))
+    return result
+
+
+@app.get("/git/remotes/{remote_id}/status")
+async def git_remote_status(remote_id: str, request: Request):
+    """Compare local pipelines/ with the remote repo. Requires viewer+ role."""
+    _require_permission(request, "read")
+    result = git_get_status(remote_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Status check failed"))
+    return result
+
+
+@app.get("/git/remotes/{remote_id}/log")
+async def git_push_log_endpoint(remote_id: str, limit: int = 30, request: Request = None):
+    """Return the push history for a remote."""
+    if request:
+        _require_permission(request, "read")
+    return {"log": git_get_push_log(remote_id, limit=limit)}
 
 
 # ---------------------------------------------------------------------------

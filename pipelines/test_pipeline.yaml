@@ -1,0 +1,54 @@
+pipeline_name: local_demo_pipeline
+description: "Fully local end-to-end demo pipeline using bundled Python scripts and generated files"
+
+tasks:
+  - name: generate_demo_orders
+    type: executor
+    plugin: python
+    operation: run_script
+    config:
+      script_path: demo/scripts/generate_orders.py
+      parameters:
+        output: demo/data/raw_orders.csv
+    retries: 1
+
+  - name: transform_demo_orders
+    type: executor
+    plugin: python
+    operation: run_script
+    config:
+      script_path: demo/scripts/transform_orders.py
+      parameters:
+        input: demo/data/raw_orders.csv
+        output: demo/data/curated_orders.csv
+    depends_on:
+      - generate_demo_orders
+    retries: 1
+
+  - name: build_demo_report
+    type: executor
+    plugin: python
+    operation: run_script
+    config:
+      script_path: demo/scripts/build_report.py
+      parameters:
+        input: demo/data/curated_orders.csv
+        json-output: demo/output/summary.json
+        markdown-output: demo/output/report.md
+    depends_on:
+      - transform_demo_orders
+    retries: 1
+
+  - name: validate_demo_outputs
+    type: executor
+    plugin: python
+    operation: run_script
+    config:
+      script_path: demo/scripts/validate_outputs.py
+      parameters:
+        curated-input: demo/data/curated_orders.csv
+        summary-input: demo/output/summary.json
+        markdown-input: demo/output/report.md
+    depends_on:
+      - build_demo_report
+    retries: 0

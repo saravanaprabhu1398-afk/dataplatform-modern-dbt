@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import List, Literal, Optional, Dict, Any, Union
 from pathlib import Path
+import networkx as _nx
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +95,7 @@ class Task(BaseModel):
     operation: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     retries: int = Field(default=0, ge=0)
-    timeout: Optional[int] = None     # per-task timeout in seconds (informational for now)
+    timeout: Optional[int] = None     # per-task timeout in seconds; enforced by executor
     depends_on: Optional[List[str]] = None
 
     # Phase 2 — observability
@@ -213,6 +214,23 @@ class PipelineConfig(BaseModel):
                     )
                 if canonical in task.depends_on:
                     raise ValueError(f"task '{task.name}' cannot depend on itself")
+
+        # Detect multi-step cycles (A→B→A) using a temporary NetworkX graph.
+        g = _nx.DiGraph()
+        for task in self.tasks:
+            key = task.id or task.name
+            g.add_node(key)
+            for dep in (task.depends_on or []):
+                g.add_edge(dep, key)
+
+        try:
+            cycle_edges = _nx.find_cycle(g)
+            cycle_nodes = [e[0] for e in cycle_edges]
+            cycle_desc = " → ".join(cycle_nodes) + f" → {cycle_nodes[0]}"
+            raise ValueError(f"circular dependency detected: {cycle_desc}")
+        except _nx.exception.NetworkXNoCycle:
+            pass
+
         return self
 
 

@@ -19,16 +19,12 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║   Data Platform Dashboard Server                              ║${NC}"
 echo -e "${BLUE}╚═══════════════════════════════════════════════════════════════╝${NC}"
 
-# Check if we're in the right directory
-if [ ! -f "sample_pipeline.yaml" ]; then
-    if [ ! -f "$SCRIPT_DIR/sample_pipeline.yaml" ]; then
-        echo -e "${RED}✗ Error: Not in data-platform-modern-dbt directory${NC}"
-        echo -e "${YELLOW}Please run this script from the workspace root:${NC}"
-        echo -e "${YELLOW}  cd /Users/prabhusaravanan/Desktop/GitHub/data-platform-modern-dbt${NC}"
-        exit 1
-    fi
-    cd "$SCRIPT_DIR"
+# Check if we're in the right directory (must contain the dataplatform package)
+if [ ! -f "$SCRIPT_DIR/pyproject.toml" ]; then
+    echo -e "${RED}✗ Error: pyproject.toml not found — run this script from the repo root${NC}"
+    exit 1
 fi
+cd "$SCRIPT_DIR"
 
 echo -e "${GREEN}✓${NC} Working directory: $PWD"
 

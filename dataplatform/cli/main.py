@@ -54,7 +54,7 @@ def run(config_path: str):
         typer.echo(f"Execution order: {execution_order}")
 
         executor = PipelineExecutor()
-        success = executor.execute_pipeline(
+        success, _results, _errors = executor.execute_pipeline(
             tasks={task.name: task for task in config.tasks},
             execution_order=execution_order,
             config={"file_path": config.file_path}

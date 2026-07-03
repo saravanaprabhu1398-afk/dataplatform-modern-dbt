@@ -55,24 +55,24 @@ def get_asset_detail(asset_uri: str) -> Optional[Dict[str, Any]]:
 def get_pipeline_catalog() -> List[Dict[str, Any]]:
     """Return all pipelines that have lineage records, with asset counts."""
     init_db()
+    from sqlalchemy import text
     from dataplatform.core.database import _get_conn
-    conn = _get_conn()
-    try:
+    with _get_conn() as conn:
         rows = conn.execute(
-            """
-            SELECT pipeline_name,
-                   COUNT(DISTINCT asset_uri) AS asset_count,
-                   SUM(CASE WHEN direction='reads_from' THEN 1 ELSE 0 END) AS inputs,
-                   SUM(CASE WHEN direction='writes_to'  THEN 1 ELSE 0 END) AS outputs,
-                   MAX(recorded_at) AS last_run_at
-            FROM lineage_records
-            GROUP BY pipeline_name
-            ORDER BY last_run_at DESC
-            """
+            text(
+                """
+                SELECT pipeline_name,
+                       COUNT(DISTINCT asset_uri) AS asset_count,
+                       SUM(CASE WHEN direction='reads_from' THEN 1 ELSE 0 END) AS inputs,
+                       SUM(CASE WHEN direction='writes_to'  THEN 1 ELSE 0 END) AS outputs,
+                       MAX(recorded_at) AS last_run_at
+                FROM lineage_records
+                GROUP BY pipeline_name
+                ORDER BY last_run_at DESC
+                """
+            )
         ).fetchall()
-    finally:
-        conn.close()
-    return [dict(r) for r in rows]
+    return [dict(r._mapping) for r in rows]
 
 
 # ---------------------------------------------------------------------------

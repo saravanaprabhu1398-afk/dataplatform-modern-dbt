@@ -3,7 +3,7 @@ import inspect
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from typing import Dict, Any, List, Optional, Tuple
 from dataplatform.core.config import Task
 from dataplatform.plugins.base import Plugin
@@ -108,7 +108,18 @@ class TaskExecutor:
 
             try:
                 plugin = self.load_plugin(task.plugin, task.type)
-                result = plugin.execute(task_config)
+
+                if task.timeout:
+                    with ThreadPoolExecutor(max_workers=1) as _tpool:
+                        _fut = _tpool.submit(plugin.execute, task_config)
+                        try:
+                            result = _fut.result(timeout=task.timeout)
+                        except FutureTimeoutError:
+                            raise TimeoutError(
+                                f"Task '{task.name}' timed out after {task.timeout}s"
+                            )
+                else:
+                    result = plugin.execute(task_config)
                 
                 # Handle different return types from plugins
                 if isinstance(result, tuple):

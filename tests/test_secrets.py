@@ -31,19 +31,19 @@ class TestEnvVarResolution:
 
 
 class TestVaultResolution:
-    def test_vault_without_addr_returns_empty_and_warns(self, monkeypatch):
+    def test_vault_without_addr_leaves_token_and_warns(self, monkeypatch):
         monkeypatch.delenv("VAULT_ADDR", raising=False)
         with patch("dataplatform.core.secrets.logger") as mock_log:
             result = resolve_secrets("${vault:secret/app:password}")
-        assert result == ""
+        assert result == "${vault:secret/app:password}"
         mock_log.warning.assert_called_once()
         assert "VAULT_ADDR" in mock_log.warning.call_args[0][0]
 
-    def test_vault_with_addr_but_no_client_returns_empty_and_warns(self, monkeypatch):
+    def test_vault_with_addr_but_no_client_leaves_token_and_warns(self, monkeypatch):
         monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
         with patch("dataplatform.core.secrets.logger") as mock_log:
             result = resolve_secrets("${vault:secret/app:key}")
-        assert result == ""
+        assert result == "${vault:secret/app:key}"
         mock_log.warning.assert_called_once()
         warning_msg = mock_log.warning.call_args[0][0]
         assert "hvac" in warning_msg or "Vault" in warning_msg
