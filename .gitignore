@@ -139,3 +139,6 @@ profiles.yml
 # Frontend
 frontend/node_modules/
 frontend/dist/
+tailwind.input.css
+node_modules/
+package-lock.json

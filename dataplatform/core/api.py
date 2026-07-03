@@ -442,8 +442,7 @@ async def login_page(request: Request):
     if _is_authenticated(request):
         return RedirectResponse(url="/", status_code=303)
     login_file = Path(__file__).resolve().parent.parent / "static" / "login.html"
-    if login_file.exists():
-        return FileResponse(str(login_file), media_type="text/html")
+    if login_file.exists(): return _page(login_file)
     raise HTTPException(status_code=404, detail=f"Login page not found at {login_file}")
 
 
@@ -477,11 +476,18 @@ async def logout():
 # Page routes
 # ---------------------------------------------------------------------------
 
+_NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+
+
+def _page(path: Path) -> FileResponse:
+    return FileResponse(str(path), media_type="text/html", headers=_NO_CACHE)
+
+
 @app.get("/")
 async def root():
     landing_page = Path(__file__).resolve().parent.parent / "static" / "landing.html"
     if landing_page.exists():
-        return FileResponse(str(landing_page), media_type="text/html")
+        return _page(landing_page)
     return {
         "message": "Data Platform API",
         "version": "0.2.0",
@@ -495,7 +501,7 @@ async def root():
 async def dashboard():
     static_index = Path(__file__).resolve().parent.parent / "static" / "index.html"
     if static_index.exists():
-        return FileResponse(str(static_index), media_type="text/html")
+        return _page(static_index)
     raise HTTPException(status_code=404, detail=f"Dashboard not found at {static_index}")
 
 
@@ -503,7 +509,7 @@ async def dashboard():
 async def generator_page():
     generator_index = Path(__file__).resolve().parent.parent / "static" / "generator.html"
     if generator_index.exists():
-        return FileResponse(str(generator_index), media_type="text/html")
+        return _page(generator_index)
     raise HTTPException(status_code=404, detail=f"Generator page not found at {generator_index}")
 
 
@@ -1746,32 +1752,28 @@ async def get_metric_history_endpoint(metric_name: str, limit: int = 50):
 @app.get("/catalog")
 async def catalog_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "catalog.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Catalog page not found")
 
 
 @app.get("/lineage-viz")
 async def lineage_viz_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "lineage.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Lineage page not found")
 
 
 @app.get("/costs")
 async def costs_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "costs.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Costs page not found")
 
 
 @app.get("/templates-ui")
 async def templates_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "templates.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Templates page not found")
 
 
@@ -1779,32 +1781,28 @@ async def templates_page(request: Request):
 async def admin_page(request: Request):
     _require_permission(request, "*")
     page = Path(__file__).resolve().parent.parent / "static" / "admin.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Admin page not found")
 
 
 @app.get("/alerts")
 async def alerts_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "alerts.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Alerts page not found")
 
 
 @app.get("/monitoring")
 async def monitoring_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "monitoring.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Monitoring page not found")
 
 
 @app.get("/job-builder")
 async def job_builder_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "job_builder.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Job Builder page not found")
 
 
@@ -1934,8 +1932,7 @@ async def use_template_endpoint(template_id: str, request_body: UseTemplateReque
 @app.get("/git-integration")
 async def git_integration_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "git_integration.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Git Integration page not found")
 
 

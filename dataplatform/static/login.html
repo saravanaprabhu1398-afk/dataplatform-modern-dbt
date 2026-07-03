@@ -4,126 +4,251 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — Data Platform Suite</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/tokens.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            min-height: 100%;
+            font-family: var(--font-body);
+            overflow-x: clip;
+        }
+
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: var(--space-4);
+            background-color: var(--color-sidebar-bg);
+            background-image:
+                radial-gradient(ellipse 60% 45% at 15% 10%, oklch(54% 0.22 250 / 0.14) 0%, transparent 65%),
+                radial-gradient(ellipse 50% 40% at 85% 88%, oklch(55% 0.18 150 / 0.08) 0%, transparent 60%);
+        }
+
+        /* ── Card ────────────────────────────────────────────────── */
+        .lc {
+            width: 100%;
+            max-width: 392px;
+            background: oklch(21% 0.022 250 / 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--color-sidebar-border);
+            border-radius: var(--radius-xl);
+            padding: var(--space-8);
+            box-shadow: var(--shadow-xl);
+        }
+
+        /* ── Logo ────────────────────────────────────────────────── */
+        .lc__logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            border-radius: var(--radius-lg);
+            background: var(--color-sidebar-item-active);
+            margin: 0 auto var(--space-4);
+            box-shadow: 0 4px 16px oklch(54% 0.22 250 / 0.35);
+        }
+        .lc__logo i { color: oklch(99% 0.005 250); font-size: 1.25rem; }
+
+        .lc__title {
+            font-family: var(--font-display);
+            font-size: var(--text-xl);
+            font-weight: 700;
+            color: var(--color-sidebar-text-active);
+            text-align: center;
+            letter-spacing: -0.01em;
+        }
+        .lc__sub {
+            font-size: var(--text-sm);
+            color: var(--color-sidebar-text);
+            text-align: center;
+            margin-top: var(--space-1);
+            margin-bottom: var(--space-6);
+        }
+        .lc__rule {
+            height: 1px;
+            background: var(--color-sidebar-border);
+            margin-bottom: var(--space-6);
+        }
+
+        /* ── Form ────────────────────────────────────────────────── */
+        label {
+            display: block;
+            font-size: var(--text-sm);
+            font-weight: 500;
+            color: var(--color-sidebar-text-active);
+            margin-bottom: 6px;
+        }
+        .lc__field { position: relative; margin-bottom: var(--space-4); }
+        .lc__icon {
+            position: absolute;
+            inset-y: 0;
+            left: 0;
+            display: flex;
+            align-items: center;
+            padding-left: var(--space-3);
+            pointer-events: none;
+            color: var(--color-sidebar-text);
+            font-size: var(--text-sm);
+        }
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            background: oklch(14% 0.016 250);
+            border: 1px solid var(--color-sidebar-border);
+            border-radius: var(--radius-md);
+            padding: 10px var(--space-4) 10px 2.5rem;
+            font-family: var(--font-body);
+            font-size: var(--text-sm);
+            color: var(--color-sidebar-text-active);
+            outline: none;
+            transition: border-color var(--dur-base) var(--ease-out),
+                        box-shadow    var(--dur-base) var(--ease-out);
+        }
+        input::placeholder { color: var(--color-sidebar-group-label); }
+        input:focus {
+            border-color: var(--color-sidebar-item-active);
+            box-shadow: 0 0 0 3px oklch(54% 0.22 250 / 0.18);
+        }
+
+        /* ── Error ───────────────────────────────────────────────── */
+        .lc__error {
+            display: none;
+            align-items: flex-start;
+            gap: var(--space-2);
+            background: oklch(22% 0.04 25);
+            border: 1px solid oklch(54% 0.22 25 / 0.45);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+            margin-bottom: var(--space-4);
+        }
+        .lc__error i { color: var(--color-danger); font-size: var(--text-sm); margin-top: 2px; flex-shrink: 0; }
+        .lc__error p { font-size: var(--text-sm); color: oklch(80% 0.12 25); line-height: 1.4; }
+
+        /* ── Button ──────────────────────────────────────────────── */
+        .lc__btn {
+            width: 100%;
+            background: var(--color-sidebar-item-active);
+            color: oklch(99% 0.005 250);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 11px var(--space-4);
+            font-family: var(--font-body);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+            transition: opacity var(--dur-base) var(--ease-out),
+                        transform  var(--dur-fast) var(--ease-out);
+            margin-top: var(--space-2);
+            box-shadow: 0 2px 8px oklch(54% 0.22 250 / 0.30);
+        }
+        .lc__btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+        .lc__btn:active:not(:disabled) { transform: translateY(0); }
+        .lc__btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* ── Footer ──────────────────────────────────────────────── */
+        .lc__foot {
+            margin-top: var(--space-6);
+            font-size: var(--text-xs);
+            color: var(--color-sidebar-group-label);
+            text-align: center;
+            line-height: 1.65;
+        }
+        .lc__foot code {
+            background: oklch(28% 0.018 250);
+            color: var(--color-sidebar-text);
+            padding: 1px 5px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+        }
+    </style>
 </head>
-<body class="min-h-screen bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.15),transparent_40%),radial-gradient(ellipse_at_bottom_right,rgba(16,185,129,0.1),transparent_40%),linear-gradient(180deg,#0f172a_0%,#111827_100%)] flex items-center justify-center px-4">
+<body>
 
-    <div class="w-full max-w-md">
-        <div class="rounded-2xl border border-white/10 bg-white/[0.08] backdrop-blur-xl shadow-2xl p-8 text-white">
+<div class="lc">
 
-            <!-- Logo -->
-            <div class="text-center mb-8">
-                <div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-indigo-500 mb-5 shadow-lg">
-                    <i class="fas fa-layer-group text-white text-xl"></i>
-                </div>
-                <h1 class="text-2xl font-bold text-white">Data Platform Suite</h1>
-                <p class="mt-2 text-sm text-slate-400">Sign in to access your data platform workspace.</p>
-            </div>
-
-            <!-- Form -->
-            <form id="loginForm" class="space-y-4" novalidate>
-
-                <div>
-                    <label for="username" class="block text-sm font-medium text-slate-300 mb-1.5">Username</label>
-                    <div class="relative">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                            <i class="fas fa-user text-slate-500 text-sm"></i>
-                        </span>
-                        <input
-                            id="username"
-                            type="text"
-                            autocomplete="username"
-                            placeholder="Enter username"
-                            required
-                            class="w-full rounded-lg border border-white/15 bg-slate-950/40 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition"
-                        >
-                    </div>
-                </div>
-
-                <div>
-                    <label for="password" class="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
-                    <div class="relative">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-                            <i class="fas fa-lock text-slate-500 text-sm"></i>
-                        </span>
-                        <input
-                            id="password"
-                            type="password"
-                            autocomplete="current-password"
-                            placeholder="Enter password"
-                            required
-                            class="w-full rounded-lg border border-white/15 bg-slate-950/40 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition"
-                        >
-                    </div>
-                </div>
-
-                <!-- Error box -->
-                <div id="loginError" class="hidden rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 flex items-start gap-2.5">
-                    <i class="fas fa-circle-xmark text-red-400 text-sm mt-0.5 shrink-0"></i>
-                    <p id="loginErrorText" class="text-sm text-red-300 leading-snug"></p>
-                </div>
-
-                <!-- Submit -->
-                <button
-                    id="loginButton"
-                    type="submit"
-                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 mt-2"
-                >
-                    <i class="fas fa-right-to-bracket"></i>
-                    Sign In
-                </button>
-
-            </form>
-
-            <!-- Footer note -->
-            <p class="mt-6 text-[11px] text-slate-500 leading-relaxed text-center">
-                Set credentials via <code class="bg-white/5 px-1 py-0.5 rounded text-slate-400">DATAPLATFORM_USERNAME</code>,
-                <code class="bg-white/5 px-1 py-0.5 rounded text-slate-400">DATAPLATFORM_PASSWORD</code>, and
-                <code class="bg-white/5 px-1 py-0.5 rounded text-slate-400">DATAPLATFORM_SESSION_SECRET</code>
-                environment variables.
-            </p>
-
-        </div>
+    <div class="lc__logo" aria-hidden="true">
+        <i class="fas fa-layer-group"></i>
     </div>
+    <h1 class="lc__title">Data Platform Suite</h1>
+    <p class="lc__sub">Sign in to access your workspace</p>
+    <div class="lc__rule"></div>
 
-    <script>
-        document.getElementById('loginForm').addEventListener('submit', async function(event) {
-            event.preventDefault();
+    <form id="loginForm" novalidate>
 
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-            const button   = document.getElementById('loginButton');
-            const errorBox = document.getElementById('loginError');
-            const errorTxt = document.getElementById('loginErrorText');
+        <label for="username">Username</label>
+        <div class="lc__field">
+            <span class="lc__icon"><i class="fas fa-user"></i></span>
+            <input id="username" type="text" autocomplete="username" placeholder="Enter username" required>
+        </div>
 
-            errorBox.classList.add('hidden');
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing In…';
+        <label for="password">Password</label>
+        <div class="lc__field">
+            <span class="lc__icon"><i class="fas fa-lock"></i></span>
+            <input id="password" type="password" autocomplete="current-password" placeholder="Enter password" required>
+        </div>
 
-            try {
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
+        <div id="loginError" class="lc__error" role="alert" aria-live="polite">
+            <i class="fas fa-circle-xmark" aria-hidden="true"></i>
+            <p id="loginErrorText"></p>
+        </div>
 
-                const result = await response.json();
+        <button id="loginButton" type="submit" class="lc__btn">
+            <i class="fas fa-right-to-bracket" aria-hidden="true"></i>
+            Sign In
+        </button>
 
-                if (!response.ok) {
-                    throw new Error(result.detail || 'Invalid credentials. Please try again.');
-                }
+    </form>
 
-                window.location.href = '/';
+    <p class="lc__foot">
+        Set credentials via
+        <code>DATAPLATFORM_USERNAME</code>,
+        <code>DATAPLATFORM_PASSWORD</code>, and
+        <code>DATAPLATFORM_SESSION_SECRET</code>
+        environment variables.
+    </p>
 
-            } catch (error) {
-                errorTxt.textContent = error.message || 'Login failed. Please try again.';
-                errorBox.classList.remove('hidden');
-            } finally {
-                button.disabled = false;
-                button.innerHTML = '<i class="fas fa-right-to-bracket"></i> Sign In';
-            }
-        });
-    </script>
+</div>
+
+<script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const username  = document.getElementById('username').value.trim();
+        const password  = document.getElementById('password').value;
+        const btn       = document.getElementById('loginButton');
+        const errorBox  = document.getElementById('loginError');
+        const errorTxt  = document.getElementById('loginErrorText');
+
+        errorBox.style.display = 'none';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Signing In…';
+
+        try {
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Invalid credentials. Please try again.');
+            window.location.href = '/';
+        } catch (err) {
+            errorTxt.textContent = err.message || 'Login failed. Please try again.';
+            errorBox.style.display = 'flex';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-right-to-bracket" aria-hidden="true"></i> Sign In';
+        }
+    });
+</script>
 </body>
 </html>
