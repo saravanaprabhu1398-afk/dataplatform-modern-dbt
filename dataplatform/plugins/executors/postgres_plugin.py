@@ -1,4 +1,5 @@
 import psycopg2
+from psycopg2 import sql as _sql
 import logging
 from dataplatform.plugins.base import ExecutorPlugin
 
@@ -122,9 +123,13 @@ class PostgresExecutor(ExecutorPlugin):
             if not file_path or not table_name:
                 return False, {"error": "file_path and table_name required"}
             
-            # Use COPY for CSV files
+            # Use COPY for CSV files — Identifier quotes the name to prevent SQL injection
+            parts = table_name.split(".", 1)
+            copy_sql = _sql.SQL("COPY {} FROM STDIN WITH CSV HEADER").format(
+                _sql.Identifier(*parts)
+            )
             with open(file_path, 'r') as f:
-                cursor.copy_expert(f"COPY {table_name} FROM STDIN WITH CSV HEADER", f)
+                cursor.copy_expert(copy_sql, f)
             conn.commit()
             
             logger.info(f"✓ Loaded data from {file_path} into {table_name}")
@@ -152,7 +157,8 @@ class PostgresExecutor(ExecutorPlugin):
             if not sql or not output_file:
                 return False, {"error": "sql and output_file required"}
             
-            cursor.copy_expert(f"COPY ({sql}) TO STDOUT WITH CSV HEADER", open(output_file, 'w'))
+            with open(output_file, 'w') as out_f:
+                cursor.copy_expert(f"COPY ({sql}) TO STDOUT WITH CSV HEADER", out_f)
             
             logger.info(f"✓ Extracted data to {output_file}")
             return True, {"file": output_file}

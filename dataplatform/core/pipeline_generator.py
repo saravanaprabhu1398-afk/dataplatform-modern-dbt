@@ -1,5 +1,7 @@
 import logging
+import os
 import re
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -586,17 +588,209 @@ def _cleanup_task_fields(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return cleaned_tasks
 
 
+_LLM_SYSTEM_PROMPT = """\
+You are a data pipeline YAML generator. Given a natural-language description of a data \
+pipeline, output ONLY a valid YAML pipeline configuration inside a ```yaml ... ``` fence. \
+No explanation, no prose outside the fence.
+
+## Schema
+
+pipeline_name: (required) string in slug format, e.g. my_pipeline
+description:   (optional) string
+team:          (optional) string
+tasks:         (required) list of at least one task; each task has:
+  name:       (required) unique slug, e.g. extract_orders
+  type:       (required) "executor" or "transformer"
+  plugin:     (required) one of: postgres, mysql, duckdb, snowflake, bigquery, dbt,
+              spark, kafka, python, shell, api, email, file
+  operation:  (optional) e.g. query, load, transform, run, execute_code
+  config:     (optional) dict of plugin-specific settings
+  retries:    (optional) integer, default 0
+  depends_on: (optional) list of upstream task names (must reference existing task names)
+schedule:     (optional) dict; allowed keys: minute, hour, day, month, day_of_week (all strings)
+sla:          (optional) dict with max_duration_minutes (float)
+tags:         (optional) list of strings
+
+## Example
+
+Input: "Daily ETL: extract orders from postgres, transform with dbt, load to snowflake"
+
+Output:
+```yaml
+pipeline_name: daily_etl
+description: Daily ETL pipeline
+tasks:
+  - name: extract_orders
+    type: executor
+    plugin: postgres
+    operation: query
+    config:
+      sql: SELECT * FROM orders
+    retries: 0
+  - name: transform_dbt
+    type: transformer
+    plugin: dbt
+    operation: run
+    config:
+      project_dir: dbt_project
+      profiles_dir: ~/.dbt
+    retries: 0
+    depends_on:
+      - extract_orders
+  - name: load_snowflake
+    type: executor
+    plugin: snowflake
+    operation: load
+    config:
+      table_name: orders
+    retries: 0
+    depends_on:
+      - transform_dbt
+schedule:
+  minute: "0"
+  hour: "0"
+tags:
+  - etl
+  - sales
+```
+"""
+
+
+def _extract_yaml_from_response(text: str) -> Optional[str]:
+    """Extract the YAML block from an LLM response string.
+
+    Looks for a ```yaml...``` fenced block first; falls back to treating the
+    entire stripped response as YAML if it starts with 'pipeline_name:'.
+    """
+    fenced = re.search(r"```(?:yaml)?\s*\n(.*?)```", text, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        return fenced.group(1).strip()
+    stripped = text.strip()
+    if re.match(r"pipeline_name\s*:", stripped, re.IGNORECASE):
+        return stripped
+    return None
+
+
+def _try_llm_generate(input_text: str) -> Optional[Dict[str, Any]]:
+    """Attempt to generate a pipeline config using an LLM.
+
+    Tries Anthropic first (ANTHROPIC_API_KEY), then OpenAI (OPENAI_API_KEY).
+    Returns a fully-formed result dict on success, or None to signal fallback.
+    """
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+
+    if not anthropic_key and not openai_key:
+        logger.debug("No LLM API key configured (ANTHROPIC_API_KEY / OPENAI_API_KEY); skipping LLM path.")
+        return None
+
+    raw_response: Optional[str] = None
+
+    # ── Anthropic path ────────────────────────────────────────────────────────
+    if anthropic_key and raw_response is None:
+        try:
+            import anthropic  # type: ignore[import]
+            client = anthropic.Anthropic(api_key=anthropic_key, timeout=12.0)
+            message = client.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=2048,
+                system=_LLM_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": input_text}],
+            )
+            raw_response = message.content[0].text
+            logger.debug("LLM response received from Anthropic (%d chars).", len(raw_response))
+        except ImportError:
+            logger.debug("anthropic package not installed; skipping Anthropic LLM path.")
+        except Exception as exc:
+            logger.warning("Anthropic LLM call failed (%s); will try fallback.", exc)
+
+    # ── OpenAI path ───────────────────────────────────────────────────────────
+    if openai_key and raw_response is None:
+        try:
+            import openai  # type: ignore[import]
+            client = openai.OpenAI(api_key=openai_key, timeout=12.0)
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=2048,
+                messages=[
+                    {"role": "system", "content": _LLM_SYSTEM_PROMPT},
+                    {"role": "user", "content": input_text},
+                ],
+            )
+            raw_response = response.choices[0].message.content
+            logger.debug("LLM response received from OpenAI (%d chars).", len(raw_response or ""))
+        except ImportError:
+            logger.debug("openai package not installed; skipping OpenAI LLM path.")
+        except Exception as exc:
+            logger.warning("OpenAI LLM call failed (%s); will try fallback.", exc)
+
+    if raw_response is None:
+        return None
+
+    # ── Extract YAML from the response ────────────────────────────────────────
+    yaml_text = _extract_yaml_from_response(raw_response)
+    if not yaml_text:
+        logger.warning("LLM response contained no recognisable YAML block; falling back.")
+        return None
+
+    # ── Validate via load_config (write to a temp file, load, delete) ─────────
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".yaml")
+    try:
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                fh.write(yaml_text)
+            tmp_fd = None  # fdopen owns it now
+            parsed_config = load_config(tmp_path)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    except Exception as val_exc:
+        logger.warning("LLM-generated YAML failed validation (%s); falling back to regex.", val_exc)
+        if tmp_fd is not None:
+            try:
+                os.close(tmp_fd)
+            except OSError:
+                pass
+        return None
+
+    return {
+        "yaml_content": yaml_text,
+        "parsed_config": parsed_config.model_dump(exclude_none=True),
+        "warnings": [],
+        "detected_language": "llm-generated",
+        "nlp_summary": [],
+        "generated_by": "llm",
+    }
+
+
 def generate_pipeline_yaml_from_text(input_text: str) -> Dict[str, Any]:
     """
     Primary entry point for pipeline generation from free text.
 
-    Uses the NLP engine (nlp_generator.py) as the primary path.
-    Falls back to the legacy regex approach if NLP raises an unexpected error.
+    Priority:
+    1. LLM path — Anthropic (ANTHROPIC_API_KEY) or OpenAI (OPENAI_API_KEY)
+    2. NLP engine (nlp_generator.py)
+    3. Legacy regex fallback
+
+    All paths return the same dict shape; ``generated_by`` is ``"llm"`` when the
+    LLM was used and ``"regex"`` otherwise.
     """
-    # ── NLP path (primary) ───────────────────────────────────────────────────
+    # ── LLM path (primary) ───────────────────────────────────────────────────
+    try:
+        llm_result = _try_llm_generate(input_text)
+        if llm_result is not None:
+            return llm_result
+    except Exception as llm_exc:  # pragma: no cover — belt-and-suspenders
+        logger.warning("LLM generate wrapper raised unexpectedly (%s); continuing to NLP.", llm_exc)
+
+    # ── NLP path (secondary) ─────────────────────────────────────────────────
     try:
         from dataplatform.core.nlp_generator import generate_from_text as _nlp_generate
-        return _nlp_generate(input_text)
+        result = _nlp_generate(input_text)
+        result["generated_by"] = "regex"
+        return result
     except Exception as nlp_exc:  # pragma: no cover
         logger.warning("NLP generator failed (%s); falling back to legacy regex parser.", nlp_exc)
 
@@ -646,6 +840,7 @@ def generate_pipeline_yaml_from_text(input_text: str) -> Dict[str, Any]:
         "warnings": warnings,
         "detected_language": "english-like-free-text",
         "nlp_summary": [],
+        "generated_by": "regex",
     }
 
 

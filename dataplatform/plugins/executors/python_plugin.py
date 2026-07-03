@@ -1,12 +1,25 @@
+import contextlib
 import logging
-import sys
 from io import StringIO
+
+from dataplatform.plugins.base import ExecutorPlugin
 
 logger = logging.getLogger(__name__)
 
 
-class PythonExecutor:
-    """Python executor for running Python scripts and custom code."""
+class PythonExecutor(ExecutorPlugin):
+    """Python executor for running Python scripts and custom code.
+
+    SECURITY MODEL — exec() is intentionally unrestricted:
+    - Code runs in the same process with the same OS privileges as the server.
+    - There is NO sandbox, NO module whitelist, and NO resource cap beyond
+      the per-task timeout enforced by the executor.
+    - Only admin/editor users can submit pipeline configs (RBAC in api.py).
+    - Do NOT expose the execute_code operation to untrusted end-users without
+      an additional sandbox layer (e.g. subprocess isolation or a container).
+    - For the Job Builder UI, make sure the Python config panel surfaces this
+      warning to operators before they publish a pipeline.
+    """
 
     def execute(self, config: dict) -> tuple[bool, dict]:
         """
@@ -60,24 +73,19 @@ class PythonExecutor:
             # Add parameters to context
             exec_globals.update(parameters)
 
-            # Capture output
-            old_stdout = sys.stdout
-            sys.stdout = StringIO()
-
-            try:
-                # Execute the code
+            # Capture output with a thread-local StringIO so parallel tasks
+            # don't stomp on each other's sys.stdout.
+            captured = StringIO()
+            with contextlib.redirect_stdout(captured):
                 exec(code, exec_globals)
-                output = sys.stdout.getvalue()
 
-                logger.info("✓ Python code executed successfully")
+            output = captured.getvalue()
+            logger.info("✓ Python code executed successfully")
 
-                return True, {
-                    "output": output,
-                    "variables": {k: str(v) for k, v in exec_globals.items() if not k.startswith("_")}
-                }
-
-            finally:
-                sys.stdout = old_stdout
+            return True, {
+                "output": output,
+                "variables": {k: str(v) for k, v in exec_globals.items() if not k.startswith("_")}
+            }
 
         except SyntaxError as e:
             logger.error(f"Python syntax error: {e}")

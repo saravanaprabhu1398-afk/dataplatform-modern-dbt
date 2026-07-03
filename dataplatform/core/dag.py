@@ -1,26 +1,35 @@
 import networkx as nx
-from typing import List
+from typing import Dict, List
 from dataplatform.core.config import Task
 
 
 class DAGBuilder:
     def __init__(self, tasks: List[Task]):
-        self.tasks = {(task.id or task.name): task for task in tasks}
+        # Key by task.name — the stable canonical identifier used by executors.
+        self.tasks: Dict[str, Task] = {task.name: task for task in tasks}
+        # Alias map: both task.id and task.name → task.name so that
+        # depends_on references using either id or name resolve correctly.
+        self._alias: Dict[str, str] = {}
+        for task in tasks:
+            self._alias[task.name] = task.name
+            if task.id:
+                self._alias[task.id] = task.name
         self.graph = nx.DiGraph()
+
+    def _canonical(self, ref: str) -> str:
+        """Translate a depends_on ref (id or name) to the canonical task.name key."""
+        return self._alias.get(ref, ref)
 
     def build(self) -> nx.DiGraph:
         """Build DAG from tasks and dependencies."""
-        # Add nodes
         for task_name in self.tasks:
             self.graph.add_node(task_name)
 
-        # Add edges based on dependencies
-        for task_key, task in self.tasks.items():
+        for task_name, task in self.tasks.items():
             if task.depends_on:
                 for dep in task.depends_on:
-                    self.graph.add_edge(dep, task_key)
+                    self.graph.add_edge(self._canonical(dep), task_name)
 
-        # Check for cycles
         if not nx.is_directed_acyclic_graph(self.graph):
             raise ValueError("Circular dependency detected in tasks")
 

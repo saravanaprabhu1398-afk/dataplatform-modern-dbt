@@ -1,13 +1,18 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any, Dict, Tuple
 
 
 class Plugin(ABC):
     """Base class for all plugins."""
 
     @abstractmethod
-    def execute(self, config: Dict[str, Any]) -> bool:
-        """Execute the plugin with given config."""
+    def execute(self, config: Dict[str, Any]) -> Tuple[bool, Any]:
+        """Execute the plugin with given config.
+
+        Returns a (success, data) tuple. success is True on success,
+        False on failure. data is plugin-specific output (dict, list, etc.)
+        or None.
+        """
         pass
 
 

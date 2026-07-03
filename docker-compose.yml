@@ -1,0 +1,34 @@
+services:
+  dataplatform:
+    build: .
+    ports:
+      - "${DATAPLATFORM_PORT:-8000}:8000"
+    environment:
+      # Auth — CHANGE THESE before any non-local deployment
+      DATAPLATFORM_USERNAME: ${DATAPLATFORM_USERNAME:-admin}
+      DATAPLATFORM_PASSWORD: ${DATAPLATFORM_PASSWORD:-admin}
+      DATAPLATFORM_SESSION_SECRET: ${DATAPLATFORM_SESSION_SECRET:-change-me-in-production}
+      # Storage paths inside the container
+      DATABASE_PATH: /app/data/platform.db
+      PIPELINES_PATH: /app/pipelines
+      GIT_CLONES_PATH: /app/data/git-clones
+      LOG_FILE: /app/logs/pipeline.log
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON: ${LOG_JSON:-false}
+    volumes:
+      # Persist DB, logs, pipeline YAMLs, and git clones across restarts
+      - dp_data:/app/data
+      - dp_logs:/app/logs
+      - dp_pipelines:/app/pipelines
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  dp_data:
+  dp_logs:
+  dp_pipelines:

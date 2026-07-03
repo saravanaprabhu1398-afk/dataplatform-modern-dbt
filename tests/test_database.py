@@ -13,8 +13,10 @@ def isolated_db(tmp_path, monkeypatch):
     import dataplatform.core.database as db_module
     db_module._initialized = False
     db_module._DB_PATH = Path(db_file)
+    db_module._engine = None  # force engine recreation with new path
     yield
     db_module._initialized = False
+    db_module._engine = None
 
 
 import dataplatform.core.database as db
@@ -23,16 +25,14 @@ import dataplatform.core.database as db
 class TestInitDb:
     def test_creates_pipeline_runs_table(self, tmp_path):
         db.init_db()
-        conn = db._get_conn()
-        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-        conn.close()
+        from sqlalchemy import inspect as _inspect
+        tables = _inspect(db._get_engine()).get_table_names()
         assert "pipeline_runs" in tables
 
     def test_creates_users_table(self):
         db.init_db()
-        conn = db._get_conn()
-        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-        conn.close()
+        from sqlalchemy import inspect as _inspect
+        tables = _inspect(db._get_engine()).get_table_names()
         assert "users" in tables
 
     def test_idempotent(self):
@@ -134,3 +134,99 @@ class TestUserCrud:
 
     def test_delete_nonexistent_returns_false(self):
         assert db.delete_user("nobody") is False
+
+
+class TestPipelineQueue:
+    def setup_method(self):
+        db.init_db()
+
+    def test_enqueue_creates_queued_entry(self):
+        db.enqueue_run("run-q1", "pipe_x", "pipelines/pipe_x.yaml", actor="alice")
+        runs = db.get_queue_runs()
+        assert any(r["run_id"] == "run-q1" and r["status"] == "queued" for r in runs)
+
+    def test_set_running_updates_status_and_started_at(self):
+        db.enqueue_run("run-q2", "pipe_y", "pipelines/pipe_y.yaml")
+        db.set_run_status_in_queue("run-q2", "running")
+        runs = db.get_queue_runs(status="running")
+        r = next(x for x in runs if x["run_id"] == "run-q2")
+        assert r["status"] == "running"
+        assert r["started_at"] is not None
+
+    def test_set_completed_updates_status_and_completed_at(self):
+        db.enqueue_run("run-q3", "pipe_z", "pipelines/pipe_z.yaml")
+        db.set_run_status_in_queue("run-q3", "completed")
+        runs = db.get_queue_runs(status="completed")
+        r = next(x for x in runs if x["run_id"] == "run-q3")
+        assert r["status"] == "completed"
+        assert r["completed_at"] is not None
+
+    def test_set_failed_stores_error(self):
+        db.enqueue_run("run-q4", "pipe_a", "pipelines/pipe_a.yaml")
+        db.set_run_status_in_queue("run-q4", "failed", error="task crashed")
+        runs = db.get_queue_runs(status="failed")
+        r = next(x for x in runs if x["run_id"] == "run-q4")
+        assert r["error"] == "task crashed"
+
+    def test_recover_orphaned_runs_marks_as_failed(self):
+        db.enqueue_run("run-orphan1", "pipe_b", "p.yaml")
+        db.enqueue_run("run-orphan2", "pipe_c", "p.yaml")
+        db.set_run_status_in_queue("run-orphan2", "running")
+        recovered = db.recover_orphaned_runs()
+        assert recovered == 2
+        runs = db.get_queue_runs(status="failed")
+        ids = [r["run_id"] for r in runs]
+        assert "run-orphan1" in ids
+        assert "run-orphan2" in ids
+        for r in runs:
+            if r["run_id"] in ("run-orphan1", "run-orphan2"):
+                assert r["error"] == "Server restarted"
+
+    def test_get_queue_runs_filtered_by_status(self):
+        db.enqueue_run("run-filt1", "pipe_d", "p.yaml")
+        db.enqueue_run("run-filt2", "pipe_e", "p.yaml")
+        db.set_run_status_in_queue("run-filt2", "running")
+        queued = db.get_queue_runs(status="queued")
+        running = db.get_queue_runs(status="running")
+        assert any(r["run_id"] == "run-filt1" for r in queued)
+        assert any(r["run_id"] == "run-filt2" for r in running)
+
+    def test_recover_skips_completed_and_failed(self):
+        db.enqueue_run("run-done1", "pipe_f", "p.yaml")
+        db.set_run_status_in_queue("run-done1", "completed")
+        db.enqueue_run("run-done2", "pipe_g", "p.yaml")
+        db.set_run_status_in_queue("run-done2", "failed", error="already failed")
+        recovered = db.recover_orphaned_runs()
+        assert recovered == 0
+
+
+class TestSchedulerSchedules:
+    def setup_method(self):
+        db.init_db()
+
+    def test_save_and_list_schedule(self):
+        db.save_schedule("daily_etl", "pipelines/daily_etl.yaml", {"hour": "6", "minute": "0"})
+        rows = db.list_schedules()
+        assert any(r["pipeline_name"] == "daily_etl" for r in rows)
+        row = next(r for r in rows if r["pipeline_name"] == "daily_etl")
+        assert row["config_path"] == "pipelines/daily_etl.yaml"
+        assert row["schedule"]["hour"] == "6"
+
+    def test_upsert_updates_existing(self):
+        db.save_schedule("pipe_x", "p.yaml", {"hour": "1"})
+        db.save_schedule("pipe_x", "p.yaml", {"hour": "3"})
+        rows = [r for r in db.list_schedules() if r["pipeline_name"] == "pipe_x"]
+        assert len(rows) == 1
+        assert rows[0]["schedule"]["hour"] == "3"
+
+    def test_delete_schedule(self):
+        db.save_schedule("pipe_y", "p.yaml", {"hour": "2"})
+        ok = db.delete_schedule("pipe_y")
+        assert ok is True
+        assert all(r["pipeline_name"] != "pipe_y" for r in db.list_schedules())
+
+    def test_delete_nonexistent_returns_false(self):
+        assert db.delete_schedule("no_such_pipe") is False
+
+    def test_list_empty_returns_empty_list(self):
+        assert db.list_schedules() == []

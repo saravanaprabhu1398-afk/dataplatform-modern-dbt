@@ -16,6 +16,8 @@ import os
 import secrets as _secrets_lib
 from typing import Any, Dict, Optional, Set
 
+import bcrypt as _bcrypt
+
 from dataplatform.core.database import (
     create_user as _db_create_user,
     delete_user as _db_delete_user,
@@ -49,33 +51,39 @@ def has_permission(role: str, action: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Password hashing (stdlib only — no bcrypt dependency)
+# Password hashing — bcrypt (work factor 12)
 # ---------------------------------------------------------------------------
+# Legacy format: "salt:hmac_sha256_hex"  (still verifiable for existing users)
+# New format:    "$2b$12$..."             (bcrypt — GPU-resistant)
 
-def _generate_salt() -> str:
-    return _secrets_lib.token_hex(16)
-
-
-def _hash_password(password: str, salt: str) -> str:
-    return hmac.new(
+def _legacy_hmac_check(password: str, stored_hash: str) -> bool:
+    """Verify a password against the old salt:hmac-sha256 format."""
+    if ":" not in stored_hash:
+        return False
+    salt, expected = stored_hash.split(":", 1)
+    actual = hmac.new(
         salt.encode("utf-8"),
         password.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
+    return hmac.compare_digest(expected, actual)
 
 
 def make_password_hash(password: str) -> str:
-    """Return a storable 'salt:hash' string for *password*."""
-    salt = _generate_salt()
-    return f"{salt}:{_hash_password(password, salt)}"
+    """Return a bcrypt hash for *password* (work factor 12)."""
+    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
 def check_password(password: str, stored_hash: str) -> bool:
-    """Return True if *password* matches the stored 'salt:hash' string."""
-    if ":" not in stored_hash:
-        return False
-    salt, expected = stored_hash.split(":", 1)
-    return hmac.compare_digest(expected, _hash_password(password, salt))
+    """Verify *password* against a stored hash.
+
+    Accepts both bcrypt hashes (new) and the legacy salt:hmac-sha256 format
+    so existing users are not locked out after upgrading. Passwords are
+    re-hashed to bcrypt on the next explicit password change.
+    """
+    if stored_hash.startswith(("$2b$", "$2a$", "$2y$")):
+        return _bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+    return _legacy_hmac_check(password, stored_hash)
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +99,7 @@ def verify_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     env_user = os.getenv("DATAPLATFORM_USERNAME", "admin")
     env_pass = os.getenv("DATAPLATFORM_PASSWORD", "admin")
 
-    if username == env_user and password == env_pass:
+    if hmac.compare_digest(username, env_user) and hmac.compare_digest(password, env_pass):
         return {"username": username, "role": "admin", "team": None}
 
     # DB users

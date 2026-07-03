@@ -1,0 +1,2882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Builder — Data Platform</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.animate-fadeIn{animation:fadeIn .15s ease-out}
+
+#canvas-wrapper{position:relative;overflow:auto;flex:1;background:#f8fafc;
+  background-image:radial-gradient(circle,#cbd5e1 1px,transparent 1px);
+  background-size:24px 24px;}
+#canvas-inner{position:relative;min-width:1500px;min-height:760px;transform-origin:top left;}
+#edge-svg{position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible;z-index:5;}
+
+.task-node{position:absolute;width:210px;z-index:10;user-select:none;}
+.node-card{background:white;border-radius:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,.09);border:1.5px solid #e2e8f0;
+  transition:box-shadow .15s;position:relative;}
+.task-node.selected .node-card{
+  box-shadow:0 0 0 2px #6366f1,0 4px 20px rgba(99,102,241,.18);
+  border-color:#6366f1;}
+.node-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.13);}
+.node-header{border-radius:8px 8px 0 0;padding:7px 10px;
+  display:flex;align-items:center;gap:8px;cursor:move;}
+.node-body{padding:9px 12px;cursor:pointer;}
+
+.port{position:absolute;width:14px;height:14px;border-radius:50%;
+  border:2.5px solid white;top:50%;transform:translateY(-50%);
+  z-index:20;transition:transform .12s;cursor:crosshair;}
+.port:hover{transform:translateY(-50%) scale(1.45);}
+.port-input{left:-7px;background:#6366f1;}
+.port-output{right:-7px;}
+
+.pal-item{display:flex;align-items:center;gap:10px;padding:9px 12px;
+  border-radius:8px;cursor:pointer;border:1.5px solid transparent;
+  transition:all .13s;margin-bottom:2px;}
+.pal-item:hover{border-color:#e2e8f0;background:white;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);}
+.pal-item:active{transform:scale(.97);}
+
+#config-panel{width:0;min-width:0;overflow:hidden;
+  background:white;border-left:1px solid #e2e8f0;
+  transition:width .2s ease,min-width .2s ease;
+  display:flex;flex-direction:column;}
+#config-panel.open{width:320px;min-width:320px;}
+#config-scroll{flex:1;overflow-y:auto;padding:16px;}
+
+.flabel{display:block;font-size:11px;font-weight:600;color:#6b7280;
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
+.finput{width:100%;padding:6px 10px;border:1px solid #d1d5db;
+  border-radius:6px;font-size:12.5px;outline:none;color:#374151;
+  transition:border-color .15s;box-sizing:border-box;}
+.finput:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.12);}
+textarea.finput{resize:vertical;font-family:'Monaco','Menlo',monospace;font-size:11.5px;}
+select.finput{appearance:auto;}
+.frow{margin-bottom:12px;}
+
+.yaml-code{font-family:'Monaco','Menlo',monospace;font-size:12px;line-height:1.65;
+  background:#0f172a;color:#e2e8f0;padding:16px;border-radius:8px;
+  overflow:auto;white-space:pre;max-height:65vh;}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+
+.drawing-mode,.drawing-mode *{cursor:crosshair!important;}
+
+.tbtn{display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:6px;border:1px solid #e2e8f0;
+  background:white;color:#64748b;cursor:pointer;transition:all .13s;}
+.tbtn:hover:not(:disabled){background:#f1f5f9;color:#374151;}
+.tbtn:disabled{opacity:.35;cursor:not-allowed;}
+
+#zoom-bar{position:absolute;bottom:12px;right:12px;z-index:30;
+  display:flex;align-items:center;gap:2px;background:white;
+  border:1px solid #e2e8f0;border-radius:8px;padding:3px 6px;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);font-size:11px;}
+
+.space-pan{cursor:grab!important;}
+.space-pan *{cursor:grab!important;}
+.panning,.panning *{cursor:grabbing!important;}
+
+.tmpl-dd{position:absolute;right:0;top:20px;background:white;
+  border:1px solid #e2e8f0;border-radius:10px;
+  box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:40;width:210px;padding:4px 0;}
+.tmpl-dd-item{padding:7px 12px;font-size:11px;color:#374151;
+  cursor:pointer;transition:background .1s;}
+.tmpl-dd-item:hover{background:#eef2ff;color:#4f46e5;}
+
+/* Left panel tabs */
+.tab-btn{flex:1;padding:8px 4px;font-size:10px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:#94a3b8;border-bottom:2px solid transparent;
+  cursor:pointer;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;}
+.tab-btn.active{color:#6366f1;border-bottom-color:#6366f1;}
+.tab-btn:hover:not(.active){color:#64748b;}
+
+/* Variable / Connection items */
+.var-item,.conn-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+  padding:10px;margin-bottom:8px;}
+.var-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;
+  border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;
+  background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;
+  transition:background .1s;margin:2px;}
+.var-badge:hover{background:#e0e7ff;}
+.conn-type-badge{display:inline-block;padding:1px 6px;border-radius:4px;
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+
+/* Error/failure edge */
+.edge-failure{stroke:#ef4444!important;}
+
+/* Validation error markers on nodes */
+.task-node.node-error .node-card{
+  border-color:#ef4444;
+  box-shadow:0 0 0 1.5px #fca5a5,0 4px 14px rgba(239,68,68,.15);
+}
+.node-err-dot{
+  position:absolute;top:-5px;right:-5px;width:13px;height:13px;
+  border-radius:50%;background:#ef4444;border:2px solid white;
+  z-index:25;box-shadow:0 1px 4px rgba(239,68,68,.6);
+  cursor:help;
+}
+
+/* Run-state markers (Phase C) */
+@keyframes nodePulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,.5)}50%{box-shadow:0 0 0 6px rgba(99,102,241,0)}}
+.task-node.node-running .node-card{
+  border-color:#6366f1;
+  animation: nodePulse 1.6s ease-in-out infinite;
+}
+.task-node.node-ok .node-card{
+  border-color:#22c55e;
+  box-shadow:0 0 0 1.5px #bbf7d0,0 4px 14px rgba(34,197,94,.15);
+}
+.task-node.node-fail .node-card{
+  border-color:#ef4444;
+  box-shadow:0 0 0 1.5px #fca5a5,0 4px 14px rgba(239,68,68,.18);
+}
+
+/* Variable reference helper */
+#var-ref-helper{border-top:1px solid #f1f5f9;padding:10px 16px;background:#fafafa;}
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen flex">
+
+<!-- SIDEBAR -->
+<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
+  <div class="px-4 py-5 border-b border-slate-700/50">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+        <i class="fas fa-layer-group text-white text-xs"></i>
+      </div>
+      <div>
+        <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
+        <p class="text-slate-400 text-[11px]">Suite</p>
+      </div>
+    </div>
+  </div>
+  <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+    <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
+    </a>
+    <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
+    </a>
+    <div class="pt-3 pb-1">
+      <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Build</p>
+    </div>
+    <a href="/job-builder" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
+      <i class="fas fa-cubes w-4 text-center shrink-0"></i><span>Job Builder</span>
+    </a>
+    <a href="/generator" class="flex items-center gap-3 pl-8 pr-3 py-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors">
+      <i class="fas fa-wand-magic-sparkles w-3.5 text-center shrink-0"></i><span>NLP Generator</span>
+    </a>
+    <div class="pt-3 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Observability</p></div>
+    <a href="/alerts" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-bell w-4 text-center shrink-0"></i><span>Alerts</span>
+    </a>
+    <a href="/monitoring" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-chart-line w-4 text-center shrink-0"></i><span>Metrics</span>
+    </a>
+    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p></div>
+    <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
+    </a>
+    <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
+    </a>
+    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p></div>
+    <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
+    </a>
+    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p></div>
+    <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
+    </a>
+    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
+    <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
+      <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
+    </a>
+  </nav>
+  <div class="px-4 py-3 border-t border-slate-700/50">
+    <p class="text-slate-500 text-[11px]">Job Builder v2</p>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="ml-56 flex flex-col h-screen overflow-hidden">
+
+  <!-- TOP BAR -->
+  <div class="bg-white border-b border-slate-200 px-5 py-2.5 flex items-center gap-3 shrink-0">
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <input id="pipelineName" type="text" placeholder="pipeline_name"
+        class="text-slate-800 font-bold text-sm border-b border-transparent focus:border-indigo-400 outline-none bg-transparent px-1 py-0.5 w-48 transition-colors"
+        value="my_pipeline" oninput="updateYAMLPreview()">
+      <span class="text-slate-300">·</span>
+      <input id="pipelineDesc" type="text" placeholder="Description (optional)"
+        class="text-slate-500 text-sm border-b border-transparent focus:border-slate-300 outline-none bg-transparent px-1 py-0.5 flex-1 min-w-0 transition-colors"
+        oninput="updateYAMLPreview()">
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <!-- Undo / Redo -->
+      <button id="undo-btn" onclick="undo()" disabled title="Undo (Ctrl+Z)" class="tbtn">
+        <i class="fas fa-rotate-left text-xs"></i>
+      </button>
+      <button id="redo-btn" onclick="redo()" disabled title="Redo (Ctrl+Y)" class="tbtn">
+        <i class="fas fa-rotate-right text-xs"></i>
+      </button>
+      <div class="w-px h-5 bg-slate-200 mx-1"></div>
+      <button onclick="showScheduleModal()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+        <i class="fas fa-clock"></i>
+        <span id="schedBtn">Schedule</span>
+      </button>
+      <button onclick="openPipelineModal()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+        <i class="fas fa-folder-open"></i> Open
+      </button>
+      <button onclick="openVersionsModal()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+        <i class="fas fa-clock-rotate-left"></i> Versions
+      </button>
+      <button onclick="arrangeNow()" title="Auto-arrange (Ctrl+L)"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+        <i class="fas fa-sitemap"></i> Arrange
+      </button>
+      <button onclick="clearCanvas()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+        <i class="fas fa-trash-can"></i> Clear
+      </button>
+      <button onclick="showYAML()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 text-xs font-medium border border-indigo-200 transition-colors">
+        <i class="fas fa-code"></i> View as YAML
+      </button>
+      <button onclick="savePipeline()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold transition-colors">
+        <i class="fas fa-floppy-disk"></i> Save
+      </button>
+      <button onclick="validatePipeline()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors">
+        <i class="fas fa-circle-check"></i> Validate
+      </button>
+      <button onclick="runPipeline()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors">
+        <i class="fas fa-play"></i> Run
+      </button>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div id="statusBar" class="hidden px-5 py-1.5 text-xs font-medium flex items-center gap-2"></div>
+
+  <!-- WORKSPACE -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- LEFT PANEL (tabbed) -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
+      <div class="flex border-b border-slate-200 shrink-0">
+        <button class="tab-btn active" id="tab-tasks"  onclick="switchTab('tasks')">Tasks</button>
+        <button class="tab-btn"        id="tab-meta"   onclick="switchTab('meta')">Pipeline</button>
+        <button class="tab-btn"        id="tab-vars"   onclick="switchTab('vars')">Vars</button>
+        <button class="tab-btn"        id="tab-conns"  onclick="switchTab('conns')">Conns</button>
+      </div>
+      <!-- Tasks -->
+      <div id="panel-tasks" class="flex-1 overflow-y-auto p-3">
+        <div id="palette"></div>
+      </div>
+      <!-- Pipeline metadata -->
+      <div id="panel-meta" class="hidden flex-1 overflow-y-auto p-3 space-y-4"></div>
+      <!-- Variables -->
+      <div id="panel-vars" class="hidden flex-1 overflow-y-auto flex flex-col">
+        <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
+          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pipeline Variables</p>
+          <button onclick="addVar()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200 transition-colors" title="Add variable">
+            <i class="fas fa-plus text-[9px]"></i>
+          </button>
+        </div>
+        <div id="vars-list" class="flex-1 overflow-y-auto px-3 pb-3"></div>
+        <div class="px-3 py-2 border-t border-slate-100 shrink-0">
+          <p class="text-[10px] text-slate-400 leading-relaxed">Reference anywhere with <code class="bg-slate-100 px-1 rounded">${var.name}</code></p>
+        </div>
+      </div>
+      <!-- Connections -->
+      <div id="panel-conns" class="hidden flex-1 overflow-y-auto flex flex-col">
+        <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
+          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Connections</p>
+          <button onclick="addConn()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200 transition-colors" title="Add connection">
+            <i class="fas fa-plus text-[9px]"></i>
+          </button>
+        </div>
+        <div id="conns-list" class="flex-1 overflow-y-auto px-3 pb-3"></div>
+        <div class="px-3 py-2 border-t border-slate-100 shrink-0">
+          <p class="text-[10px] text-slate-400 leading-relaxed">Reference with <code class="bg-slate-100 px-1 rounded">${conn.name}</code></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div id="canvas-wrapper">
+      <div id="canvas-inner">
+        <svg id="edge-svg"></svg>
+        <div id="canvas-empty" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+          <i class="fas fa-diagram-project text-slate-200 text-6xl mb-4"></i>
+          <p class="text-slate-400 text-sm font-medium">Click a task type to add it</p>
+          <p class="text-slate-300 text-xs mt-1">Connect tasks by dragging from <span class="font-semibold">right port → left port</span></p>
+          <p class="text-slate-300 text-xs mt-0.5">Ctrl+Wheel zoom · Space+drag pan · Ctrl+D duplicate · Ctrl+L arrange · Shift-click multi-select · Delete to remove</p>
+        </div>
+      </div>
+      <!-- Zoom bar -->
+      <div id="zoom-bar">
+        <button onclick="adjustZoom(-0.1)" class="tbtn border-0 w-6 h-6" title="Zoom out"><i class="fas fa-minus text-[9px]"></i></button>
+        <span id="zoom-label" class="font-semibold text-slate-500 w-9 text-center select-none">100%</span>
+        <button onclick="adjustZoom(0.1)" class="tbtn border-0 w-6 h-6" title="Zoom in"><i class="fas fa-plus text-[9px]"></i></button>
+        <button onclick="resetZoom()" class="tbtn border-0 px-1 w-auto h-6 text-[10px] font-semibold text-slate-400" title="Reset zoom">fit</button>
+      </div>
+    </div>
+
+    <!-- CONFIG PANEL -->
+    <div id="config-panel">
+      <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <p class="text-xs font-bold text-slate-700 uppercase tracking-wider" id="config-title">Configure Task</p>
+        <button onclick="deselectAll()" class="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+          <i class="fas fa-times text-xs"></i>
+        </button>
+      </div>
+      <div id="config-scroll"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- OPEN PIPELINE MODAL -->
+<div id="open-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onclick="if(event.target===this)closeOpenModal()">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-fadeIn flex flex-col max-h-[80vh]">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+          <i class="fas fa-folder-open text-indigo-500 text-sm"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-slate-800">Open Pipeline</p>
+          <p class="text-xs text-slate-400">Load an existing pipeline into the canvas</p>
+        </div>
+      </div>
+      <button onclick="closeOpenModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="p-4 border-b border-slate-100 shrink-0">
+      <input id="open-search" type="text" placeholder="Search pipelines…"
+        class="finput" oninput="filterOpenList(this.value)">
+    </div>
+    <div id="open-list" class="flex-1 overflow-y-auto p-3 space-y-1">
+      <p class="text-xs text-slate-400 text-center py-4">Loading pipelines…</p>
+    </div>
+  </div>
+</div>
+
+<!-- YAML MODAL -->
+<div id="yaml-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onclick="if(event.target===this)closeYAML()">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-full animate-fadeIn">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
+          <i class="fas fa-code text-slate-300 text-xs"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-slate-800">Pipeline YAML</p>
+          <p class="text-xs text-slate-400" id="yaml-pipeline-label"></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="copyYAML()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-600 transition-colors">
+          <i class="fas fa-copy"></i> Copy
+        </button>
+        <button onclick="closeYAML()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="p-6 overflow-auto flex-1">
+      <pre class="yaml-code" id="yaml-output"></pre>
+      <div id="credential-warning" style="display:none"
+           class="mt-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-xs leading-relaxed">
+        <strong>Warning:</strong> Your YAML contains sensitive values (passwords, tokens, keys).
+        Use environment variable references like <code class="bg-amber-100 px-1 rounded">${MY_SECRET}</code> instead of hardcoded values.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VERSIONS MODAL -->
+<div id="ver-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onclick="if(event.target===this)closeVersionsModal()">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] animate-fadeIn">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
+          <i class="fas fa-clock-rotate-left text-slate-300 text-xs"></i>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-slate-800">Pipeline Versions</p>
+          <p class="text-xs text-slate-400" id="ver-label">Every Save creates a new version (deduped by content hash)</p>
+        </div>
+      </div>
+      <button onclick="closeVersionsModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="flex flex-1 overflow-hidden">
+      <div id="ver-list" class="w-64 border-r border-slate-100 overflow-y-auto p-3 space-y-1">
+        <p class="text-xs text-slate-400 text-center py-6">Loading…</p>
+      </div>
+      <div class="flex-1 overflow-auto p-4">
+        <pre class="yaml-code" id="ver-yaml" style="max-height:none;height:100%">Select a version on the left to view its YAML.</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCHEDULE MODAL -->
+<div id="sched-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onclick="if(event.target===this)closeScheduleModal()">
+  <div class="bg-white rounded-2xl shadow-2xl w-80 animate-fadeIn">
+    <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+      <p class="font-bold text-slate-800 text-sm">Set Schedule</p>
+      <button onclick="clearSchedule()" class="text-xs text-red-500 hover:underline">Clear</button>
+    </div>
+    <div class="p-5 space-y-3">
+      <div class="grid grid-cols-3 gap-2 mb-4">
+        <button onclick="setPreset('0 6 * * *')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Daily 6am</button>
+        <button onclick="setPreset('0 * * * *')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Hourly</button>
+        <button onclick="setPreset('0 6 * * 1-5')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Weekdays</button>
+      </div>
+<div><label class="flabel">Minute</label><input id="sched-min" class="finput" placeholder="0" value="0" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Hour</label><input id="sched-hr" class="finput" placeholder="6" value="6" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Day of month</label><input id="sched-dom" class="finput" placeholder="*" value="*" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Month</label><input id="sched-mo" class="finput" placeholder="*" value="*" oninput="renderCronPreview()"></div>
+      <div><label class="flabel">Day of week</label><input id="sched-dow" class="finput" placeholder="* (0=Sun)" value="*" oninput="renderCronPreview()"></div>
+      <div class="mt-3 p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg">
+        <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Next runs</p>
+        <ul id="cron-preview" class="text-[11px] text-slate-600 space-y-0.5"></ul>
+      </div>
+    </div>
+    <div class="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+      <button onclick="closeScheduleModal()" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
+      <button onclick="applySchedule()" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// TASK TYPE DEFINITIONS
+// ─────────────────────────────────────────
+// NOTE: 5 task types (pipeline, loop, condition, set_var, on_error) are intentionally
+// omitted from the palette — backend executor plugins for them don't exist yet, and
+// PipelineConfig forbids the extra YAML keys (variables:/connections:/depends_on_failure:)
+// they would need. They'll be reintroduced as a follow-up alongside their plugins.
+const TT = {
+  sql:        {label:'SQL Query',    icon:'fa-database',              color:'#3b82f6', desc:'Query any database',        plugin:null},
+  python:     {label:'Python',       icon:'fa-code',                  color:'#f59e0b', desc:'Run Python code or script',  plugin:'python'},
+  shell:      {label:'Shell',        icon:'fa-terminal',              color:'#64748b', desc:'Execute shell commands',     plugin:'shell'},
+  dbt:        {label:'dbt',          icon:'fa-gear',                  color:'#f97316', desc:'Run dbt transformations',    plugin:'dbt'},
+  spark:      {label:'Spark',        icon:'fa-bolt',                  color:'#ef4444', desc:'Submit Spark jobs',          plugin:'spark'},
+  api:        {label:'REST API',     icon:'fa-cloud',                 color:'#14b8a6', desc:'Make HTTP API calls',        plugin:'api'},
+  kafka:      {label:'Kafka',        icon:'fa-arrows-spin',           color:'#8b5cf6', desc:'Publish or subscribe',       plugin:'kafka'},
+  file:       {label:'File',         icon:'fa-folder-open',           color:'#6366f1', desc:'Read, write, merge files',   plugin:'file'},
+  email:      {label:'Email',        icon:'fa-envelope',              color:'#ec4899', desc:'Send notifications',         plugin:'email'},
+  validation: {label:'Validation',   icon:'fa-circle-check',          color:'#10b981', desc:'Data quality checks',        plugin:'duckdb'},
+};
+
+const DEFAULT_CONFIGS = {
+  sql:        {database:'duckdb', sql:'SELECT * FROM my_table LIMIT 100', return_data:false},
+  python:     {mode:'code', code:'# Write your Python code here\nresult = "done"\nprint(result)', script_path:'', parameters:{}},
+  shell:      {command:'bash scripts/run.sh', cwd:'.', timeout:300},
+  dbt:        {operation:'run', project_dir:'dbt_project', profiles_dir:'~/.dbt', select:''},
+  spark:      {spark_master:'spark://localhost:7077', app_name:'MySparkApp', input_path:'data/input.parquet', output_path:'data/output.parquet'},
+  api:        {method:'GET', url:'https://api.example.com/data', headers:{Authorization:'Bearer ${API_TOKEN}'}, params:{}, body:''},
+  kafka:      {operation:'publish', brokers:['localhost:9092'], topic:'my_topic', group_id:'my_group', message:{event:'data_ready'}},
+  file:       {operation:'read', file_path:'data/input.csv', source_files:[], destination:'data/merged.csv'},
+  email:      {smtp_server:'smtp.gmail.com', smtp_port:587, sender_email:'${EMAIL_SENDER}', sender_password:'${EMAIL_PASSWORD}', recipients:['team@example.com'], subject:'Pipeline Complete', body:'Your pipeline has finished successfully.'},
+  validation: {file_path:'data/input.csv', checks:[{name:'no_nulls', sql:'SELECT COUNT(*) FROM data WHERE id IS NULL', expect:0}]},
+};
+
+const CHECK_TEMPLATES = [
+  {name:'no_nulls',           label:'No nulls in column',    sql:'SELECT COUNT(*) FROM data WHERE {column} IS NULL',                          expect:0},
+  {name:'unique_values',      label:'Unique values',         sql:'SELECT COUNT(*) - COUNT(DISTINCT {column}) FROM data',                      expect:0},
+  {name:'row_count_positive', label:'Row count > 0',         sql:'SELECT CASE WHEN COUNT(*) > 0 THEN 0 ELSE 1 END FROM data',                 expect:0},
+  {name:'no_negatives',       label:'No negative values',    sql:'SELECT COUNT(*) FROM data WHERE {column} < 0',                              expect:0},
+  {name:'value_in_range',     label:'Value in range',        sql:'SELECT COUNT(*) FROM data WHERE {column} NOT BETWEEN {min} AND {max}',      expect:0},
+  {name:'no_duplicates',      label:'No duplicate rows',     sql:'SELECT COUNT(*) FROM (SELECT *, COUNT(*) OVER() c FROM data GROUP BY ALL HAVING COUNT(*)>1)', expect:0},
+  {name:'not_blank',          label:'No blank strings',      sql:"SELECT COUNT(*) FROM data WHERE TRIM({column}) = ''",                       expect:0},
+  {name:'future_dates',       label:'No future dates',       sql:'SELECT COUNT(*) FROM data WHERE {date_col} > CURRENT_DATE',                 expect:0},
+];
+
+// ─────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────
+const state = {tasks:[], edges:[], selected:null, selection:[], schedule:null, nextId:1};
+let dragState = null;
+let edgeDraw  = null;
+const NODE_W = 210, NODE_H = 80;
+
+// ── Undo / Redo ──
+const hist = {undo:[], redo:[]};
+const MAX_HIST = 50;
+
+// ── Pipeline-level variables & connections ──
+const pipeline = {variables: [], connections: []};
+let varIdCtr = 1, connIdCtr = 1;
+
+// ── Pipeline-level metadata (team, tags, sla, triggers) ──
+const meta = {
+  team: '',
+  tags: [],          // [string]
+  sla: null,         // { max_duration_minutes, alert: {type, email|webhook_url} }
+  triggers: [],      // [{ type, watch_path?, upstream_pipeline?, poll_interval_seconds }]
+};
+
+const CONN_META = {
+  postgres:  {icon:'fa-database', color:'#3b82f6', fields:['host','port','database','user','password']},
+  mysql:     {icon:'fa-database', color:'#f97316', fields:['host','port','database','user','password']},
+  bigquery:  {icon:'fa-database', color:'#4285f4', fields:['project_id','dataset_id','credentials_file']},
+  snowflake: {icon:'fa-snowflake',color:'#29b5e8', fields:['account','warehouse','database','user','password']},
+  spark:     {icon:'fa-bolt',     color:'#ef4444', fields:['spark_master','deploy_mode']},
+  kafka:     {icon:'fa-arrows-spin',color:'#8b5cf6',fields:['brokers','security_protocol']},
+  http:      {icon:'fa-cloud',    color:'#14b8a6', fields:['base_url','auth_type','token']},
+};
+
+const CONN_DEFAULTS = {
+  postgres:  {host:'localhost', port:5432, database:'mydb', user:'${DB_USER}', password:'${DB_PASSWORD}'},
+  mysql:     {host:'localhost', port:3306, database:'mydb', user:'${DB_USER}', password:'${DB_PASSWORD}'},
+  bigquery:  {project_id:'my-project', dataset_id:'my_dataset', credentials_file:'${GOOGLE_APPLICATION_CREDENTIALS}'},
+  snowflake: {account:'myaccount.us-east-1', warehouse:'COMPUTE_WH', database:'mydb', user:'${SF_USER}', password:'${SF_PASSWORD}'},
+  spark:     {spark_master:'spark://localhost:7077', deploy_mode:'client'},
+  kafka:     {brokers:'localhost:9092', security_protocol:'PLAINTEXT'},
+  http:      {base_url:'https://api.example.com', auth_type:'bearer', token:'${API_TOKEN}'},
+};
+
+// ── Current left tab ──
+let activeTab = 'tasks';
+
+// ── Copy/Paste ──
+let clipboard = null;
+
+// ── Zoom ──
+let zoom = 1;
+
+// ── Pan ──
+let spaceDown = false;
+let panState  = null;
+
+// ─────────────────────────────────────────
+// HISTORY
+// ─────────────────────────────────────────
+function snap() {
+  return JSON.stringify({
+    tasks:  state.tasks.map(t => ({...t, config: JSON.parse(JSON.stringify(t.config))})),
+    edges:  state.edges.map(e => ({...e})),
+    nextId: state.nextId,
+  });
+}
+
+function saveSnap() {
+  hist.undo.push(snap());
+  if (hist.undo.length > MAX_HIST) hist.undo.shift();
+  hist.redo = [];
+  syncHistBtns();
+}
+
+function undo() {
+  if (!hist.undo.length) return;
+  hist.redo.push(snap());
+  restoreSnap(JSON.parse(hist.undo.pop()));
+  syncHistBtns();
+}
+
+function redo() {
+  if (!hist.redo.length) return;
+  hist.undo.push(snap());
+  restoreSnap(JSON.parse(hist.redo.pop()));
+  syncHistBtns();
+}
+
+function restoreSnap(s) {
+  state.tasks  = s.tasks;
+  state.edges  = s.edges;
+  state.nextId = s.nextId;
+  state.selected = null;
+  document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
+  document.getElementById('config-panel').classList.remove('open');
+  state.tasks.forEach(t => mountNode(t));
+  renderSVG();
+  updateEmpty();
+  updateYAMLPreview();
+}
+
+function syncHistBtns() {
+  document.getElementById('undo-btn').disabled = !hist.undo.length;
+  document.getElementById('redo-btn').disabled = !hist.redo.length;
+}
+
+// ─────────────────────────────────────────
+// ZOOM
+// ─────────────────────────────────────────
+function setZoom(z) {
+  zoom = Math.min(2, Math.max(0.25, z));
+  document.getElementById('canvas-inner').style.transform = `scale(${zoom})`;
+  document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
+}
+function adjustZoom(delta) { setZoom(zoom + delta); }
+function resetZoom() { setZoom(1); }
+
+// ─────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderPalette();
+  renderVarsPanel();
+  renderConnsPanel();
+  renderMetaPanel();
+  bindCanvasEvents();
+  renderSVG();
+  syncHistBtns();
+  restoreAutosave();
+});
+
+// ─────────────────────────────────────────
+// TAB SWITCHING
+// ─────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  ['tasks','meta','vars','conns'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
+  });
+  if (tab === 'meta') renderMetaPanel();
+}
+
+// ─────────────────────────────────────────
+// VARIABLES PANEL
+// ─────────────────────────────────────────
+function addVar() {
+  pipeline.variables.push({id:'v'+varIdCtr++, name:'var_'+pipeline.variables.length, type:'string', default_value:'', description:''});
+  renderVarsPanel();
+  updateYAMLPreview();
+}
+
+function deleteVar(id) {
+  pipeline.variables = pipeline.variables.filter(v => v.id !== id);
+  renderVarsPanel();
+  updateYAMLPreview();
+}
+
+function updateVar(id, field, value) {
+  const v = pipeline.variables.find(v => v.id === id);
+  if (v) { v[field] = value; updateYAMLPreview(); }
+}
+
+function renderVarsPanel() {
+  const list = document.getElementById('vars-list');
+  if (!pipeline.variables.length) {
+    list.innerHTML = `<div class="text-center py-8">
+      <i class="fas fa-sliders text-slate-200 text-3xl mb-2"></i>
+      <p class="text-[11px] text-slate-400">No variables yet</p>
+      <p class="text-[10px] text-slate-300 mt-0.5">Click + to declare one</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = pipeline.variables.map(v => `
+    <div class="var-item">
+      <div class="flex items-center gap-1.5 mb-2">
+        <input class="finput text-xs font-semibold flex-1" value="${esc(v.name)}" placeholder="variable_name"
+               oninput="updateVar('${v.id}','name',this.value)">
+        <button onclick="deleteVar('${v.id}')" class="text-slate-300 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+      </div>
+      <div class="flex gap-1.5 mb-1.5">
+        <select class="finput text-[11px]" style="width:88px;flex-shrink:0" onchange="updateVar('${v.id}','type',this.value)">
+          ${['string','integer','boolean','list','secret'].map(t => `<option value="${t}" ${v.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <input class="finput text-[11px] flex-1" value="${esc(v.default_value)}" placeholder="Default value"
+               oninput="updateVar('${v.id}','default_value',this.value)">
+      </div>
+      <p class="text-[10px] text-slate-400">Use: <code class="bg-white px-1 rounded border border-slate-200">\${var.${esc(v.name)}}</code></p>
+    </div>
+  `).join('');
+}
+
+// ─────────────────────────────────────────
+// CONNECTIONS PANEL
+// ─────────────────────────────────────────
+function addConn() {
+  const type = 'postgres';
+  pipeline.connections.push({
+    id: 'c'+connIdCtr++, name:'conn_'+pipeline.connections.length,
+    conn_type: type, expanded: true,
+    ...JSON.parse(JSON.stringify(CONN_DEFAULTS[type]))
+  });
+  renderConnsPanel();
+  updateYAMLPreview();
+}
+
+function deleteConn(id) {
+  pipeline.connections = pipeline.connections.filter(c => c.id !== id);
+  renderConnsPanel();
+  updateYAMLPreview();
+}
+
+function updateConn(id, field, value) {
+  const c = pipeline.connections.find(c => c.id === id);
+  if (!c) return;
+  if (field === 'conn_type') {
+    const defaults = JSON.parse(JSON.stringify(CONN_DEFAULTS[value] || {}));
+    Object.keys(CONN_DEFAULTS).forEach(t => CONN_META[t].fields.forEach(f => delete c[f]));
+    Object.assign(c, defaults);
+    c.conn_type = value;
+  } else {
+    c[field] = value;
+  }
+  renderConnsPanel();
+  updateYAMLPreview();
+}
+
+function toggleConnExpand(id) {
+  const c = pipeline.connections.find(c => c.id === id);
+  if (c) { c.expanded = !c.expanded; renderConnsPanel(); }
+}
+
+function renderConnsPanel() {
+  const list = document.getElementById('conns-list');
+  if (!pipeline.connections.length) {
+    list.innerHTML = `<div class="text-center py-8">
+      <i class="fas fa-plug text-slate-200 text-3xl mb-2"></i>
+      <p class="text-[11px] text-slate-400">No connections yet</p>
+      <p class="text-[10px] text-slate-300 mt-0.5">Click + to add one</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = pipeline.connections.map(c => {
+    const meta = CONN_META[c.conn_type] || CONN_META.postgres;
+    const fields = meta.fields || [];
+    return `
+    <div class="conn-item">
+      <div class="flex items-center gap-2 cursor-pointer" onclick="toggleConnExpand('${c.id}')">
+        <div class="w-6 h-6 rounded flex items-center justify-center shrink-0" style="background:${meta.color}22;border:1px solid ${meta.color}44">
+          <i class="fas ${meta.icon} text-[9px]" style="color:${meta.color}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[11px] font-semibold text-slate-700 truncate">${esc(c.name)}</p>
+          <span class="conn-type-badge" style="background:${meta.color}18;color:${meta.color}">${c.conn_type}</span>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button onclick="event.stopPropagation();deleteConn('${c.id}')" class="text-slate-300 hover:text-red-400 text-[10px] transition-colors">✕</button>
+          <i class="fas fa-chevron-${c.expanded?'up':'down'} text-[8px] text-slate-400"></i>
+        </div>
+      </div>
+      ${c.expanded ? `
+      <div class="mt-2 pt-2 border-t border-slate-200 space-y-1.5">
+        <div>
+          <label class="flabel" style="font-size:9px">Name</label>
+          <input class="finput text-[11px]" value="${esc(c.name)}" oninput="updateConn('${c.id}','name',this.value)">
+        </div>
+        <div>
+          <label class="flabel" style="font-size:9px">Type</label>
+          <select class="finput text-[11px]" onchange="updateConn('${c.id}','conn_type',this.value)">
+            ${Object.keys(CONN_META).map(t => `<option value="${t}" ${c.conn_type===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        ${fields.map(f => `
+        <div>
+          <label class="flabel" style="font-size:9px">${f.replace(/_/g,' ')}</label>
+          <input class="finput text-[11px]" value="${esc(String(c[f]||''))}" oninput="updateConn('${c.id}','${f}',this.value)">
+        </div>`).join('')}
+        <p class="text-[10px] text-slate-400 pt-1">Ref: <code class="bg-white px-1 rounded border border-slate-200">\${conn.${esc(c.name)}}</code></p>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────
+// PIPELINE METADATA PANEL (team, tags, sla, triggers)
+// ─────────────────────────────────────────
+function renderMetaPanel() {
+  const panel = document.getElementById('panel-meta');
+  if (!panel) return;
+  const tagsStr = (meta.tags || []).join(', ');
+  const slaOn   = !!meta.sla;
+  const alertType = (meta.sla && meta.sla.alert && meta.sla.alert.type) || 'email';
+  const alertVal  = meta.sla && meta.sla.alert
+    ? (alertType === 'email' ? (meta.sla.alert.email||'') : (meta.sla.alert.webhook_url||''))
+    : '';
+
+  panel.innerHTML = `
+    <section>
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Ownership</p>
+      <div class="frow">
+        <label class="flabel">Team</label>
+        <input class="finput" placeholder="data-platform" value="${esc(meta.team||'')}"
+               oninput="meta.team = this.value; updateYAMLPreview()">
+      </div>
+      <div class="frow">
+        <label class="flabel">Tags (comma-separated)</label>
+        <input class="finput" placeholder="finance, daily, critical" value="${esc(tagsStr)}"
+               oninput="setMetaTags(this.value)">
+        <p class="text-[10px] text-slate-400 mt-1">Surfaced in /catalog and /templates-ui</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SLA</p>
+        <label class="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <input type="checkbox" ${slaOn?'checked':''} onchange="toggleSLA(this.checked)">
+          Enabled
+        </label>
+      </div>
+      ${slaOn ? `
+        <div class="frow">
+          <label class="flabel">Max duration (minutes)</label>
+          <input class="finput" type="number" min="1" step="1"
+                 value="${meta.sla.max_duration_minutes||30}"
+                 oninput="meta.sla.max_duration_minutes = parseFloat(this.value)||0; updateYAMLPreview()">
+        </div>
+        <div class="frow">
+          <label class="flabel">Alert via</label>
+          <select class="finput" onchange="setAlertType(this.value)">
+            <option value="email"   ${alertType==='email'?'selected':''}>Email</option>
+            <option value="webhook" ${alertType==='webhook'?'selected':''}>Webhook</option>
+          </select>
+        </div>
+        <div class="frow">
+          <label class="flabel">${alertType==='email'?'Email address':'Webhook URL'}</label>
+          <input class="finput" value="${esc(alertVal)}"
+                 placeholder="${alertType==='email'?'oncall@example.com':'https://hooks.slack.com/...'}"
+                 oninput="setAlertTarget(this.value)">
+        </div>
+      ` : `<p class="text-[11px] text-slate-400">Pipelines without SLA never page.</p>`}
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Triggers</p>
+        <button onclick="addTrigger()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200" title="Add trigger">
+          <i class="fas fa-plus text-[9px]"></i>
+        </button>
+      </div>
+      ${meta.triggers.length === 0
+        ? `<p class="text-[11px] text-slate-400">No event triggers. The pipeline runs only on schedule or manual /run.</p>`
+        : meta.triggers.map((t,i) => `
+          <div class="var-item">
+            <div class="flex items-center justify-between mb-2">
+              <select class="finput" style="flex:1;margin-right:6px" onchange="updateTrigger(${i},'type',this.value)">
+                <option value="file_sensor"          ${t.type==='file_sensor'?'selected':''}>File sensor</option>
+                <option value="pipeline_completion"  ${t.type==='pipeline_completion'?'selected':''}>Pipeline completion</option>
+              </select>
+              <button onclick="deleteTrigger(${i})" class="text-red-400 hover:text-red-600 text-xs">
+                <i class="fas fa-trash-can"></i>
+              </button>
+            </div>
+            ${t.type==='file_sensor' ? `
+              <div class="frow">
+                <label class="flabel">Watch path</label>
+                <input class="finput" value="${esc(t.watch_path||'')}" placeholder="/data/dropbox/orders.csv"
+                       oninput="updateTrigger(${i},'watch_path',this.value)">
+              </div>
+              <div class="frow">
+                <label class="flabel">Poll interval (s)</label>
+                <input class="finput" type="number" min="5" value="${t.poll_interval_seconds||30}"
+                       oninput="updateTrigger(${i},'poll_interval_seconds',parseInt(this.value)||30)">
+              </div>
+            ` : `
+              <div class="frow">
+                <label class="flabel">Upstream pipeline</label>
+                <input class="finput" value="${esc(t.upstream_pipeline||'')}" placeholder="extract_orders"
+                       oninput="updateTrigger(${i},'upstream_pipeline',this.value)">
+              </div>
+            `}
+          </div>`).join('')}
+    </section>
+  `;
+}
+
+function setMetaTags(value) {
+  meta.tags = value.split(',').map(s => s.trim()).filter(Boolean);
+  updateYAMLPreview();
+}
+
+function toggleSLA(on) {
+  if (on) {
+    meta.sla = { max_duration_minutes: 30, alert: { type: 'email', email: '' } };
+  } else {
+    meta.sla = null;
+  }
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+function setAlertType(type) {
+  if (!meta.sla) return;
+  meta.sla.alert = type === 'email'
+    ? { type: 'email', email: '' }
+    : { type: 'webhook', webhook_url: '' };
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+function setAlertTarget(value) {
+  if (!meta.sla || !meta.sla.alert) return;
+  if (meta.sla.alert.type === 'email') meta.sla.alert.email = value;
+  else meta.sla.alert.webhook_url = value;
+  updateYAMLPreview();
+}
+
+function addTrigger() {
+  meta.triggers.push({ type: 'file_sensor', watch_path: '', poll_interval_seconds: 30 });
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+function updateTrigger(i, field, value) {
+  const t = meta.triggers[i];
+  if (!t) return;
+  if (field === 'type') {
+    // reset fields on type change
+    meta.triggers[i] = value === 'file_sensor'
+      ? { type: 'file_sensor', watch_path: '', poll_interval_seconds: 30 }
+      : { type: 'pipeline_completion', upstream_pipeline: '' };
+    renderMetaPanel();
+  } else {
+    t[field] = value;
+  }
+  updateYAMLPreview();
+}
+
+function deleteTrigger(i) {
+  meta.triggers.splice(i, 1);
+  renderMetaPanel();
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// PALETTE
+// ─────────────────────────────────────────
+function renderPalette() {
+  const pal = document.getElementById('palette');
+  pal.innerHTML = Object.entries(TT).map(([key, tt]) => `
+    <div class="pal-item" onclick="addTask('${key}')">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+           style="background:${tt.color}20;border:1px solid ${tt.color}40">
+        <i class="fas ${tt.icon} text-[11px]" style="color:${tt.color}"></i>
+      </div>
+      <div class="min-w-0">
+        <p class="text-slate-700 text-xs font-semibold leading-tight">${tt.label}</p>
+        <p class="text-slate-400 text-[10px] truncate">${tt.desc}</p>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─────────────────────────────────────────
+// ADD / DELETE / DUPLICATE TASK
+// ─────────────────────────────────────────
+function addTask(typeKey) {
+  saveSnap();
+  const id    = 'task_' + state.nextId++;
+  const count = state.tasks.filter(t => t.typeKey === typeKey).length + 1;
+  const label = TT[typeKey].label.toLowerCase().replace(/\s+/g,'_');
+  const name  = `${label}_${count}`;
+  // Smart placement (Phase C2): place next to selected node if any, else after the
+  // furthest-right existing node, else at canvas origin. Avoid stacking on top of
+  // an existing node by nudging down 80px until the slot is free.
+  const sel = state.selected ? getTask(state.selected) : null;
+  let x, y;
+  if (sel) {
+    x = sel.x + 260;
+    y = sel.y;
+  } else if (state.tasks.length) {
+    const rightmost = state.tasks.reduce((m,t) => t.x > m.x ? t : m, state.tasks[0]);
+    x = rightmost.x + 260;
+    y = rightmost.y;
+  } else {
+    x = 80; y = 80;
+  }
+  while (state.tasks.some(t => Math.abs(t.x - x) < 20 && Math.abs(t.y - y) < 60)) {
+    y += 130;
+  }
+  const task = {id, typeKey, name, x, y, retries:0, config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey]))};
+  state.tasks.push(task);
+  mountNode(task);
+  selectTask(id);
+  // If user added downstream of selection, auto-connect.
+  if (sel) {
+    const noCycle = !wouldCycle(sel.id, id);
+    if (noCycle) state.edges.push({from: sel.id, to: id});
+    renderSVG();
+  }
+  updateEmpty();
+  updateYAMLPreview();
+}
+
+function arrangeNow() {
+  if (!state.tasks.length) return;
+  saveSnap();
+  autoLayout();
+  state.tasks.forEach(t => {
+    const el = document.getElementById('node-' + t.id);
+    if (el) { el.style.left = t.x + 'px'; el.style.top = t.y + 'px'; }
+  });
+  renderSVG();
+  updateYAMLPreview();
+  showStatus('Auto-arranged by dependency depth.', 'indigo');
+}
+
+function deleteTask(id) {
+  saveSnap();
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  state.edges = state.edges.filter(e => e.from !== id && e.to !== id);
+  document.getElementById('node-' + id)?.remove();
+  state.selection = state.selection.filter(x => x !== id);
+  if (state.selected === id) {
+    state.selected = state.selection[state.selection.length - 1] || null;
+    if (!state.selected) document.getElementById('config-panel').classList.remove('open');
+  }
+  renderSVG();
+  updateEmpty();
+  updateYAMLPreview();
+}
+
+function duplicateTask(id) {
+  const src = getTask(id);
+  if (!src) return;
+  saveSnap();
+  const newId = 'task_' + state.nextId++;
+  const task = {
+    ...JSON.parse(JSON.stringify(src)),
+    id:   newId,
+    x:    Math.min(src.x + 240, 1280),
+    y:    src.y + 30,
+    name: src.name + '_copy',
+  };
+  state.tasks.push(task);
+  mountNode(task);
+  selectTask(newId);
+  updateEmpty();
+  updateYAMLPreview();
+  showStatus('Duplicated — Ctrl+D to duplicate again', 'green');
+}
+
+// ─────────────────────────────────────────
+// NODE RENDERING
+// ─────────────────────────────────────────
+function mountNode(task) {
+  const inner = document.getElementById('canvas-inner');
+  const div   = document.createElement('div');
+  div.className = 'task-node';
+  div.id = 'node-' + task.id;
+  div.style.left = task.x + 'px';
+  div.style.top  = task.y + 'px';
+  div.innerHTML  = buildNodeHTML(task);
+  inner.appendChild(div);
+}
+
+function refreshNode(task) {
+  const el = document.getElementById('node-' + task.id);
+  if (!el) return;
+  el.classList.toggle('selected', state.selection.includes(task.id));
+  el.innerHTML = buildNodeHTML(task);
+}
+
+function buildNodeHTML(task) {
+  const tt = TT[task.typeKey];
+  return `
+    <div class="node-card">
+      <div class="port port-input" data-port="input" data-node="${task.id}" title="Connect here"></div>
+      <div class="node-header" style="background:${tt.color}" data-drag="${task.id}">
+        <div class="w-5 h-5 rounded bg-white/20 flex items-center justify-center shrink-0">
+          <i class="fas ${tt.icon} text-white" style="font-size:9px"></i>
+        </div>
+        <span class="text-white font-bold uppercase tracking-wide flex-1" style="font-size:10px">${tt.label}</span>
+        <button class="w-5 h-5 rounded flex items-center justify-center text-white/60 hover:bg-white/25 hover:text-white"
+                data-delete="${task.id}">
+          <i class="fas fa-times" style="font-size:8px"></i>
+        </button>
+      </div>
+      <div class="node-body" data-select="${task.id}">
+        <p class="text-slate-800 font-semibold truncate" style="font-size:12px">${esc(task.name)}</p>
+        <p class="text-slate-400 truncate mt-0.5" style="font-size:10px">${taskSummary(task)}</p>
+      </div>
+      <div class="port port-output" data-port="output" data-node="${task.id}"
+           style="background:${tt.color}" title="Drag to connect"></div>
+    </div>`;
+}
+
+function taskSummary(task) {
+  const c = task.config;
+  const badges = [];
+  const reads  = (task.lineage && task.lineage.reads_from)  || [];
+  const writes = (task.lineage && task.lineage.writes_to)   || [];
+  const checks = (task.quality && task.quality.checks)      || [];
+  if (reads.length || writes.length) badges.push(`📊${reads.length}↓${writes.length}↑`);
+  if (checks.length) badges.push(`✓${checks.length}`);
+  const badge = badges.length ? ` · ${badges.join(' ')}` : '';
+  const base = (() => {
+  switch (task.typeKey) {
+    case 'sql':        return `${(c.database||'duckdb').toUpperCase()} · ${(c.sql||'').substring(0,28).replace(/\s+/g,' ')}`;
+    case 'python':     return c.mode === 'script' ? (c.script_path||'script') : 'inline code';
+    case 'shell':      return (c.command||'').substring(0,32);
+    case 'dbt':        return `dbt ${c.operation||'run'}${c.select ? ' --select '+c.select : ''}`;
+    case 'spark':      return c.app_name || 'spark job';
+    case 'api':        return `${c.method||'GET'} ${(c.url||'').substring(0,25)}`;
+    case 'kafka':      return `${c.operation||'publish'} → ${c.topic||'topic'}`;
+    case 'file':       return `${c.operation||'read'} ${c.file_path||''}`;
+    case 'email':      return `→ ${(c.recipients||[]).join(', ').substring(0,24)}`;
+    case 'validation': return `${(c.checks||[]).length} quality check(s)`;
+    default:           return '';
+  }
+  })();
+  return base + badge;
+}
+
+// ─────────────────────────────────────────
+// CANVAS EVENTS
+// ─────────────────────────────────────────
+function bindCanvasEvents() {
+  const wrapper = document.getElementById('canvas-wrapper');
+  const inner   = document.getElementById('canvas-inner');
+
+  // Ctrl+Wheel zoom
+  wrapper.addEventListener('wheel', e => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      adjustZoom(e.deltaY < 0 ? 0.1 : -0.1);
+    }
+  }, {passive: false});
+
+  // Space+drag pan (start on wrapper)
+  wrapper.addEventListener('mousedown', e => {
+    if (spaceDown && !edgeDraw) {
+      panState = {startX: e.clientX, startY: e.clientY, scrollLeft: wrapper.scrollLeft, scrollTop: wrapper.scrollTop};
+      wrapper.classList.add('panning');
+      e.preventDefault();
+    }
+  });
+
+  inner.addEventListener('mousedown', e => {
+    if (spaceDown) return; // pan mode, let wrapper handle
+
+    if (edgeDraw) {
+      const port = e.target.closest('[data-port="input"]');
+      if (port) completeEdge(port.dataset.node);
+      else cancelEdgeDraw();
+      return;
+    }
+
+    const outPort = e.target.closest('[data-port="output"]');
+    if (outPort) { startEdgeDraw(e, outPort.dataset.node); return; }
+
+    const delBtn = e.target.closest('[data-delete]');
+    if (delBtn) { deleteTask(delBtn.dataset.delete); return; }
+
+    const dragHdr = e.target.closest('[data-drag]');
+    if (dragHdr) {
+      const taskId = dragHdr.dataset.drag;
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+      // If already in multi-selection, keep it for group-drag; otherwise reset.
+      if (!additive && !state.selection.includes(taskId)) {
+        selectTask(taskId);
+      } else if (additive) {
+        selectTask(taskId, true);
+      }
+      startDrag(e, taskId);
+      return;
+    }
+
+    const selEl = e.target.closest('[data-select]');
+    if (selEl) {
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+      selectTask(selEl.dataset.select, additive);
+      return;
+    }
+
+    deselectAll();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (panState) {
+      wrapper.scrollLeft = panState.scrollLeft - (e.clientX - panState.startX);
+      wrapper.scrollTop  = panState.scrollTop  - (e.clientY - panState.startY);
+      return;
+    }
+    if (dragState) {
+      const pos  = canvasPos(e);
+      const lead = getTask(dragState.id);
+      if (!lead) return;
+      const nx = Math.max(0, pos.x - dragState.offX);
+      const ny = Math.max(0, pos.y - dragState.offY);
+      const dx = nx - lead.x;
+      const dy = ny - lead.y;
+      // Group move: move all selected if lead is part of the selection.
+      const movers = state.selection.includes(lead.id) ? state.selection : [lead.id];
+      movers.forEach(id => {
+        const t = getTask(id);
+        if (!t) return;
+        t.x = Math.max(0, t.x + dx);
+        t.y = Math.max(0, t.y + dy);
+        const el = document.getElementById('node-' + t.id);
+        if (el) { el.style.left = t.x + 'px'; el.style.top = t.y + 'px'; }
+      });
+      renderSVG();
+    }
+    if (edgeDraw) {
+      const pos = canvasPos(e);
+      edgeDraw.mouseX = pos.x;
+      edgeDraw.mouseY = pos.y;
+      renderSVG();
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (panState) {
+      panState = null;
+      document.getElementById('canvas-wrapper').classList.remove('panning');
+    }
+    if (dragState) {
+      dragState = null;
+      updateYAMLPreview();
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    const inInput = e.target.matches('input, textarea, select');
+
+    // Space pan
+    if (e.key === ' ' && !inInput) {
+      e.preventDefault();
+      if (!spaceDown) {
+        spaceDown = true;
+        document.getElementById('canvas-wrapper').classList.add('space-pan');
+      }
+    }
+
+    if (e.key === 'Escape') cancelEdgeDraw();
+
+    if ((e.ctrlKey || e.metaKey) && !inInput) {
+      if (e.key === 'z' && !e.shiftKey) { undo(); e.preventDefault(); }
+      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { redo(); e.preventDefault(); }
+      if (e.key === 'd' && state.selected) { duplicateTask(state.selected); e.preventDefault(); }
+      if (e.key === 'l') { arrangeNow(); e.preventDefault(); }
+      if (e.key === 'a') { selectAllTasks(); e.preventDefault(); }
+    }
+    // Delete key removes selected nodes
+    if (!inInput && (e.key === 'Delete' || e.key === 'Backspace') && (state.selection && state.selection.length)) {
+      deleteSelection();
+      e.preventDefault();
+    }
+    // Zoom keyboard shortcuts
+    if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) { adjustZoom(0.1); e.preventDefault(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === '-') { adjustZoom(-0.1); e.preventDefault(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === '0') { resetZoom(); e.preventDefault(); }
+  });
+
+  document.addEventListener('keyup', e => {
+    if (e.key === ' ') {
+      spaceDown = false;
+      document.getElementById('canvas-wrapper').classList.remove('space-pan', 'panning');
+    }
+  });
+}
+
+function canvasPos(e) {
+  const w = document.getElementById('canvas-wrapper');
+  const r = w.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left + w.scrollLeft) / zoom,
+    y: (e.clientY - r.top  + w.scrollTop)  / zoom,
+  };
+}
+
+// ─────────────────────────────────────────
+// DRAG
+// ─────────────────────────────────────────
+function startDrag(e, taskId) {
+  e.preventDefault();
+  saveSnap();
+  const pos  = canvasPos(e);
+  const task = getTask(taskId);
+  dragState  = {id: taskId, offX: pos.x - task.x, offY: pos.y - task.y};
+}
+
+// ─────────────────────────────────────────
+// EDGES
+// ─────────────────────────────────────────
+function startEdgeDraw(e, fromId) {
+  e.stopPropagation();
+  e.preventDefault();
+  const task = getTask(fromId);
+  edgeDraw = {fromId, x1: task.x + NODE_W, y1: task.y + NODE_H/2, mouseX: task.x + NODE_W + 10, mouseY: task.y + NODE_H/2};
+  document.getElementById('canvas-wrapper').classList.add('drawing-mode');
+}
+
+function completeEdge(toId) {
+  if (!edgeDraw) return;
+  const fromId = edgeDraw.fromId;
+  cancelEdgeDraw();
+  if (fromId === toId) return;
+  if (state.edges.some(e => e.from === fromId && e.to === toId)) return;
+  if (wouldCycle(fromId, toId)) { showStatus('Circular dependency detected — connection not allowed.', 'red'); return; }
+  saveSnap();
+  state.edges.push({from: fromId, to: toId});
+  renderSVG();
+  updateYAMLPreview();
+}
+
+function cancelEdgeDraw() {
+  edgeDraw = null;
+  document.getElementById('canvas-wrapper').classList.remove('drawing-mode');
+  renderSVG();
+}
+
+function wouldCycle(fromId, toId) {
+  const visited = new Set();
+  function dfs(nodeId) {
+    if (nodeId === fromId) return true;
+    if (visited.has(nodeId)) return false;
+    visited.add(nodeId);
+    return state.edges.filter(e => e.from === nodeId).some(e => dfs(e.to));
+  }
+  return dfs(toId);
+}
+
+// ─────────────────────────────────────────
+// SVG
+// ─────────────────────────────────────────
+function renderSVG() {
+  const svg = document.getElementById('edge-svg');
+  let h = `<defs>
+    <marker id="arr"      markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#6366f1"/></marker>
+    <marker id="arr-t"    markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#94a3b8"/></marker>
+  </defs>`;
+
+  for (const edge of state.edges) {
+    const f = getTask(edge.from), t = getTask(edge.to);
+    if (!f || !t) continue;
+    const x1 = f.x + NODE_W, y1 = f.y + NODE_H/2;
+    const x2 = t.x,          y2 = t.y + NODE_H/2;
+    const cx1 = x1 + 70, cx2 = x2 - 70;
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    const edgeColor = '#6366f1';
+    const markerId  = 'arr';
+    const dashArray = 'none';
+    h += `<g>
+      <path d="M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2}"
+            stroke="${edgeColor}" stroke-width="2" fill="none" opacity=".8"
+            stroke-dasharray="${dashArray}"
+            marker-end="url(#${markerId})"/>
+      <circle cx="${mx}" cy="${my}" r="9" fill="white" stroke="#e2e8f0" stroke-width="1.5"
+              style="cursor:pointer;pointer-events:all"
+              onclick="removeEdge('${edge.from}','${edge.to}')"/>
+      <text x="${mx}" y="${my+4}" text-anchor="middle" fill="#94a3b8"
+            font-size="10" style="pointer-events:none">✕</text>
+    </g>`;
+  }
+
+  if (edgeDraw) {
+    const cx1 = edgeDraw.x1 + 70, cx2 = edgeDraw.mouseX - 70;
+    h += `<path d="M${edgeDraw.x1},${edgeDraw.y1} C${cx1},${edgeDraw.y1} ${cx2},${edgeDraw.mouseY} ${edgeDraw.mouseX},${edgeDraw.mouseY}"
+          stroke="#94a3b8" stroke-width="2" fill="none" stroke-dasharray="6,3"
+          marker-end="url(#arr-t)"/>`;
+  }
+  svg.innerHTML = h;
+}
+
+function removeEdge(from, to) {
+  saveSnap();
+  state.edges = state.edges.filter(e => !(e.from === from && e.to === to));
+  renderSVG();
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// SELECTION
+// ─────────────────────────────────────────
+function selectTask(id, additive) {
+  if (additive) {
+    if (state.selection.includes(id)) {
+      state.selection = state.selection.filter(x => x !== id);
+      if (state.selected === id) state.selected = state.selection[state.selection.length - 1] || null;
+    } else {
+      state.selection.push(id);
+      state.selected = id;
+    }
+  } else {
+    state.selection = [id];
+    state.selected = id;
+  }
+  applySelectionStyles();
+  const panel = document.getElementById('config-panel');
+  if (state.selected) {
+    panel.classList.add('open');
+    renderConfigPanel(getTask(state.selected));
+  } else {
+    panel.classList.remove('open');
+  }
+}
+
+function applySelectionStyles() {
+  state.tasks.forEach(t => {
+    const el = document.getElementById('node-' + t.id);
+    if (!el) return;
+    // Preserve existing run/validation marker classes; rebuild only the
+    // "selected" decoration. We do this by stripping known selection
+    // markers, not the entire className.
+    el.classList.toggle('selected', state.selection.includes(t.id));
+  });
+}
+
+function selectAllTasks() {
+  state.selection = state.tasks.map(t => t.id);
+  state.selected  = state.selection[state.selection.length - 1] || null;
+  applySelectionStyles();
+  if (state.selected) {
+    document.getElementById('config-panel').classList.add('open');
+    renderConfigPanel(getTask(state.selected));
+  }
+}
+
+function deleteSelection() {
+  if (!state.selection.length) return;
+  saveSnap();
+  const dead = new Set(state.selection);
+  state.tasks = state.tasks.filter(t => !dead.has(t.id));
+  state.edges = state.edges.filter(e => !dead.has(e.from) && !dead.has(e.to));
+  dead.forEach(id => document.getElementById('node-' + id)?.remove());
+  state.selection = [];
+  state.selected = null;
+  document.getElementById('config-panel').classList.remove('open');
+  renderSVG();
+  updateEmpty();
+  updateYAMLPreview();
+}
+
+function deselectAll() {
+  state.selected = null;
+  state.selection = [];
+  applySelectionStyles();
+  document.getElementById('config-panel').classList.remove('open');
+}
+
+// ─────────────────────────────────────────
+// CONFIG PANEL
+// ─────────────────────────────────────────
+function renderConfigPanel(task) {
+  if (!task) return;
+  const tt = TT[task.typeKey];
+  document.getElementById('config-title').textContent = tt.label + ' — Configure';
+  const scroll = document.getElementById('config-scroll');
+
+  scroll.innerHTML = `
+    <div class="frow">
+      <label class="flabel">Task Name</label>
+      <input class="finput" value="${esc(task.name)}"
+             oninput="updateTaskName('${task.id}', this.value)">
+    </div>
+    <div class="frow">
+      <label class="flabel">Retries</label>
+      <input class="finput" type="number" min="0" max="10" value="${task.retries||0}"
+             oninput="updateField('${task.id}','retries',parseInt(this.value)||0)">
+    </div>
+    <hr class="border-slate-100 my-3">
+    ${buildConfigFields(task)}
+    <hr class="border-slate-100 my-3">
+    ${buildLineageFields(task)}
+    <hr class="border-slate-100 my-3">
+    ${buildQualityFields(task)}
+    <div class="mt-4 pt-3 border-t border-slate-100 flex gap-2">
+      <button onclick="duplicateTask('${task.id}')"
+        class="flex-1 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 text-xs font-medium border border-indigo-100 transition-colors">
+        <i class="fas fa-copy mr-1"></i>Duplicate
+      </button>
+      <button onclick="deleteTask('${task.id}')"
+        class="flex-1 py-1.5 rounded-lg text-red-500 hover:bg-red-50 text-xs font-medium border border-red-100 transition-colors">
+        <i class="fas fa-trash-can mr-1"></i>Delete
+      </button>
+    </div>
+  `;
+
+  // Variable reference helper
+  if (pipeline.variables.length || pipeline.connections.length) {
+    const helper = document.createElement('div');
+    helper.id = 'var-ref-helper';
+    if (pipeline.variables.length) {
+      helper.innerHTML += `<p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Variables</p>
+        <div class="flex flex-wrap">${pipeline.variables.map(v =>
+          `<span class="var-badge" onclick="copyRef('\${var.${v.name}}')" title="Click to copy">\${var.${esc(v.name)}}</span>`
+        ).join('')}</div>`;
+    }
+    if (pipeline.connections.length) {
+      helper.innerHTML += `<p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 mt-2">Connections</p>
+        <div class="flex flex-wrap">${pipeline.connections.map(c =>
+          `<span class="var-badge" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0" onclick="copyRef('\${conn.${c.name}}')" title="Click to copy">\${conn.${esc(c.name)}}</span>`
+        ).join('')}</div>`;
+    }
+    helper.innerHTML += `<p class="text-[10px] text-slate-300 mt-2">Click a badge to copy reference</p>`;
+    scroll.appendChild(helper);
+  }
+}
+
+function buildConfigFields(task) {
+  const id = task.id, c = task.config;
+  switch (task.typeKey) {
+
+    case 'sql': {
+      const usesConn = !!c.use_connection;
+      // Filter saved connections to those that look like a SQL backend.
+      const sqlConns = pipeline.connections.filter(cn => ['postgres','mysql','bigquery','snowflake'].includes(cn.conn_type));
+      const connDropdown = sqlConns.length
+        ? `<select class="finput" onchange="onSqlConnChange('${id}',this.value)">
+             <option value="">— select connection —</option>
+             ${sqlConns.map(cn => `<option value="${esc(cn.name)}" ${c.connection_name===cn.name?'selected':''}>${esc(cn.name)} (${cn.conn_type})</option>`).join('')}
+           </select>`
+        : `<p class="text-[11px] text-amber-500">No SQL connections defined. Add one in the <strong>Conns</strong> tab.</p>`;
+      return `
+      <div class="frow flex items-center gap-2">
+        <input type="checkbox" id="uc-${id}" ${usesConn?'checked':''} onchange="toggleSqlUseConn('${id}',this.checked)">
+        <label for="uc-${id}" class="text-xs text-slate-600">Use saved connection</label>
+      </div>
+      ${usesConn ? `
+        <div class="frow">
+          <label class="flabel">Connection</label>
+          ${connDropdown}
+        </div>
+      ` : `
+        <div class="frow">
+          <label class="flabel">Database</label>
+          <select class="finput" onchange="updateCfg('${id}','database',this.value);renderConfigPanel(getTask('${id}'))">
+            ${['duckdb','postgres','mysql','bigquery'].map(db => `<option value="${db}" ${c.database===db?'selected':''}>${db==='duckdb'?'DuckDB (local)':db==='postgres'?'PostgreSQL':db==='mysql'?'MySQL':'BigQuery'}</option>`).join('')}
+          </select>
+        </div>
+        ${c.database !== 'duckdb' && c.database !== 'bigquery' ? `
+        <div class="frow"><label class="flabel">Host</label>
+          <input class="finput" value="${c.host||'localhost'}" oninput="updateCfg('${id}','host',this.value)"></div>
+        <div class="frow"><label class="flabel">Port</label>
+          <input class="finput" type="number" value="${c.port||5432}" oninput="updateCfg('${id}','port',parseInt(this.value))"></div>
+        <div class="frow"><label class="flabel">Database Name</label>
+          <input class="finput" value="${c.db_name||'mydb'}" oninput="updateCfg('${id}','db_name',this.value)"></div>
+        <div class="frow"><label class="flabel">User</label>
+          <input class="finput" value="${c.user||'user'}" oninput="updateCfg('${id}','user',this.value)"></div>
+        <div class="frow"><label class="flabel">Password (env var)</label>
+          <input class="finput" value="${c.password||'${POSTGRES_PASSWORD}'}" oninput="updateCfg('${id}','password',this.value)"></div>
+        ` : ''}
+        ${c.database === 'bigquery' ? `
+        <div class="frow"><label class="flabel">Project ID</label>
+          <input class="finput" value="${c.project_id||'my-gcp-project'}" oninput="updateCfg('${id}','project_id',this.value)"></div>
+        <div class="frow"><label class="flabel">Dataset ID</label>
+          <input class="finput" value="${c.dataset_id||'my_dataset'}" oninput="updateCfg('${id}','dataset_id',this.value)"></div>
+        ` : ''}
+      `}
+      <div class="frow"><label class="flabel">SQL</label>
+        <textarea class="finput h-24" oninput="updateCfg('${id}','sql',this.value)">${esc(c.sql||'')}</textarea></div>
+      <div class="frow flex items-center gap-2">
+        <input type="checkbox" id="rd-${id}" ${c.return_data?'checked':''} onchange="updateCfg('${id}','return_data',this.checked)">
+        <label for="rd-${id}" class="text-xs text-slate-600">Return data to next task</label>
+      </div>`;
+    }
+
+    case 'python': return `
+      <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 mb-2 text-xs text-amber-800 flex gap-2">
+        <i class="fas fa-triangle-exclamation mt-0.5 shrink-0"></i>
+        <span><strong>Security:</strong> Python code runs unsandboxed in the server process with full OS privileges. Only admin/editor users can save pipelines, but treat inline code as trusted operator input — not end-user input.</span>
+      </div>
+      <div class="frow">
+        <label class="flabel">Mode</label>
+        <select class="finput" onchange="updateCfg('${id}','mode',this.value);renderConfigPanel(getTask('${id}'))">
+          <option value="code"   ${c.mode==='code'?'selected':''}>Inline Code</option>
+          <option value="script" ${c.mode==='script'?'selected':''}>Script File</option>
+        </select>
+      </div>
+      ${c.mode === 'script' ? `
+      <div class="frow"><label class="flabel">Script Path</label>
+        <input class="finput" value="${c.script_path||'scripts/run.py'}" oninput="updateCfg('${id}','script_path',this.value)"></div>
+      ` : `
+      <div class="frow"><label class="flabel">Code</label>
+        <textarea class="finput h-32" oninput="updateCfg('${id}','code',this.value)">${esc(c.code||'')}</textarea></div>
+      `}`;
+
+    case 'shell': return `
+      <div class="frow"><label class="flabel">Command</label>
+        <input class="finput" value="${esc(c.command||'')}" oninput="updateCfg('${id}','command',this.value)"></div>
+      <div class="frow"><label class="flabel">Working Directory</label>
+        <input class="finput" value="${c.cwd||'.'}" oninput="updateCfg('${id}','cwd',this.value)"></div>
+      <div class="frow"><label class="flabel">Timeout (seconds)</label>
+        <input class="finput" type="number" value="${c.timeout||300}" oninput="updateCfg('${id}','timeout',parseInt(this.value))"></div>`;
+
+    case 'dbt': return `
+      <div class="frow"><label class="flabel">Operation</label>
+        <select class="finput" onchange="updateCfg('${id}','operation',this.value)">
+          ${['run','test','compile','seed','snapshot','docs','ls'].map(op => `<option value="${op}" ${c.operation===op?'selected':''}>${op}</option>`).join('')}
+        </select>
+      </div>
+      <div class="frow"><label class="flabel">Project Directory</label>
+        <input class="finput" value="${c.project_dir||'dbt_project'}" oninput="updateCfg('${id}','project_dir',this.value)"></div>
+      <div class="frow"><label class="flabel">Profiles Directory</label>
+        <input class="finput" value="${c.profiles_dir||'~/.dbt'}" oninput="updateCfg('${id}','profiles_dir',this.value)"></div>
+      <div class="frow"><label class="flabel">--select (optional)</label>
+        <input class="finput" placeholder="e.g. tag:daily" value="${c.select||''}" oninput="updateCfg('${id}','select',this.value)"></div>`;
+
+    case 'spark': return `
+      <div class="frow"><label class="flabel">Spark Master</label>
+        <input class="finput" value="${c.spark_master||'spark://localhost:7077'}" oninput="updateCfg('${id}','spark_master',this.value)"></div>
+      <div class="frow"><label class="flabel">App Name</label>
+        <input class="finput" value="${c.app_name||'MyApp'}" oninput="updateCfg('${id}','app_name',this.value)"></div>
+      <div class="frow"><label class="flabel">Input Path</label>
+        <input class="finput" value="${c.input_path||'data/input.parquet'}" oninput="updateCfg('${id}','input_path',this.value)"></div>
+      <div class="frow"><label class="flabel">Output Path</label>
+        <input class="finput" value="${c.output_path||'data/output.parquet'}" oninput="updateCfg('${id}','output_path',this.value)"></div>`;
+
+    case 'api': return `
+      <div class="frow">
+        <label class="flabel">Method</label>
+        <select class="finput" onchange="updateCfg('${id}','method',this.value);renderConfigPanel(getTask('${id}'))">
+          ${['GET','POST','PUT','DELETE','PATCH'].map(m => `<option value="${m}" ${c.method===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="frow"><label class="flabel">URL</label>
+        <input class="finput" value="${esc(c.url||'')}" oninput="updateCfg('${id}','url',this.value)"></div>
+      <div class="frow"><label class="flabel">Authorization Header</label>
+        <input class="finput" value="${esc((c.headers&&c.headers.Authorization)||'Bearer ${API_TOKEN}')}" oninput="updateCfg('${id}','auth_header',this.value)"></div>
+      ${['POST','PUT','PATCH'].includes(c.method) ? `
+      <div class="frow"><label class="flabel">Request Body (JSON)</label>
+        <textarea class="finput h-20" oninput="updateCfg('${id}','body',this.value)">${esc(c.body||'{"key":"value"}')}</textarea></div>
+      ` : ''}
+      <div class="frow"><label class="flabel">Retry Count</label>
+        <input class="finput" type="number" min="0" max="10" value="${c.retry_count||3}" oninput="updateCfg('${id}','retry_count',parseInt(this.value))"></div>`;
+
+    case 'kafka': return `
+      <div class="frow">
+        <label class="flabel">Operation</label>
+        <select class="finput" onchange="updateCfg('${id}','operation',this.value);renderConfigPanel(getTask('${id}'))">
+          <option value="publish"   ${c.operation==='publish'?'selected':''}>Publish</option>
+          <option value="subscribe" ${c.operation==='subscribe'?'selected':''}>Subscribe</option>
+        </select>
+      </div>
+      <div class="frow"><label class="flabel">Brokers (comma-separated)</label>
+        <input class="finput" value="${(c.brokers||['localhost:9092']).join(',')}" oninput="updateCfg('${id}','brokers',this.value.split(',').map(s=>s.trim()))"></div>
+      <div class="frow"><label class="flabel">Topic</label>
+        <input class="finput" value="${c.topic||'my_topic'}" oninput="updateCfg('${id}','topic',this.value)"></div>
+      ${c.operation === 'subscribe' ? `
+      <div class="frow"><label class="flabel">Consumer Group ID</label>
+        <input class="finput" value="${c.group_id||'my_group'}" oninput="updateCfg('${id}','group_id',this.value)"></div>
+      <div class="frow"><label class="flabel">Max Messages</label>
+        <input class="finput" type="number" value="${c.max_messages||100}" oninput="updateCfg('${id}','max_messages',parseInt(this.value))"></div>
+      ` : `
+      <div class="frow"><label class="flabel">Message (JSON)</label>
+        <textarea class="finput h-16" oninput="updateCfg('${id}','message_raw',this.value)">${esc(JSON.stringify(c.message||{event:'data_ready'},null,2))}</textarea></div>
+      `}`;
+
+    case 'file': return `
+      <div class="frow">
+        <label class="flabel">Operation</label>
+        <select class="finput" onchange="updateCfg('${id}','operation',this.value);renderConfigPanel(getTask('${id}'))">
+          ${['read','write','merge'].map(op => `<option value="${op}" ${c.operation===op?'selected':''}>${op}</option>`).join('')}
+        </select>
+      </div>
+      ${c.operation === 'merge' ? `
+      <div class="frow"><label class="flabel">Source Files (one per line)</label>
+        <textarea class="finput h-20" oninput="updateCfg('${id}','source_files',this.value.split('\\n').filter(Boolean))">${(c.source_files||[]).join('\n')}</textarea></div>
+      <div class="frow"><label class="flabel">Destination</label>
+        <input class="finput" value="${c.destination||'data/merged.csv'}" oninput="updateCfg('${id}','destination',this.value)"></div>
+      ` : `
+      <div class="frow"><label class="flabel">File Path</label>
+        <input class="finput" value="${c.file_path||'data/input.csv'}" oninput="updateCfg('${id}','file_path',this.value)"></div>
+      `}
+      ${c.operation === 'write' ? `
+      <div class="frow"><label class="flabel">Content</label>
+        <textarea class="finput h-16" oninput="updateCfg('${id}','content',this.value)">${esc(c.content||'')}</textarea></div>
+      ` : ''}`;
+
+    case 'email': return `
+      <div class="frow"><label class="flabel">SMTP Server</label>
+        <input class="finput" value="${c.smtp_server||'smtp.gmail.com'}" oninput="updateCfg('${id}','smtp_server',this.value)"></div>
+      <div class="frow"><label class="flabel">SMTP Port</label>
+        <input class="finput" type="number" value="${c.smtp_port||587}" oninput="updateCfg('${id}','smtp_port',parseInt(this.value))"></div>
+      <div class="frow"><label class="flabel">Sender Email</label>
+        <input class="finput" value="${c.sender_email||'${EMAIL_SENDER}'}" oninput="updateCfg('${id}','sender_email',this.value)"></div>
+      <div class="frow"><label class="flabel">Password (env var)</label>
+        <input class="finput" value="${c.sender_password||'${EMAIL_PASSWORD}'}" oninput="updateCfg('${id}','sender_password',this.value)"></div>
+      <div class="frow"><label class="flabel">Recipients (comma-separated)</label>
+        <input class="finput" value="${(c.recipients||[]).join(', ')}" oninput="updateCfg('${id}','recipients',this.value.split(',').map(s=>s.trim()))"></div>
+      <div class="frow"><label class="flabel">Subject</label>
+        <input class="finput" value="${esc(c.subject||'Pipeline Complete')}" oninput="updateCfg('${id}','subject',this.value)"></div>
+      <div class="frow"><label class="flabel">Body</label>
+        <textarea class="finput h-20" oninput="updateCfg('${id}','body',this.value)">${esc(c.body||'')}</textarea></div>`;
+
+    case 'validation': return `
+      <div class="frow"><label class="flabel">File Path</label>
+        <input class="finput" value="${c.file_path||'data/input.csv'}" oninput="updateCfg('${id}','file_path',this.value)"></div>
+      <div class="frow">
+        <div class="flex items-center justify-between mb-2">
+          <label class="flabel" style="margin-bottom:0">Quality Checks</label>
+          <div class="relative">
+            <button onclick="toggleTmplDd('${id}')"
+              class="flex items-center gap-1 text-[11px] text-indigo-500 hover:text-indigo-700 font-semibold">
+              <i class="fas fa-wand-magic-sparkles text-[10px]"></i> Template
+            </button>
+            <div id="tmpl-dd-${id}" class="tmpl-dd hidden">
+              ${CHECK_TEMPLATES.map((t,i) => `
+                <div class="tmpl-dd-item" onclick="addTmplCheck('${id}',${i})">${t.label}</div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+        <div id="checks-${id}" class="space-y-2">${renderChecks(task)}</div>
+        <button onclick="addCheck('${id}')" class="mt-2 w-full py-1 rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors">
+          <i class="fas fa-plus mr-1"></i>Add custom check
+        </button>
+      </div>`;
+
+    default: return '<p class="text-xs text-slate-400">No configuration required.</p>';
+  }
+}
+
+// ─────────────────────────────────────────
+// SQL — connection picker
+// ─────────────────────────────────────────
+function toggleSqlUseConn(taskId, on) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.config.use_connection = !!on;
+  if (!on) { delete task.config.connection_name; }
+  renderConfigPanel(task);
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+function onSqlConnChange(taskId, connName) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.config.connection_name = connName;
+  // Align task.config.database with the connection's type so YAML `plugin:` is correct.
+  const conn = pipeline.connections.find(cn => cn.name === connName);
+  if (conn && ['postgres','mysql','bigquery','snowflake'].includes(conn.conn_type)) {
+    task.config.database = conn.conn_type;
+  }
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// PER-TASK LINEAGE (reads_from / writes_to)
+// ─────────────────────────────────────────
+function buildLineageFields(task) {
+  const reads  = (task.lineage && task.lineage.reads_from) || [];
+  const writes = (task.lineage && task.lineage.writes_to)  || [];
+  const chip = (uri, kind, i) => `
+    <span class="var-badge" style="background:${kind==='reads'?'#eff6ff':'#f0fdf4'};color:${kind==='reads'?'#1d4ed8':'#166534'};border-color:${kind==='reads'?'#bfdbfe':'#bbf7d0'}">
+      ${esc(uri)}
+      <button onclick="removeLineage('${task.id}','${kind}',${i})" class="ml-1 text-current opacity-50 hover:opacity-100">×</button>
+    </span>`;
+  return `
+    <div class="frow">
+      <label class="flabel">Reads from</label>
+      <div class="flex flex-wrap mb-1">${reads.map((u,i)=>chip(u,'reads',i)).join('')}</div>
+      <input class="finput" placeholder="postgres://db/public.orders — press Enter"
+             onkeydown="if(event.key==='Enter'){addLineage('${task.id}','reads',this.value);this.value=''}">
+    </div>
+    <div class="frow">
+      <label class="flabel">Writes to</label>
+      <div class="flex flex-wrap mb-1">${writes.map((u,i)=>chip(u,'writes',i)).join('')}</div>
+      <input class="finput" placeholder="s3://bucket/orders.parquet — press Enter"
+             onkeydown="if(event.key==='Enter'){addLineage('${task.id}','writes',this.value);this.value=''}">
+    </div>
+    <p class="text-[10px] text-slate-400">Lineage powers /catalog and /lineage-viz</p>
+  `;
+}
+
+function addLineage(taskId, kind, value) {
+  const v = (value||'').trim();
+  if (!v) return;
+  const task = getTask(taskId);
+  if (!task) return;
+  if (!task.lineage) task.lineage = { reads_from: [], writes_to: [] };
+  const arr = kind === 'reads' ? (task.lineage.reads_from ||= []) : (task.lineage.writes_to ||= []);
+  if (!arr.includes(v)) arr.push(v);
+  refreshNode(task);
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+function removeLineage(taskId, kind, i) {
+  const task = getTask(taskId);
+  if (!task || !task.lineage) return;
+  const arr = kind === 'reads' ? task.lineage.reads_from : task.lineage.writes_to;
+  if (!arr) return;
+  arr.splice(i, 1);
+  if (!(task.lineage.reads_from||[]).length && !(task.lineage.writes_to||[]).length) task.lineage = null;
+  refreshNode(task);
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// PER-TASK QUALITY CHECKS (any task)
+// ─────────────────────────────────────────
+function buildQualityFields(task) {
+  // The validation task type has its own dedicated checks editor in buildConfigFields.
+  if (task.typeKey === 'validation') {
+    return `<p class="text-[10px] text-slate-400">Quality checks are configured above (this is a validation task).</p>`;
+  }
+  const checks = (task.quality && task.quality.checks) || [];
+  return `
+    <div class="flex items-center justify-between mb-2">
+      <label class="flabel mb-0">Quality Checks (post-run)</label>
+      <button onclick="addQualityCheck('${task.id}')" class="text-indigo-500 hover:text-indigo-700 text-xs font-semibold">
+        <i class="fas fa-plus mr-1"></i>Add
+      </button>
+    </div>
+    ${checks.length === 0
+      ? `<p class="text-[10px] text-slate-400">SQL assertions run against the task's result. Fails the task on mismatch.</p>`
+      : checks.map((ch, i) => `
+        <div class="var-item">
+          <div class="flex items-center justify-between mb-1">
+            <input class="finput" style="flex:1;margin-right:6px" placeholder="check name"
+                   value="${esc(ch.name||'')}"
+                   oninput="updateQualityCheck('${task.id}',${i},'name',this.value)">
+            <button onclick="removeQualityCheck('${task.id}',${i})" class="text-red-400 hover:text-red-600 text-xs">
+              <i class="fas fa-trash-can"></i>
+            </button>
+          </div>
+          <textarea class="finput" rows="2" placeholder="SELECT COUNT(*) FROM data WHERE col IS NULL"
+                    oninput="updateQualityCheck('${task.id}',${i},'sql',this.value)">${esc(ch.sql||'')}</textarea>
+          <div class="flex gap-1 mt-1">
+            <input class="finput" placeholder="expect" value="${ch.expect!==undefined?esc(String(ch.expect)):''}"
+                   oninput="updateQualityCheck('${task.id}',${i},'expect',this.value)">
+            <input class="finput" placeholder="≥ min" value="${ch.expect_min!==undefined?esc(String(ch.expect_min)):''}"
+                   oninput="updateQualityCheck('${task.id}',${i},'expect_min',this.value)">
+            <input class="finput" placeholder="≤ max" value="${ch.expect_max!==undefined?esc(String(ch.expect_max)):''}"
+                   oninput="updateQualityCheck('${task.id}',${i},'expect_max',this.value)">
+          </div>
+        </div>`).join('')
+    }
+  `;
+}
+
+function addQualityCheck(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  if (!task.quality) task.quality = { checks: [] };
+  if (!task.quality.checks) task.quality.checks = [];
+  task.quality.checks.push({ name: 'check_' + (task.quality.checks.length + 1), sql: '', expect: 0 });
+  renderConfigPanel(task);
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+function updateQualityCheck(taskId, i, field, value) {
+  const task = getTask(taskId);
+  if (!task || !task.quality || !task.quality.checks || !task.quality.checks[i]) return;
+  if (['expect','expect_min','expect_max'].includes(field)) {
+    if (value === '' || value === null) {
+      delete task.quality.checks[i][field];
+    } else {
+      const num = Number(value);
+      task.quality.checks[i][field] = Number.isFinite(num) ? num : value;
+    }
+  } else {
+    task.quality.checks[i][field] = value;
+  }
+  updateYAMLPreview();
+}
+
+function removeQualityCheck(taskId, i) {
+  const task = getTask(taskId);
+  if (!task || !task.quality || !task.quality.checks) return;
+  task.quality.checks.splice(i, 1);
+  if (!task.quality.checks.length) task.quality = null;
+  renderConfigPanel(task);
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+// ── Validation check template dropdown ──
+function toggleTmplDd(taskId) {
+  const dd = document.getElementById('tmpl-dd-' + taskId);
+  const hidden = dd.classList.toggle('hidden');
+  if (!hidden) {
+    const close = e => {
+      if (!dd.contains(e.target)) {
+        dd.classList.add('hidden');
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+
+function addTmplCheck(taskId, idx) {
+  const tmpl = CHECK_TEMPLATES[idx];
+  const task  = getTask(taskId);
+  task.config.checks = task.config.checks || [];
+  task.config.checks.push({
+    name:   tmpl.name + '_' + (task.config.checks.length + 1),
+    sql:    tmpl.sql,
+    expect: tmpl.expect,
+  });
+  document.getElementById('tmpl-dd-' + taskId)?.classList.add('hidden');
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+// ── Validation check helpers ──
+function renderChecks(task) {
+  return (task.config.checks || []).map((ch, i) => `
+    <div class="bg-slate-50 rounded-lg p-2 border border-slate-200">
+      <div class="flex items-center justify-between mb-1">
+        <input class="finput text-[11px] flex-1 mr-2" value="${esc(ch.name||'')}" placeholder="Check name"
+               oninput="updateCheck('${task.id}',${i},'name',this.value)">
+        <button onclick="removeCheck('${task.id}',${i})" class="text-slate-400 hover:text-red-500 text-xs shrink-0">✕</button>
+      </div>
+      <textarea class="finput text-[11px] h-12 mb-1" placeholder="SQL..." oninput="updateCheck('${task.id}',${i},'sql',this.value)">${esc(ch.sql||'')}</textarea>
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] text-slate-500">Expect:</span>
+        <input class="finput text-[11px] w-20" type="number" value="${ch.expect||0}" oninput="updateCheck('${task.id}',${i},'expect',parseInt(this.value))">
+      </div>
+    </div>
+  `).join('');
+}
+
+function addCheck(taskId) {
+  const task = getTask(taskId);
+  task.config.checks = task.config.checks || [];
+  task.config.checks.push({name:'check_'+(task.config.checks.length+1), sql:'SELECT COUNT(*) FROM data WHERE ...', expect:0});
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+function removeCheck(taskId, idx) {
+  const task = getTask(taskId);
+  task.config.checks.splice(idx, 1);
+  renderConfigPanel(task);
+  updateYAMLPreview();
+}
+
+function updateCheck(taskId, idx, field, value) {
+  const task = getTask(taskId);
+  task.config.checks[idx][field] = value;
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// STATE UPDATES
+// ─────────────────────────────────────────
+function updateTaskName(id, value) {
+  const task = getTask(id);
+  if (!task) return;
+  task.name = value;
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+function updateField(id, field, value) {
+  const task = getTask(id);
+  if (!task) return;
+  task[field] = value;
+  updateYAMLPreview();
+}
+
+function updateCfg(id, key, value) {
+  const task = getTask(id);
+  if (!task) return;
+  task.config[key] = value;
+  refreshNode(task);
+  updateYAMLPreview();
+}
+
+function updateCfgNested(id, key, value) {
+  const task = getTask(id);
+  if (!task) return;
+  if (!task.config.connection) task.config.connection = {};
+  task.config.connection[key] = value;
+  updateYAMLPreview();
+}
+
+// ─────────────────────────────────────────
+// YAML GENERATION
+// ─────────────────────────────────────────
+// ─────────────────────────────────────────
+// AUTOSAVE (localStorage)
+// ─────────────────────────────────────────
+const AUTOSAVE_KEY = 'jobBuilder.autosave.v1';
+let autosaveTimer = null;
+
+function writeAutosave() {
+  try {
+    const payload = {
+      pipelineName: document.getElementById('pipelineName')?.value || '',
+      pipelineDesc: document.getElementById('pipelineDesc')?.value || '',
+      tasks:        state.tasks,
+      edges:        state.edges,
+      nextId:       state.nextId,
+      schedule:     state.schedule,
+      meta,
+      pipeline:     { variables: pipeline.variables, connections: pipeline.connections },
+      savedAt:      Date.now(),
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+  } catch (_) { /* quota or privacy mode — ignore */ }
+}
+
+function clearAutosave() {
+  try { localStorage.removeItem(AUTOSAVE_KEY); } catch (_) {}
+}
+
+function restoreAutosave() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (!d || !Array.isArray(d.tasks) || !d.tasks.length) return false;
+    if (!confirm(`Restore unsaved canvas from ${new Date(d.savedAt).toLocaleString()}?`)) {
+      clearAutosave();
+      return false;
+    }
+    state.tasks    = d.tasks;
+    state.edges    = d.edges || [];
+    state.nextId   = d.nextId || (d.tasks.length + 1);
+    state.schedule = d.schedule || null;
+    Object.assign(meta, { team:'', tags:[], sla:null, triggers:[] }, d.meta || {});
+    pipeline.variables   = (d.pipeline && d.pipeline.variables)   || [];
+    pipeline.connections = (d.pipeline && d.pipeline.connections) || [];
+    if (d.pipelineName) document.getElementById('pipelineName').value = d.pipelineName;
+    if (d.pipelineDesc) document.getElementById('pipelineDesc').value = d.pipelineDesc;
+    if (state.schedule) {
+      const s = state.schedule;
+      document.getElementById('schedBtn').textContent =
+        `${s.minute||'0'} ${s.hour||'6'} ${s.day||'*'} ${s.month||'*'} ${s.day_of_week||'*'}`;
+    }
+    document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
+    state.tasks.forEach(t => mountNode(t));
+    renderSVG();
+    renderVarsPanel();
+    renderConnsPanel();
+    renderMetaPanel();
+    updateEmpty();
+    showStatus('Restored unsaved canvas from local draft.', 'indigo');
+    return true;
+  } catch (_) { return false; }
+}
+
+function updateYAMLPreview() {
+  // Schedule a debounced autosave so any state-mutating action persists.
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(writeAutosave, 400);
+}
+
+function generateYAML() {
+  const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
+  const desc = document.getElementById('pipelineDesc').value;
+  const lines = [`pipeline_name: ${name}`];
+  if (desc) lines.push(`description: "${escY(desc)}"`);
+
+  // NOTE: pipeline-level variables/connections are intentionally NOT emitted as
+  // top-level YAML keys — PipelineConfig has extra='forbid'. The Variables and
+  // Connections tabs exist only as a clipboard helper for ${var.x} / ${conn.x}
+  // references typed into individual task config fields. When the backend gains
+  // first-class support for these blocks, re-enable emission here.
+
+  if (meta.team) lines.push(`team: "${escY(meta.team)}"`);
+  if (meta.tags && meta.tags.length) {
+    lines.push('tags:');
+    meta.tags.forEach(tag => lines.push(`  - "${escY(tag)}"`));
+  }
+
+  if (meta.sla && meta.sla.max_duration_minutes > 0) {
+    lines.push('', 'sla:');
+    lines.push(`  max_duration_minutes: ${meta.sla.max_duration_minutes}`);
+    if (meta.sla.alert) {
+      lines.push('  alert:');
+      lines.push(`    type: ${meta.sla.alert.type}`);
+      if (meta.sla.alert.type === 'email' && meta.sla.alert.email) {
+        lines.push(`    email: "${escY(meta.sla.alert.email)}"`);
+      } else if (meta.sla.alert.type === 'webhook' && meta.sla.alert.webhook_url) {
+        lines.push(`    webhook_url: "${escY(meta.sla.alert.webhook_url)}"`);
+      }
+    }
+  }
+
+  if (meta.triggers && meta.triggers.length) {
+    lines.push('', 'triggers:');
+    meta.triggers.forEach(t => {
+      lines.push(`  - type: ${t.type}`);
+      if (t.type === 'file_sensor') {
+        if (t.watch_path)            lines.push(`    watch_path: "${escY(t.watch_path)}"`);
+        if (t.poll_interval_seconds) lines.push(`    poll_interval_seconds: ${t.poll_interval_seconds}`);
+      } else {
+        if (t.upstream_pipeline)     lines.push(`    upstream_pipeline: "${escY(t.upstream_pipeline)}"`);
+      }
+    });
+  }
+
+  if (state.schedule) {
+    lines.push('', 'schedule:');
+    Object.entries(state.schedule).forEach(([k,v]) => lines.push(`  ${k}: "${v}"`));
+  }
+  lines.push('', 'tasks:');
+  for (const task of state.tasks) {
+    const deps = state.edges.filter(e => e.to === task.id).map(e => e.from);
+    const isTransformer = task.typeKey === 'dbt';
+    const plugin = getPlugin(task);
+    lines.push(`  - name: "${escY(task.name)}"`);
+    lines.push(`    id: ${task.id}`);
+    lines.push(`    type: ${isTransformer ? 'transformer' : 'executor'}`);
+    lines.push(`    plugin: ${plugin}`);
+    if ((task.retries||0) > 0) lines.push(`    retries: ${task.retries}`);
+    if (deps.length) lines.push(`    depends_on: [${deps.join(', ')}]`);
+
+    // Per-task lineage (Phase B2)
+    const reads  = (task.lineage && task.lineage.reads_from) || [];
+    const writes = (task.lineage && task.lineage.writes_to)  || [];
+    if (reads.length || writes.length) {
+      lines.push('    lineage:');
+      if (reads.length) {
+        lines.push('      reads_from:');
+        reads.forEach(u => lines.push(`        - "${escY(u)}"`));
+      }
+      if (writes.length) {
+        lines.push('      writes_to:');
+        writes.forEach(u => lines.push(`        - "${escY(u)}"`));
+      }
+    }
+
+    // Per-task quality checks (Phase B2 — any task)
+    const qChecks = (task.quality && task.quality.checks) || [];
+    if (qChecks.length) {
+      lines.push('    quality:');
+      lines.push('      checks:');
+      qChecks.forEach(ch => {
+        lines.push(`        - name: ${ch.name||'check'}`);
+        if (ch.sql) lines.push(`          sql: "${escY(ch.sql)}"`);
+        if (ch.expect !== undefined && ch.expect !== '') lines.push(`          expect: ${ch.expect}`);
+        if (ch.expect_min !== undefined && ch.expect_min !== '' && ch.expect_min !== null) lines.push(`          expect_min: ${ch.expect_min}`);
+        if (ch.expect_max !== undefined && ch.expect_max !== '' && ch.expect_max !== null) lines.push(`          expect_max: ${ch.expect_max}`);
+      });
+    }
+
+    const cfgLines = buildConfigYAML(task);
+    if (cfgLines.length) { lines.push('    config:'); cfgLines.forEach(l => lines.push('      ' + l)); }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function getPlugin(task) {
+  if (task.typeKey === 'sql') return task.config.database || 'duckdb';
+  if (task.typeKey === 'validation') return 'duckdb';
+  return TT[task.typeKey].plugin || 'python';
+}
+
+function buildConfigYAML(task) {
+  const c = task.config, lines = [];
+  switch (task.typeKey) {
+    case 'sql':
+      if (c.use_connection && c.connection_name) {
+        // Resolve the saved connection by name and inline its fields.
+        // (The backend doesn't yet have first-class ${conn.x} resolution at load time.)
+        const conn = pipeline.connections.find(cn => cn.name === c.connection_name);
+        if (conn) {
+          if (conn.conn_type === 'bigquery') {
+            if (conn.project_id) lines.push(`project_id: ${conn.project_id}`);
+            if (conn.dataset_id) lines.push(`dataset_id: ${conn.dataset_id}`);
+          } else {
+            lines.push('connection:');
+            if (conn.host)     lines.push(`  host: ${conn.host}`);
+            if (conn.port)     lines.push(`  port: ${conn.port}`);
+            if (conn.database) lines.push(`  database: ${conn.database}`);
+            if (conn.user)     lines.push(`  user: ${conn.user}`);
+            if (conn.password) lines.push(`  password: "${escY(conn.password)}"`);
+          }
+        }
+        lines.push(`# connection: \${conn.${c.connection_name}}`);
+      } else if (c.database && c.database !== 'duckdb') {
+        if (c.database === 'bigquery') {
+          if (c.project_id) lines.push(`project_id: ${c.project_id}`);
+          if (c.dataset_id) lines.push(`dataset_id: ${c.dataset_id}`);
+        } else {
+          lines.push('connection:');
+          if (c.host)     lines.push(`  host: ${c.host}`);
+          if (c.port)     lines.push(`  port: ${c.port}`);
+          if (c.db_name)  lines.push(`  database: ${c.db_name}`);
+          if (c.user)     lines.push(`  user: ${c.user}`);
+          if (c.password) lines.push(`  password: "${escY(c.password)}"`);
+        }
+      }
+      if (c.sql) { lines.push('sql: |'); c.sql.split('\n').forEach(l => lines.push('  ' + l)); }
+      if (c.return_data) lines.push('return_data: true');
+      break;
+
+    case 'python':
+      if (c.mode === 'script') {
+        if (c.script_path) lines.push(`script_path: ${c.script_path}`);
+      } else {
+        if (c.code) { lines.push('code: |'); c.code.split('\n').forEach(l => lines.push('  ' + l)); }
+      }
+      break;
+
+    case 'shell':
+      if (c.command)      lines.push(`command: "${escY(c.command)}"`);
+      if (c.cwd && c.cwd !== '.') lines.push(`cwd: ${c.cwd}`);
+      if (c.timeout)      lines.push(`timeout: ${c.timeout}`);
+      break;
+
+    case 'dbt':
+      if (c.operation)    lines.push(`operation: ${c.operation}`);
+      if (c.project_dir)  lines.push(`project_dir: ${c.project_dir}`);
+      if (c.profiles_dir) lines.push(`profiles_dir: ${c.profiles_dir}`);
+      if (c.select)       lines.push(`select: ${c.select}`);
+      break;
+
+    case 'spark':
+      if (c.spark_master) lines.push(`spark_master: ${c.spark_master}`);
+      if (c.app_name)     lines.push(`app_name: ${c.app_name}`);
+      if (c.input_path)   lines.push(`input_path: ${c.input_path}`);
+      if (c.output_path)  lines.push(`output_path: ${c.output_path}`);
+      break;
+
+    case 'api':
+      if (c.method) lines.push(`method: ${c.method}`);
+      if (c.url)    lines.push(`url: "${escY(c.url)}"`);
+      if (c.auth_header || (c.headers && c.headers.Authorization)) {
+        lines.push('headers:');
+        lines.push(`  Authorization: "${escY(c.auth_header || c.headers.Authorization)}"`);
+      }
+      if (['POST','PUT','PATCH'].includes(c.method) && c.body) {
+        lines.push('json:'); lines.push('  # ' + c.body.replace(/\n/g,' '));
+      }
+      if (c.retry_count) lines.push(`retry_count: ${c.retry_count}`);
+      break;
+
+    case 'kafka':
+      if (c.operation) lines.push(`operation: ${c.operation}`);
+      if (c.brokers)   lines.push(`brokers: [${(c.brokers||[]).join(', ')}]`);
+      if (c.topic)     lines.push(`topic: ${c.topic}`);
+      if (c.operation === 'subscribe') {
+        if (c.group_id)     lines.push(`group_id: ${c.group_id}`);
+        if (c.max_messages) lines.push(`max_messages: ${c.max_messages}`);
+      } else {
+        lines.push('message:');
+        lines.push('  event: data_ready');
+      }
+      break;
+
+    case 'file':
+      lines.push(`operation: ${c.operation||'read'}`);
+      if (c.operation === 'merge') {
+        lines.push('source_files:');
+        (c.source_files||[]).forEach(f => lines.push(`  - ${f}`));
+        if (c.destination) lines.push(`destination: ${c.destination}`);
+      } else {
+        if (c.file_path) lines.push(`file_path: ${c.file_path}`);
+        if (c.operation === 'write' && c.content) lines.push(`content: "${escY(c.content)}"`);
+      }
+      break;
+
+    case 'email':
+      if (c.smtp_server)     lines.push(`smtp_server: ${c.smtp_server}`);
+      if (c.smtp_port)       lines.push(`smtp_port: ${c.smtp_port}`);
+      if (c.sender_email)    lines.push(`sender_email: "${c.sender_email}"`);
+      if (c.sender_password) lines.push(`sender_password: "${c.sender_password}"`);
+      if (c.recipients)      lines.push(`recipients: [${c.recipients.map(r=>`"${r}"`).join(', ')}]`);
+      if (c.subject)         lines.push(`subject: "${escY(c.subject)}"`);
+      if (c.body)            lines.push(`body: "${escY(c.body)}"`);
+      break;
+
+    case 'validation':
+      lines.push(`operation: validate`);
+      if (c.file_path) lines.push(`file_path: ${c.file_path}`);
+      if (c.checks && c.checks.length) {
+        lines.push('checks:');
+        c.checks.forEach(ch => {
+          lines.push(`  - name: ${ch.name}`);
+          lines.push(`    sql: "${escY(ch.sql||'')}"`);
+          lines.push(`    expect: ${ch.expect||0}`);
+        });
+      }
+      break;
+
+  }
+  return lines;
+}
+
+// ─────────────────────────────────────────
+// YAML MODAL
+// ─────────────────────────────────────────
+function _checkCredentialWarning() {
+  const yaml = document.getElementById('yaml-output').textContent;
+  const sensitive = /(password|token|secret|api_key|private_key|credentials)\s*:/i.test(yaml);
+  document.getElementById('credential-warning').style.display = sensitive ? '' : 'none';
+}
+
+function showYAML() {
+  const yaml = generateYAML();
+  const name = document.getElementById('pipelineName').value || 'my_pipeline';
+  document.getElementById('yaml-pipeline-label').textContent = name + '.yaml · ' + state.tasks.length + ' task(s)';
+  document.getElementById('yaml-output').textContent = yaml;
+  document.getElementById('yaml-modal').classList.remove('hidden');
+  _checkCredentialWarning();
+}
+function closeYAML() { document.getElementById('yaml-modal').classList.add('hidden'); }
+function copyYAML()  { navigator.clipboard.writeText(generateYAML()).then(() => showStatus('YAML copied to clipboard', 'green')); }
+
+// ─────────────────────────────────────────
+// SCHEDULE MODAL
+// ─────────────────────────────────────────
+function showScheduleModal() {
+  if (state.schedule) {
+    document.getElementById('sched-min').value = state.schedule.minute || '0';
+    document.getElementById('sched-hr').value  = state.schedule.hour   || '6';
+    document.getElementById('sched-dom').value = state.schedule.day    || '*';
+    document.getElementById('sched-mo').value  = state.schedule.month  || '*';
+    document.getElementById('sched-dow').value = state.schedule.day_of_week || '*';
+  }
+  document.getElementById('sched-modal').classList.remove('hidden');
+  renderCronPreview();
+}
+function closeScheduleModal() { document.getElementById('sched-modal').classList.add('hidden'); }
+function setPreset(cron) {
+  const [min, hr, dom, mo, dow] = cron.split(' ');
+  document.getElementById('sched-min').value = min;
+  document.getElementById('sched-hr').value  = hr;
+  document.getElementById('sched-dom').value = dom;
+  document.getElementById('sched-mo').value  = mo;
+  document.getElementById('sched-dow').value = dow;
+  renderCronPreview();
+}
+
+// ── Cron field matchers (supports *, n, a-b, */n, a,b,c) ──
+function _matchCron(field, value, valid) {
+  field = (field || '*').trim();
+  if (field === '*') return true;
+  for (const part of field.split(',')) {
+    let step = 1, body = part;
+    if (part.includes('/')) { const [b, s] = part.split('/'); body = b || '*'; step = parseInt(s, 10) || 1; }
+    let lo, hi;
+    if (body === '*') { lo = valid[0]; hi = valid[1]; }
+    else if (body.includes('-')) { const [a, b] = body.split('-').map(Number); lo = a; hi = b; }
+    else { const n = Number(body); lo = n; hi = n; }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) continue;
+    if (value < lo || value > hi) continue;
+    if ((value - lo) % step === 0) return true;
+  }
+  return false;
+}
+
+function _cronMatches(dt, sched) {
+  return _matchCron(sched.minute, dt.getMinutes(),  [0, 59])
+      && _matchCron(sched.hour,   dt.getHours(),    [0, 23])
+      && _matchCron(sched.dom,    dt.getDate(),     [1, 31])
+      && _matchCron(sched.month,  dt.getMonth() + 1, [1, 12])
+      && _matchCron(sched.dow,    dt.getDay(),      [0, 6]);
+}
+
+function renderCronPreview() {
+  const sched = {
+    minute: document.getElementById('sched-min')?.value || '0',
+    hour:   document.getElementById('sched-hr')?.value  || '0',
+    dom:    document.getElementById('sched-dom')?.value || '*',
+    month:  document.getElementById('sched-mo')?.value  || '*',
+    dow:    document.getElementById('sched-dow')?.value || '*',
+  };
+  const out = document.getElementById('cron-preview');
+  if (!out) return;
+  const hits = [];
+  const start = new Date();
+  start.setSeconds(0, 0);
+  // Round forward to the next minute and scan up to 14 days.
+  start.setMinutes(start.getMinutes() + 1);
+  const MAX_SCAN = 14 * 24 * 60; // minutes
+  const dt = new Date(start.getTime());
+  let i = 0;
+  while (hits.length < 3 && i < MAX_SCAN) {
+    if (_cronMatches(dt, sched)) hits.push(new Date(dt.getTime()));
+    dt.setMinutes(dt.getMinutes() + 1);
+    i++;
+  }
+  if (!hits.length) {
+    out.innerHTML = `<li class="text-slate-400">No matching runs in the next 14 days.</li>`;
+    return;
+  }
+  out.innerHTML = hits.map(d => `<li><i class="far fa-clock text-indigo-400 mr-1"></i>${d.toLocaleString()}</li>`).join('');
+}
+function applySchedule() {
+  state.schedule = {
+    minute:      document.getElementById('sched-min').value || '0',
+    hour:        document.getElementById('sched-hr').value  || '6',
+    day:         document.getElementById('sched-dom').value || '*',
+    month:       document.getElementById('sched-mo').value  || '*',
+    day_of_week: document.getElementById('sched-dow').value || '*',
+  };
+  document.getElementById('schedBtn').textContent =
+    `${state.schedule.minute} ${state.schedule.hour} ${state.schedule.day} ${state.schedule.month} ${state.schedule.day_of_week}`;
+  closeScheduleModal();
+}
+function clearSchedule() {
+  state.schedule = null;
+  document.getElementById('schedBtn').textContent = 'Schedule';
+  closeScheduleModal();
+}
+
+// ─────────────────────────────────────────
+// SAVE / RUN
+// ─────────────────────────────────────────
+// Tracks the last saved file_path so Run can pass it to /run/sync.
+let lastSavedPath = null;
+
+async function savePipeline() {
+  if (!state.tasks.length) { showStatus('Add at least one task before saving.', 'amber'); return null; }
+  const yaml = generateYAML();
+  const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
+  try {
+    const r = await fetch('/save-pipeline', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({yaml_content: yaml, filename: name})});
+    const d = await r.json();
+    if (r.ok) {
+      lastSavedPath = d.file_path || null;
+      showStatus('Pipeline saved → ' + (d.file_path || name + '.yaml'), 'green');
+      clearAutosave();
+      // Phase B5 — run validation in the background so users see DAG/plugin issues
+      // as red node borders without an extra click.
+      runValidationGate(d.file_path);
+      return d.file_path || null;
+    }
+    showStatus('Save failed: ' + (d.detail || 'unknown error'), 'red');
+    return null;
+  } catch(e) { showStatus('Save failed: ' + e.message, 'red'); return null; }
+}
+
+async function runValidationGate(configPath) {
+  if (!configPath) return;
+  try {
+    const r = await fetch('/validate', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({config_path: configPath})});
+    if (!r.ok) return;
+    const d = await r.json();
+    applyValidationMarkers(d);
+  } catch (_) { /* non-blocking */ }
+}
+
+function applyValidationMarkers(d) {
+  // Clear previous markers.
+  document.querySelectorAll('.task-node').forEach(el => {
+    el.classList.remove('node-error');
+    const dot = el.querySelector('.node-err-dot');
+    if (dot) dot.remove();
+  });
+  if (!d || d.is_valid) return;
+  // Map task_name -> task.id via state.tasks (names are unique by PipelineConfig validator).
+  const nameToId = {};
+  state.tasks.forEach(t => { nameToId[t.name] = t.id; });
+  (d.task_results || []).filter(tr => !tr.plugin_loadable).forEach(tr => {
+    const taskId = nameToId[tr.task_name];
+    const el = taskId ? document.getElementById('node-' + taskId) : null;
+    if (!el) return;
+    el.classList.add('node-error');
+    const dot = document.createElement('div');
+    dot.className = 'node-err-dot';
+    dot.title = tr.error || 'plugin not loadable';
+    el.querySelector('.node-card')?.appendChild(dot);
+  });
+}
+
+async function validatePipeline() {
+  if (!state.tasks.length) { showStatus('Add at least one task before validating.', 'amber'); return; }
+  const savedPath = await savePipeline();
+  if (!savedPath) return;
+  try {
+    showStatus('Validating…', 'indigo');
+    const r = await fetch('/validate', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({config_path: savedPath})});
+    const d = await r.json();
+    if (!r.ok) { showStatus('Validate failed: ' + (d.detail || 'unknown error'), 'red'); return; }
+    if (d.is_valid) {
+      showStatus(`Valid — ${d.task_count} task(s), all plugins loadable.`, 'green');
+    } else {
+      const firstErr = (d.errors||[])[0] || 'see task results';
+      showStatus(`Invalid: ${firstErr}`, 'red');
+    }
+  } catch(e) { showStatus('Validate error: ' + e.message, 'red'); }
+}
+
+async function runPipeline() {
+  if (!state.tasks.length) { showStatus('Add at least one task before running.', 'amber'); return; }
+  const savedPath = await savePipeline();
+  if (!savedPath) return;
+  clearRunMarkers();
+  state.tasks.forEach(t => { const el = document.getElementById('node-'+t.id); if (el) el.classList.add('node-running'); });
+  try {
+    showStatus('Running pipeline…', 'indigo');
+    const r = await fetch('/run/sync', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({config_path: savedPath})});
+    const d = await r.json();
+    clearRunMarkers();
+    if (r.ok) {
+      applyRunResults(d.results || {}, d.execution_order || []);
+      const ok = Object.values(d.results || {}).filter(v => v).length;
+      const fail = Object.values(d.results || {}).filter(v => !v).length;
+      const pname = d.pipeline_name || '';
+      const link = ` <a href="/dashboard" class="underline">view runs</a>`;
+      const msg = d.status === 'completed'
+        ? `Run complete — ${ok} task(s) succeeded.${link}`
+        : `Run ${d.status} — ${ok} ok, ${fail} failed. ${d.message||''}${link}`;
+      showStatusHTML(msg, d.status === 'completed' ? 'green' : 'red');
+    } else {
+      showStatus('Run failed: ' + (d.detail || 'unknown error'), 'red');
+    }
+  } catch(e) {
+    clearRunMarkers();
+    showStatus('Run error: ' + e.message, 'red');
+  }
+}
+
+function applyRunResults(results, execOrder) {
+  // results is { task_name: bool }. Match by name; on /run/sync currently every
+  // listed task is present only on success path, so we treat absent-after-completion
+  // as "did not run" (no marker).
+  const nameToId = {};
+  state.tasks.forEach(t => { nameToId[t.name] = t.id; });
+  Object.entries(results).forEach(([name, ok]) => {
+    const id = nameToId[name];
+    const el = id ? document.getElementById('node-' + id) : null;
+    if (!el) return;
+    el.classList.add(ok ? 'node-ok' : 'node-fail');
+  });
+}
+
+function clearRunMarkers() {
+  document.querySelectorAll('.task-node').forEach(el => {
+    el.classList.remove('node-ok','node-fail','node-running');
+  });
+}
+
+// ─────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────
+function getTask(id) { return state.tasks.find(t => t.id === id); }
+
+function updateEmpty() {
+  document.getElementById('canvas-empty').style.display = state.tasks.length ? 'none' : '';
+}
+
+function clearCanvas() {
+  if (state.tasks.length && !confirm('Clear all tasks from the canvas?')) return;
+  saveSnap();
+  state.tasks = []; state.edges = []; state.selected = null;
+  state.schedule = null;
+  meta.team = ''; meta.tags = []; meta.sla = null; meta.triggers = [];
+  document.getElementById('schedBtn').textContent = 'Schedule';
+  document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
+  document.getElementById('config-panel').classList.remove('open');
+  renderSVG(); updateEmpty();
+  renderMetaPanel();
+  clearAutosave();
+}
+
+function showStatus(msg, color) { _renderStatus(esc(msg), color); }
+function showStatusHTML(html, color) { _renderStatus(html, color); }
+function _renderStatus(innerHTML, color) {
+  const bar = document.getElementById('statusBar');
+  const colors = {
+    green:  'bg-green-50 text-green-700 border-green-200',
+    red:    'bg-red-50 text-red-700 border-red-200',
+    amber:  'bg-amber-50 text-amber-700 border-amber-200',
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  };
+  bar.className = `px-5 py-1.5 text-xs font-medium flex items-center gap-2 border-b ${colors[color]||colors.indigo}`;
+  bar.innerHTML = `<i class="fas fa-circle-info"></i> ${innerHTML}`;
+  bar.classList.remove('hidden');
+  if (color !== 'indigo') setTimeout(() => bar.classList.add('hidden'), 6000);
+}
+
+function esc(s)  { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escY(s) { return String(s||'').replace(/"/g,'\\"'); }
+
+function copyRef(ref) {
+  navigator.clipboard.writeText(ref).then(() => showStatus('Copied: ' + ref, 'green'));
+}
+
+// ─────────────────────────────────────────
+// OPEN PIPELINE MODAL
+// ─────────────────────────────────────────
+let _allPipelines = [];
+
+async function openPipelineModal() {
+  document.getElementById('open-modal').classList.remove('hidden');
+  document.getElementById('open-search').value = '';
+  document.getElementById('open-list').innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Loading…</p>';
+  try {
+    const r = await fetch('/pipelines');
+    const d = await r.json();
+    _allPipelines = d.pipelines || [];
+    renderOpenList(_allPipelines);
+  } catch {
+    document.getElementById('open-list').innerHTML = '<p class="text-xs text-red-400 text-center py-4">Failed to load pipelines.</p>';
+  }
+}
+
+function closeOpenModal() { document.getElementById('open-modal').classList.add('hidden'); }
+
+// ─────────────────────────────────────────
+// VERSIONS DRAWER
+// ─────────────────────────────────────────
+async function openVersionsModal() {
+  const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
+  document.getElementById('ver-modal').classList.remove('hidden');
+  document.getElementById('ver-label').textContent = name + ' — every Save snapshots (deduped by SHA-256)';
+  document.getElementById('ver-list').innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Loading…</p>';
+  document.getElementById('ver-yaml').textContent = 'Select a version on the left to view its YAML.';
+  try {
+    const r = await fetch('/versions/' + encodeURIComponent(name));
+    if (!r.ok) {
+      document.getElementById('ver-list').innerHTML = `<p class="text-xs text-amber-500 text-center py-6">No versions yet. Save the pipeline first.</p>`;
+      return;
+    }
+    const versions = await r.json();
+    renderVersionList(name, versions);
+  } catch (e) {
+    document.getElementById('ver-list').innerHTML = `<p class="text-xs text-red-400 text-center py-6">Failed to load: ${esc(e.message)}</p>`;
+  }
+}
+
+function closeVersionsModal() { document.getElementById('ver-modal').classList.add('hidden'); }
+
+function renderVersionList(pipelineName, versions) {
+  const list = document.getElementById('ver-list');
+  if (!versions || !versions.length) {
+    list.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">No versions yet.</p>`;
+    return;
+  }
+  list.innerHTML = versions.map((v, i) => {
+    const ts = v.saved_at ? new Date(v.saved_at).toLocaleString() : '';
+    const isHead = i === 0;
+    const shortHash = (v.version_hash || '').substring(0, 8);
+    return `
+      <div onclick="loadVersion('${esc(pipelineName)}','${esc(v.version_id)}',this)"
+           class="px-3 py-2 rounded-lg hover:bg-indigo-50 cursor-pointer border border-transparent hover:border-indigo-200 transition-colors">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-700">${esc(ts || ('v' + v.version_id))}</span>
+          ${isHead ? '<span class="text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">HEAD</span>' : ''}
+        </div>
+        <p class="text-[10px] text-slate-400 mt-0.5">${esc(v.saved_by||'unknown')} · <code>${shortHash}</code></p>
+      </div>`;
+  }).join('');
+}
+
+async function loadVersion(pipelineName, versionId, el) {
+  document.querySelectorAll('#ver-list > div').forEach(d => d.classList.remove('bg-indigo-100'));
+  if (el) el.classList.add('bg-indigo-100');
+  try {
+    const r = await fetch(`/versions/${encodeURIComponent(pipelineName)}/${encodeURIComponent(versionId)}`);
+    if (!r.ok) throw new Error('Version not found');
+    const v = await r.json();
+    document.getElementById('ver-yaml').textContent = v.content || v.yaml_content || '(empty)';
+  } catch (e) {
+    document.getElementById('ver-yaml').textContent = 'Error: ' + e.message;
+  }
+}
+
+function filterOpenList(query) {
+  const q = query.toLowerCase();
+  renderOpenList(_allPipelines.filter(p =>
+    p.display_name.toLowerCase().includes(q) || (p.description||'').toLowerCase().includes(q)
+  ));
+}
+
+function renderOpenList(pipelines) {
+  const list = document.getElementById('open-list');
+  if (!pipelines.length) {
+    list.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">No pipelines found.</p>';
+    return;
+  }
+  list.innerHTML = pipelines.map(p => `
+    <div onclick="loadPipeline('${esc(p.file_path)}')"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 border border-transparent cursor-pointer transition-all group">
+      <div class="w-9 h-9 rounded-lg bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center shrink-0 transition-colors">
+        <i class="fas fa-diagram-project text-slate-400 group-hover:text-indigo-500 text-sm transition-colors"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-slate-800 truncate">${esc(p.display_name)}</p>
+        <p class="text-xs text-slate-400 truncate">${esc(p.description||'No description')} · ${p.task_count} task${p.task_count!==1?'s':''}</p>
+      </div>
+      <i class="fas fa-arrow-right text-slate-300 group-hover:text-indigo-400 text-xs transition-colors"></i>
+    </div>
+  `).join('');
+}
+
+async function loadPipeline(filePath) {
+  closeOpenModal();
+  showStatus('Loading pipeline…', 'indigo');
+  try {
+    const r = await fetch('/pipeline-config?config_path=' + encodeURIComponent(filePath));
+    if (!r.ok) throw new Error('Pipeline not found');
+    const d = await r.json();
+    importParsedConfig(d.parsed_config);
+    showStatus('Pipeline loaded into canvas.', 'green');
+  } catch(e) {
+    showStatus('Failed to load pipeline: ' + e.message, 'red');
+  }
+}
+
+function importParsedConfig(cfg) {
+  state.tasks = []; state.edges = []; state.selected = null; state.nextId = 1;
+  hist.undo = []; hist.redo = [];
+  syncHistBtns();
+
+  // Import pipeline-level variables and connections if present
+  if (cfg.variables) {
+    pipeline.variables = Object.entries(cfg.variables).map(([name, val]) => ({
+      id: 'v' + varIdCtr++, name,
+      type: Array.isArray(val) ? 'list' : typeof val === 'boolean' ? 'boolean' : typeof val === 'number' ? 'integer' : 'string',
+      default_value: Array.isArray(val) ? val.join(', ') : String(val),
+    }));
+  } else {
+    pipeline.variables = [];
+  }
+  if (cfg.connections) {
+    pipeline.connections = (cfg.connections || []).map(c => ({
+      id: 'c' + connIdCtr++, name: c.name, conn_type: c.type, expanded: false,
+      ...(CONN_DEFAULTS[c.type] || {}), ...c,
+    }));
+  } else {
+    pipeline.connections = [];
+  }
+  renderVarsPanel();
+  renderConnsPanel();
+
+  // Pipeline-level metadata (team, tags, sla, triggers)
+  meta.team     = cfg.team || '';
+  meta.tags     = Array.isArray(cfg.tags) ? cfg.tags.slice() : [];
+  meta.sla      = cfg.sla ? JSON.parse(JSON.stringify(cfg.sla)) : null;
+  meta.triggers = Array.isArray(cfg.triggers) ? cfg.triggers.map(t => ({...t})) : [];
+  renderMetaPanel();
+
+  document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
+  document.getElementById('config-panel').classList.remove('open');
+
+  document.getElementById('pipelineName').value = cfg.pipeline_name || 'my_pipeline';
+  document.getElementById('pipelineDesc').value = cfg.description || '';
+  if (cfg.schedule) {
+    state.schedule = cfg.schedule;
+    const s = cfg.schedule;
+    document.getElementById('schedBtn').textContent =
+      `${s.minute||'0'} ${s.hour||'6'} ${s.day||'*'} ${s.month||'*'} ${s.day_of_week||'*'}`;
+  } else {
+    state.schedule = null;
+    document.getElementById('schedBtn').textContent = 'Schedule';
+  }
+
+  const rawTasks = cfg.tasks || [];
+  const idMap = {};
+  rawTasks.forEach((rt, i) => {
+    const typeKey = guessTypeKey(rt.plugin, rt.config || {}, rt.type);
+    const id = 'task_' + state.nextId++;
+    idMap[rt.id || rt.name] = id;
+    state.tasks.push({
+      id, typeKey,
+      name:    rt.name || `task_${i+1}`,
+      x: 0, y: 0,
+      retries: rt.retries || 0,
+      config:  buildImportedConfig(typeKey, rt.plugin, rt.config || {}),
+      lineage: rt.lineage ? {
+        reads_from: Array.isArray(rt.lineage.reads_from) ? rt.lineage.reads_from.slice() : [],
+        writes_to:  Array.isArray(rt.lineage.writes_to)  ? rt.lineage.writes_to.slice()  : [],
+      } : null,
+      quality: rt.quality && Array.isArray(rt.quality.checks) ? {
+        checks: rt.quality.checks.map(c => ({...c})),
+      } : null,
+    });
+  });
+
+  rawTasks.forEach(rt => {
+    const toId = idMap[rt.id || rt.name];
+    (rt.depends_on || []).forEach(dep => {
+      const fromId = idMap[dep];
+      if (fromId && toId) state.edges.push({from: fromId, to: toId});
+    });
+  });
+
+  autoLayout();
+  state.tasks.forEach(t => mountNode(t));
+  renderSVG();
+  updateEmpty();
+  updateYAMLPreview();
+}
+
+function guessTypeKey(plugin, config, taskType) {
+  if (taskType === 'transformer' || plugin === 'dbt') return 'dbt';
+  const op = (config.operation || '').toLowerCase();
+  if (plugin === 'duckdb') {
+    if (op === 'validate' || config.checks) return 'validation';
+    return 'sql';
+  }
+  const map = {
+    postgres:'sql', mysql:'sql', bigquery:'sql', snowflake:'sql',
+    python:'python', shell:'shell', spark:'spark',
+    api:'api', kafka:'kafka', file:'file', email:'email',
+  };
+  return map[plugin] || 'python';
+}
+
+function buildImportedConfig(typeKey, plugin, rawConfig) {
+  const base = JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey] || {}));
+  if (typeKey === 'sql') {
+    base.database = plugin || 'duckdb';
+    if (rawConfig.connection)             base.connection = rawConfig.connection;
+    if (rawConfig.sql)                    base.sql = rawConfig.sql;
+    if (rawConfig.return_data !== undefined) base.return_data = rawConfig.return_data;
+    if (rawConfig.project_id)             base.project_id = rawConfig.project_id;
+    if (rawConfig.dataset_id)             base.dataset_id = rawConfig.dataset_id;
+  } else {
+    Object.assign(base, rawConfig);
+  }
+  return base;
+}
+
+function autoLayout() {
+  if (!state.tasks.length) return;
+  const depth = {};
+  function getDepth(id) {
+    if (depth[id] !== undefined) return depth[id];
+    const deps = state.edges.filter(e => e.to === id).map(e => e.from);
+    if (!deps.length) { depth[id] = 0; return 0; }
+    depth[id] = Math.max(...deps.map(d => getDepth(d))) + 1;
+    return depth[id];
+  }
+  state.tasks.forEach(t => getDepth(t.id));
+  const waves = {};
+  state.tasks.forEach(t => {
+    const d = depth[t.id] || 0;
+    if (!waves[d]) waves[d] = [];
+    waves[d].push(t.id);
+  });
+  const WAVE_W = 280, NODE_H_STEP = 130, START_X = 60, CANVAS_H = 720;
+  Object.entries(waves).forEach(([d, ids]) => {
+    const x = START_X + parseInt(d) * WAVE_W;
+    const totalH = ids.length * NODE_H_STEP;
+    const startY = Math.max(40, (CANVAS_H - totalH) / 2);
+    ids.forEach((id, i) => {
+      const task = getTask(id);
+      if (task) { task.x = x; task.y = startY + i * NODE_H_STEP; }
+    });
+  });
+}
+
+// Re-run credential check whenever any input changes and the YAML modal is open
+document.addEventListener('input', function() {
+  if (!document.getElementById('yaml-modal').classList.contains('hidden')) {
+    document.getElementById('yaml-output').textContent = generateYAML();
+    _checkCredentialWarning();
+  }
+});
+</script>
+</body>
+</html>

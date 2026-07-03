@@ -20,6 +20,7 @@ dependencies = [
     "snowflake-connector-python",
     "pandas",
     "requests",
+    "bcrypt>=4.0.0",
 ]
 authors = [
     {name = "Prabhu Saravanan", email = "prabhu@example.com"},

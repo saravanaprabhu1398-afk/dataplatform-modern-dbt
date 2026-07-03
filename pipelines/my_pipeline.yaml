@@ -1,0 +1,14 @@
+pipeline_name: my_pipeline
+tasks:
+- name: kafka_1
+  id: task_6
+  type: executor
+  plugin: kafka
+  config:
+    operation: publish
+    brokers:
+    - localhost:9092
+    topic: my_topic
+    message:
+      event: data_ready
+  retries: 0

@@ -2,27 +2,28 @@
 
 Resolves ${TOKEN} patterns in any string value inside a config dict/list:
 
-  ${MY_ENV_VAR}          → resolved from os.environ
-  ${vault:secret/app:key} → resolved from HashiCorp Vault
-                            (stub: logs a warning unless VAULT_ADDR is set)
+  ${MY_ENV_VAR}           → resolved from os.environ
+  ${vault:path/to/secret:key} → resolved from HashiCorp Vault KV
 
-Usage::
+Vault token reference format:
+  ${vault:<mount>/<path>:<key>}
+  e.g. ${vault:secret/myapp:db_password}
 
-    from dataplatform.core.secrets import resolve_secrets
+Auth methods (checked in order):
+  1. Token:   VAULT_TOKEN env var
+  2. AppRole: VAULT_ROLE_ID + VAULT_SECRET_ID env vars
 
-    safe_config = resolve_secrets(task.config)
-    plugin.execute(safe_config)
+Requires the ``hvac`` package (``pip install hvac``).  If hvac is not
+installed or the Vault call fails the original token is left in place
+and a warning is logged — pipelines are never silently broken.
 
 The function is recursive — nested dicts and lists are fully resolved.
 Non-string values (int, float, bool, None) are passed through unchanged.
-If an environment variable is referenced but not set, the original
-${VAR} token is left in place and a warning is logged (rather than
-replacing with an empty string, which could silently break auth).
 """
 import logging
 import os
 import re
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,63 @@ _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 # ${vault:path/to/secret:key}  — Vault KV reference
 _VAULT_RE = re.compile(r"\$\{vault:([^}]+)\}")
+
+# ---------------------------------------------------------------------------
+# Vault client cache — one client per (VAULT_ADDR, auth_hash) pair
+# ---------------------------------------------------------------------------
+_vault_client_cache: Optional[Any] = None
+
+
+def _get_vault_client():
+    """Return an authenticated hvac.Client, or None if unavailable."""
+    global _vault_client_cache
+
+    if _vault_client_cache is not None:
+        return _vault_client_cache
+
+    vault_addr = os.getenv("VAULT_ADDR")
+    if not vault_addr:
+        return None
+
+    try:
+        import hvac  # type: ignore[import]
+    except ImportError:
+        logger.warning(
+            "VAULT_ADDR is set but the 'hvac' package is not installed. "
+            "Run: pip install hvac"
+        )
+        return None
+
+    client = hvac.Client(url=vault_addr)
+
+    # Try token auth first
+    vault_token = os.getenv("VAULT_TOKEN")
+    if vault_token:
+        client.token = vault_token
+    else:
+        # Try AppRole auth
+        role_id = os.getenv("VAULT_ROLE_ID")
+        secret_id = os.getenv("VAULT_SECRET_ID")
+        if role_id and secret_id:
+            try:
+                client.auth.approle.login(role_id=role_id, secret_id=secret_id)
+            except Exception as exc:
+                logger.warning("Vault AppRole login failed: %s", exc)
+                return None
+        else:
+            logger.warning(
+                "VAULT_ADDR is set but no auth credentials found. "
+                "Set VAULT_TOKEN or VAULT_ROLE_ID + VAULT_SECRET_ID."
+            )
+            return None
+
+    if not client.is_authenticated():
+        logger.warning("Vault client at %s failed authentication check.", vault_addr)
+        return None
+
+    _vault_client_cache = client
+    logger.info("Vault client authenticated at %s", vault_addr)
+    return client
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +131,7 @@ def _env_replacer(match: re.Match) -> str:
     resolved = os.getenv(var_name)
     if resolved is None:
         logger.warning(
-            f"Secret reference '${{%s}}' is unresolved: environment variable not set. "
+            "Secret reference '${%s}' is unresolved: environment variable not set. "
             "Set the variable or remove the reference from your pipeline config.",
             var_name,
         )
@@ -88,24 +146,52 @@ def _vault_replacer(match: re.Match) -> str:
     if not vault_addr:
         logger.warning(
             "Vault reference '${vault:%s}' found but VAULT_ADDR is not set. "
-            "Returning empty string. Set VAULT_ADDR and VAULT_TOKEN to enable Vault integration.",
+            "Token left in place.",
             ref,
         )
-        return ""
+        return match.group(0)
 
-    # Vault client stub — extend with hvac when Vault is available in the environment.
-    # Example implementation once hvac is installed:
-    #
-    #   import hvac
-    #   parts = ref.split(":")
-    #   path, key = parts[0], parts[1] if len(parts) > 1 else "value"
-    #   client = hvac.Client(url=vault_addr, token=os.getenv("VAULT_TOKEN"))
-    #   secret = client.secrets.kv.read_secret_version(path=path)
-    #   return secret["data"]["data"].get(key, "")
-    #
-    logger.warning(
-        "VAULT_ADDR is set to %s but the Vault client (hvac) is not installed. "
-        "Install hvac and implement _vault_replacer to enable Vault secrets.",
-        vault_addr,
-    )
-    return ""
+    # Parse  <mount>/<path>:<key>  or  <path>:<key>
+    # Everything before the last ":" is the KV path; after is the key name.
+    if ":" not in ref:
+        logger.warning("Vault reference '${vault:%s}' has no key separator (expected path:key).", ref)
+        return match.group(0)
+
+    kv_path, key = ref.rsplit(":", 1)
+
+    client = _get_vault_client()
+    if client is None:
+        return match.group(0)
+
+    try:
+        # Try KV v2 first (most common in modern Vault installs)
+        # kv_path may include the mount point, e.g. "secret/myapp"
+        parts = kv_path.split("/", 1)
+        mount = parts[0] if len(parts) == 2 else "secret"
+        path = parts[1] if len(parts) == 2 else kv_path
+        try:
+            response = client.secrets.kv.v2.read_secret_version(
+                path=path, mount_point=mount
+            )
+            secret_data = response["data"]["data"]
+        except Exception:
+            # Fall back to KV v1
+            response = client.read(kv_path)
+            secret_data = response["data"] if response else {}
+
+        if key not in secret_data:
+            logger.warning(
+                "Vault secret at '%s' has no key '%s'. Token left in place.", kv_path, key
+            )
+            return match.group(0)
+
+        return str(secret_data[key])
+
+    except Exception as exc:
+        logger.warning(
+            "Vault read failed for '${vault:%s}': %s. Token left in place.", ref, exc
+        )
+        # Invalidate cached client in case the token expired
+        global _vault_client_cache
+        _vault_client_cache = None
+        return match.group(0)

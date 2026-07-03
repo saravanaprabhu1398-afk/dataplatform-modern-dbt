@@ -29,7 +29,7 @@ def suppress_scheduler(monkeypatch):
 
 @pytest.fixture
 def client():
-    return TestClient(app, raise_server_exceptions=False)
+    return TestClient(app)
 
 
 def _make_config(tasks=None):
