@@ -4,119 +4,176 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alerts — Data Platform Suite</title>
+    <link rel="stylesheet" href="/static/tokens.css">
+    <link rel="stylesheet" href="/static/sidebar.css">
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>html, body { overflow-x: clip; }</style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
-        @keyframes blink-red { 0%,100%{background-color:#fca5a5} 50%{background-color:#ef4444} }
+        @keyframes blink-red {
+            0%,100%{ background-color: var(--color-danger-subtle); }
+            50%{     background-color: var(--color-danger); }
+        }
         .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
-        .blink-red { animation: blink-red 1.2s ease-in-out infinite; }
-        .tog-input { display:none; }
-        .tog-track { width:32px;height:18px;background:#cbd5e1;border-radius:9px;position:relative;cursor:pointer;transition:background .2s;display:inline-block; }
-        .tog-input:checked + .tog-track { background:#10b981; }
-        .tog-track::after { content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2); }
-        .tog-input:checked + .tog-track::after { left:16px; }
-        .afbtn-active { background:#1e293b; color:#fff; font-weight:700; }
+        .blink-red  { animation: blink-red 1.2s ease-in-out infinite; }
+        .tog-input  { display: none; }
+        .tog-track  {
+            width:32px; height:18px;
+            background: var(--color-border-2);
+            border-radius:9px; position:relative; cursor:pointer;
+            transition: background var(--dur-base) var(--ease-in-out);
+            display: inline-block;
+        }
+        .tog-input:checked + .tog-track { background: var(--color-success); }
+        .tog-track::after {
+            content:''; position:absolute; top:2px; left:2px;
+            width:14px; height:14px; border-radius:50%;
+            background: var(--color-surface);
+            transition: left var(--dur-base) var(--ease-in-out);
+            box-shadow: var(--shadow-sm);
+        }
+        .tog-input:checked + .tog-track::after { left: 16px; }
+        .afbtn-active { background: var(--color-ink); color: var(--color-surface); font-weight:700; }
+
+        /* Card system */
+        .dp-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+        .dp-card__head {
+            padding: var(--space-3) var(--space-6);
+            border-bottom: 1px solid var(--color-border);
+            background: var(--color-paper-2);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .dp-card__head--sm {
+            padding: var(--space-3) var(--space-4);
+        }
+
+        /* Row hovers */
+        #alertsList > div:hover,
+        #alertRulesList > div:hover,
+        .dp-sla-row:hover,
+        .dp-trigger-row:hover {
+            background: var(--color-paper-2);
+        }
+
+        /* Trigger type badge */
+        .dp-trigger-badge {
+            background: var(--color-accent-subtle);
+            color: var(--color-accent);
+            border-radius: var(--radius-full);
+            font-size: var(--text-xs);
+            padding: var(--space-1) var(--space-3);
+            font-weight: 600;
+        }
+
+        /* SLA / violations empty state */
+        .dp-empty {
+            color: var(--color-ink-3);
+            font-size: var(--text-sm);
+        }
+
+        /* Section headings */
+        .dp-section-head {
+            font-family: var(--font-display);
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
 
 <!-- ═══ SIDEBAR ═══ -->
-<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
-    <div class="px-4 py-5 border-b border-slate-700/50">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-                <i class="fas fa-layer-group text-white text-xs"></i>
-            </div>
-            <div>
-                <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
-                <p class="text-slate-400 text-[11px]">Suite</p>
-            </div>
-        </div>
+<button class="dp-sidebar-toggle" id="dpSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="dpSidebar">
+  <i class="fas fa-bars" aria-hidden="true"></i>
+</button>
+<div class="dp-sidebar-overlay" id="dpSidebarOverlay" aria-hidden="true"></div>
+<aside class="dp-sidebar" id="dpSidebar" role="navigation" aria-label="Main navigation">
+  <div class="dp-sidebar__brand">
+    <div class="dp-sidebar__logo" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
+    <div class="dp-sidebar__brand-text">
+      <span class="dp-sidebar__brand-name">Data Platform</span>
+      <span class="dp-sidebar__brand-sub">Suite</span>
     </div>
-    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
-        </a>
-        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
-        </a>
-        <div class="pt-3 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Build</p>
-        </div>
-        <a href="/job-builder" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-cubes w-4 text-center shrink-0"></i><span>Job Builder</span>
-        </a>
-        <a href="/generator" class="flex items-center gap-3 pl-8 pr-3 py-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors">
-            <i class="fas fa-wand-magic-sparkles w-3.5 text-center shrink-0"></i><span>NLP Generator</span>
-        </a>
-        <div class="pt-4 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Observability</p>
-        </div>
-        <a href="/alerts" class="flex items-center justify-between px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
-            <span class="flex items-center gap-3"><i class="fas fa-bell w-4 text-center shrink-0"></i><span>Alerts</span></span>
-            <span id="navAlertBadge" class="hidden bg-red-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">1</span>
-        </a>
-        <a href="/monitoring" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-chart-line w-4 text-center shrink-0"></i><span>Metrics</span>
-        </a>
-        <div class="pt-4 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p>
-        </div>
-        <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
-        </a>
-        <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
-        </a>
-        <div class="pt-4 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p>
-        </div>
-        <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
-        </a>
-        <div class="pt-4 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p>
-        </div>
-        <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
-        </a>        <a href="/git-integration" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-code-branch w-4 text-center shrink-0"></i><span>Git Integration</span>
-        </a>
-
-        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
-        <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
-        </a>
-    </nav>
-    <div class="px-4 py-4 border-t border-slate-700/50">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
-                <i class="fas fa-user text-indigo-300 text-xs"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-                <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
-                <p class="text-slate-500 text-xs">Data Platform</p>
-            </div>
-            <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
-                <i class="fas fa-arrow-right-from-bracket text-sm"></i>
-            </button>
-        </div>
+  </div>
+  <nav class="dp-sidebar__nav" aria-label="Application navigation">
+    <a href="/" class="dp-sidebar__item">
+      <i class="fas fa-house dp-sidebar__icon" aria-hidden="true"></i><span>Overview</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Pipelines</div>
+    <a href="/dashboard" class="dp-sidebar__item">
+      <i class="fas fa-wave-square dp-sidebar__icon" aria-hidden="true"></i><span>DP Flow</span>
+    </a>
+    <a href="/job-builder" class="dp-sidebar__item">
+      <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
+    </a>
+    <a href="/templates-ui" class="dp-sidebar__item">
+      <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
+    </a>
+    <a href="/generator" class="dp-sidebar__item">
+      <i class="fas fa-wand-magic-sparkles dp-sidebar__icon" aria-hidden="true"></i><span>Generator</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Observability</div>
+    <a href="/monitoring" class="dp-sidebar__item">
+      <i class="fas fa-chart-line dp-sidebar__icon" aria-hidden="true"></i><span>Monitoring</span>
+    </a>
+    <a href="/lineage-viz" class="dp-sidebar__item">
+      <i class="fas fa-diagram-project dp-sidebar__icon" aria-hidden="true"></i><span>Lineage</span>
+    </a>
+    <a href="/alerts" class="dp-sidebar__item is-active" aria-current="page">
+      <i class="fas fa-bell dp-sidebar__icon" aria-hidden="true"></i><span>Alerts</span>
+      <span id="navAlertBadge" class="dp-sidebar__badge hidden" aria-label="active alerts">1</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Governance</div>
+    <a href="/catalog" class="dp-sidebar__item">
+      <i class="fas fa-database dp-sidebar__icon" aria-hidden="true"></i><span>Catalog</span>
+    </a>
+    <a href="/costs" class="dp-sidebar__item">
+      <i class="fas fa-coins dp-sidebar__icon" aria-hidden="true"></i><span>Costs</span>
+    </a>
+    <a href="/git-integration" class="dp-sidebar__item">
+      <i class="fas fa-code-branch dp-sidebar__icon" aria-hidden="true"></i><span>Git Integration</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Admin</div>
+    <a href="/admin" class="dp-sidebar__item">
+      <i class="fas fa-shield-halved dp-sidebar__icon" aria-hidden="true"></i><span>Users &amp; Roles</span>
+    </a>
+  </nav>
+  <div class="dp-sidebar__footer">
+    <div class="dp-sidebar__avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
+    <div class="dp-sidebar__user-info">
+      <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
+      <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
+      <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+    </button>
+  </div>
 </aside>
+<script>
+(function(){var t=document.getElementById('dpSidebarToggle'),s=document.getElementById('dpSidebar'),o=document.getElementById('dpSidebarOverlay');if(!t||!s||!o)return;function open(){s.classList.add('is-open');o.classList.add('is-open');o.removeAttribute('aria-hidden');t.setAttribute('aria-expanded','true');t.querySelector('i').className='fas fa-xmark';}function close(){s.classList.remove('is-open');o.classList.remove('is-open');o.setAttribute('aria-hidden','true');t.setAttribute('aria-expanded','false');t.querySelector('i').className='fas fa-bars';}t.addEventListener('click',function(){s.classList.contains('is-open')?close():open();});o.addEventListener('click',close);document.addEventListener('keydown',function(e){if(e.key==='Escape'&&s.classList.contains('is-open'))close();});}());
+</script>
 
 <!-- ═══ MAIN ═══ -->
-<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+<div class="pl-56 min-h-screen flex flex-col">
 
     <!-- Topbar -->
-    <header class="bg-white border-b border-slate-200 px-6 py-3.5 sticky top-0 z-30">
+    <header class="px-6 py-3.5 sticky top-0 z-30"
+            style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);">
         <div class="flex items-center justify-between">
             <nav class="flex items-center gap-1.5 text-sm">
-                <a href="/" class="text-slate-400 hover:text-slate-600 transition-colors">Home</a>
-                <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
-                <span class="text-slate-700 font-semibold">Alerts &amp; Incidents</span>
+                <a href="/" style="color: var(--color-ink-3);"
+                   class="hover:underline transition-colors">Home</a>
+                <i class="fas fa-chevron-right text-[10px]" style="color: var(--color-border-2);"></i>
+                <span class="font-semibold" style="color: var(--color-ink);">Alerts &amp; Incidents</span>
             </nav>
-            <button onclick="openNewAlertRule()" class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
+            <button onclick="openNewAlertRule()"
+                    class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                    style="background: var(--color-accent-subtle); color: var(--color-accent); border: 1px solid var(--color-accent);">
                 <i class="fas fa-plus text-[10px]"></i>New Rule
             </button>
         </div>
@@ -126,41 +183,55 @@
 
         <!-- Page title -->
         <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center">
-                <i class="fas fa-bell text-red-500"></i>
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center"
+                 style="background: var(--color-danger-subtle); border: 1px solid var(--color-danger);">
+                <i class="fas fa-bell" style="color: var(--color-danger);"></i>
             </div>
             <div>
-                <h1 class="text-xl font-bold text-slate-900">Alerts &amp; Incidents</h1>
-                <p class="text-xs text-slate-500 mt-0.5">Real-time alerting · On-call routing · Incident management</p>
+                <h1 class="text-xl font-bold dp-section-head" style="color: var(--color-ink);">Alerts &amp; Incidents</h1>
+                <p class="text-xs mt-0.5" style="color: var(--color-ink-3);">Real-time alerting · On-call routing · Incident management</p>
             </div>
+        </div>
+
+        <!-- Dashboard summary bar (from /dashboard-summary) -->
+        <div id="dashSummaryBar" class="flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-lg text-xs"
+             style="background: var(--color-paper-2); border: 1px solid var(--color-border); font-family: var(--font-body);">
+            <i class="fas fa-circle-notch fa-spin" style="color: var(--color-ink-3);"></i>
+            <span style="color: var(--color-ink-3);">Loading pipeline summary…</span>
         </div>
 
         <!-- Summary chips -->
         <div class="flex flex-wrap gap-3">
-            <div class="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3 shadow-sm">
-                <span id="firingDot" class="w-2.5 h-2.5 rounded-full bg-red-500 blink-red shrink-0"></span>
-                <span class="text-[11px] font-bold text-red-700 uppercase tracking-wide">Firing</span>
-                <span id="cntFiring" class="text-2xl font-bold text-red-600 ml-1">1</span>
+            <div class="flex items-center gap-2.5 rounded-xl px-4 py-3"
+                 style="background: var(--color-danger-subtle); border: 1px solid var(--color-danger); box-shadow: var(--shadow-sm);">
+                <span id="firingDot" class="w-2.5 h-2.5 rounded-full blink-red shrink-0"
+                      style="background: var(--color-danger);"></span>
+                <span class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--color-danger);">Firing</span>
+                <span id="cntFiring" class="text-2xl font-bold ml-1" style="color: var(--color-danger);">1</span>
             </div>
-            <div class="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 shadow-sm">
-                <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0"></span>
-                <span class="text-[11px] font-bold text-amber-700 uppercase tracking-wide">Acknowledged</span>
-                <span id="cntAcked" class="text-2xl font-bold text-amber-600 ml-1">2</span>
+            <div class="flex items-center gap-2.5 rounded-xl px-4 py-3"
+                 style="background: var(--color-warning-subtle); border: 1px solid var(--color-warning); box-shadow: var(--shadow-sm);">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: var(--color-warning);"></span>
+                <span class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--color-warning);">Acknowledged</span>
+                <span id="cntAcked" class="text-2xl font-bold ml-1" style="color: var(--color-warning);">2</span>
             </div>
-            <div class="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 shadow-sm">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
-                <span class="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">Resolved today</span>
-                <span id="cntResolved" class="text-2xl font-bold text-emerald-600 ml-1">3</span>
+            <div class="flex items-center gap-2.5 rounded-xl px-4 py-3"
+                 style="background: var(--color-success-subtle); border: 1px solid var(--color-success); box-shadow: var(--shadow-sm);">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: var(--color-success);"></span>
+                <span class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--color-success);">Resolved today</span>
+                <span id="cntResolved" class="text-2xl font-bold ml-1" style="color: var(--color-success);">3</span>
             </div>
-            <div class="flex items-center gap-2.5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 shadow-sm">
-                <i class="fas fa-stopwatch text-blue-500 text-sm shrink-0"></i>
-                <span class="text-[11px] font-bold text-blue-700 uppercase tracking-wide">MTTR</span>
-                <span class="text-2xl font-bold text-blue-600 ml-1">12<span class="text-sm font-normal ml-0.5">min</span></span>
+            <div class="flex items-center gap-2.5 rounded-xl px-4 py-3"
+                 style="background: var(--color-accent-subtle); border: 1px solid var(--color-accent); box-shadow: var(--shadow-sm);">
+                <i class="fas fa-stopwatch text-sm shrink-0" style="color: var(--color-accent);"></i>
+                <span class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--color-accent);">MTTR</span>
+                <span class="text-2xl font-bold ml-1" style="color: var(--color-accent);">12<span class="text-sm font-normal ml-0.5">min</span></span>
             </div>
-            <div class="flex items-center gap-2.5 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 shadow-sm">
-                <i class="fas fa-shield-halved text-violet-500 text-sm shrink-0"></i>
-                <span class="text-[11px] font-bold text-violet-700 uppercase tracking-wide">Uptime (7d)</span>
-                <span class="text-2xl font-bold text-violet-600 ml-1">99.1<span class="text-sm font-normal ml-0.5">%</span></span>
+            <div class="flex items-center gap-2.5 rounded-xl px-4 py-3"
+                 style="background: var(--color-paper-3); border: 1px solid var(--color-border-2); box-shadow: var(--shadow-sm);">
+                <i class="fas fa-shield-halved text-sm shrink-0" style="color: var(--color-ink-2);"></i>
+                <span class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--color-ink-2);">Uptime (7d)</span>
+                <span class="text-2xl font-bold ml-1" style="color: var(--color-ink);">99.1<span class="text-sm font-normal ml-0.5">%</span></span>
             </div>
         </div>
 
@@ -171,25 +242,53 @@
             <div class="xl:col-span-2 space-y-5">
 
                 <!-- Alerts card -->
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                        <span class="text-sm font-bold text-slate-800">Active &amp; Recent Alerts</span>
+                <div class="dp-card">
+                    <div class="dp-card__head">
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">Active &amp; Recent Alerts</span>
                         <div class="flex gap-1">
                             <button onclick="filterAlerts('all')"          id="flt-all"          class="afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all afbtn-active">All</button>
-                            <button onclick="filterAlerts('firing')"       id="flt-firing"       class="afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all text-slate-500 hover:bg-slate-100">Firing</button>
-                            <button onclick="filterAlerts('acknowledged')" id="flt-acknowledged" class="afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all text-slate-500 hover:bg-slate-100">Ack'd</button>
-                            <button onclick="filterAlerts('resolved')"     id="flt-resolved"     class="afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all text-slate-500 hover:bg-slate-100">Resolved</button>
+                            <button onclick="filterAlerts('firing')"       id="flt-firing"       class="afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all" style="color: var(--color-ink-3);">Firing</button>
+                            <button onclick="filterAlerts('acknowledged')" id="flt-acknowledged" class="afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all" style="color: var(--color-ink-3);">Ack'd</button>
+                            <button onclick="filterAlerts('resolved')"     id="flt-resolved"     class="afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all" style="color: var(--color-ink-3);">Resolved</button>
                         </div>
                     </div>
-                    <div id="alertsList" class="divide-y divide-slate-100"></div>
+                    <div id="alertsList" class="divide-y" style="border-color: var(--color-border);"></div>
                 </div>
 
                 <!-- Alert History timeline -->
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
-                        <span class="text-sm font-bold text-slate-800">Incident Timeline (last 24 h)</span>
+                <div class="dp-card">
+                    <div class="dp-card__head">
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">Incident Timeline (last 24 h)</span>
                     </div>
                     <div class="p-5 space-y-3" id="alertTimeline"></div>
+                </div>
+
+                <!-- SLA Violations card -->
+                <div class="dp-card">
+                    <div class="dp-card__head">
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">SLA Violations</span>
+                        <span id="slaViolCount" class="text-xs" style="color: var(--color-ink-3);"></span>
+                    </div>
+                    <div id="slaViolBody">
+                        <div class="flex flex-col items-center justify-center py-8 gap-2">
+                            <i class="fas fa-circle-notch fa-spin" style="color: var(--color-ink-3);"></i>
+                            <span class="dp-empty">Loading…</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Triggers card -->
+                <div class="dp-card">
+                    <div class="dp-card__head">
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">Active Triggers</span>
+                        <span id="triggerCount" class="text-xs" style="color: var(--color-ink-3);"></span>
+                    </div>
+                    <div id="triggerBody">
+                        <div class="flex flex-col items-center justify-center py-8 gap-2">
+                            <i class="fas fa-circle-notch fa-spin" style="color: var(--color-ink-3);"></i>
+                            <span class="dp-empty">Loading…</span>
+                        </div>
+                    </div>
                 </div>
 
             </div>
@@ -198,65 +297,95 @@
             <div class="flex flex-col gap-5">
 
                 <!-- On-Call card -->
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div class="dp-card p-5">
                     <div class="flex items-center gap-2 mb-4">
-                        <i class="fas fa-user-shield text-indigo-500"></i>
-                        <span class="text-sm font-bold text-slate-800">On-Call Now</span>
-                        <span class="ml-auto text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">ACTIVE</span>
+                        <i class="fas fa-user-shield" style="color: var(--color-accent);"></i>
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">On-Call Now</span>
+                        <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
+                              style="background: var(--color-success-subtle); color: var(--color-success);">ACTIVE</span>
                     </div>
                     <div class="flex items-center gap-3 mb-3">
-                        <div class="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm shrink-0">AC</div>
+                        <div class="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                             style="background: var(--color-accent-subtle); color: var(--color-accent);">AC</div>
                         <div>
-                            <p class="text-sm font-semibold text-slate-800">Alex Chen</p>
-                            <p class="text-xs text-slate-500">Platform Engineering</p>
+                            <p class="text-sm font-semibold" style="color: var(--color-ink);">Alex Chen</p>
+                            <p class="text-xs" style="color: var(--color-ink-3);">Platform Engineering</p>
                         </div>
                     </div>
-                    <div class="bg-slate-50 rounded-xl p-3 space-y-2 text-xs mb-4">
-                        <div class="flex justify-between"><span class="text-slate-500 font-medium">Shift</span><span class="text-slate-700 font-semibold">08:00 – 20:00 UTC</span></div>
-                        <div class="flex justify-between"><span class="text-slate-500 font-medium">Next on-call</span><span class="text-slate-700 font-semibold">Maria Santos</span></div>
-                        <div class="flex justify-between"><span class="text-slate-500 font-medium">Escalation</span><span class="text-slate-700 font-semibold">Jordan Park (mgr)</span></div>
-                        <div class="flex justify-between"><span class="text-slate-500 font-medium">Response SLA</span><span class="text-slate-700 font-semibold">15 min</span></div>
+                    <div class="rounded-xl p-3 space-y-2 text-xs mb-4"
+                         style="background: var(--color-paper-2); border: 1px solid var(--color-border);">
+                        <div class="flex justify-between">
+                            <span class="font-medium" style="color: var(--color-ink-3);">Shift</span>
+                            <span class="font-semibold" style="color: var(--color-ink);">08:00 – 20:00 UTC</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-medium" style="color: var(--color-ink-3);">Next on-call</span>
+                            <span class="font-semibold" style="color: var(--color-ink);">Maria Santos</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-medium" style="color: var(--color-ink-3);">Escalation</span>
+                            <span class="font-semibold" style="color: var(--color-ink);">Jordan Park (mgr)</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-medium" style="color: var(--color-ink-3);">Response SLA</span>
+                            <span class="font-semibold" style="color: var(--color-ink);">15 min</span>
+                        </div>
                     </div>
-                    <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Notify via</p>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide mb-2" style="color: var(--color-ink-3);">Notify via</p>
                     <div class="flex flex-wrap gap-1.5">
-                        <span class="flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fab fa-slack text-[10px]"></i>Slack</span>
-                        <span class="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-envelope text-[10px]"></i>Email</span>
-                        <span class="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-mobile text-[10px]"></i>PagerDuty</span>
+                        <span class="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                              style="background: var(--color-success-subtle); color: var(--color-success); border: 1px solid var(--color-success);">
+                            <i class="fab fa-slack text-[10px]"></i>Slack
+                        </span>
+                        <span class="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                              style="background: var(--color-accent-subtle); color: var(--color-accent); border: 1px solid var(--color-accent);">
+                            <i class="fas fa-envelope text-[10px]"></i>Email
+                        </span>
+                        <span class="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                              style="background: var(--color-warning-subtle); color: var(--color-warning); border: 1px solid var(--color-warning);">
+                            <i class="fas fa-mobile text-[10px]"></i>PagerDuty
+                        </span>
                     </div>
 
                     <!-- Rotation schedule preview -->
-                    <div class="mt-4 pt-4 border-t border-slate-100">
-                        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Rotation (this week)</p>
+                    <div class="mt-4 pt-4" style="border-top: 1px solid var(--color-border);">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide mb-2" style="color: var(--color-ink-3);">Rotation (this week)</p>
                         <div class="space-y-1.5 text-xs">
                             <div class="flex items-center gap-2">
-                                <span class="w-12 text-slate-400 font-medium">Mon–Tue</span>
-                                <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center shrink-0">AC</div>
-                                <span class="text-slate-600">Alex Chen</span>
-                                <span class="ml-auto text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-semibold">Now</span>
+                                <span class="w-12 font-medium" style="color: var(--color-ink-3);">Mon–Tue</span>
+                                <div class="w-6 h-6 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0"
+                                     style="background: var(--color-accent-subtle); color: var(--color-accent);">AC</div>
+                                <span style="color: var(--color-ink-2);">Alex Chen</span>
+                                <span class="ml-auto text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                                      style="background: var(--color-accent-subtle); color: var(--color-accent);">Now</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="w-12 text-slate-400 font-medium">Wed–Thu</span>
-                                <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px] flex items-center justify-center shrink-0">MS</div>
-                                <span class="text-slate-600">Maria Santos</span>
+                                <span class="w-12 font-medium" style="color: var(--color-ink-3);">Wed–Thu</span>
+                                <div class="w-6 h-6 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0"
+                                     style="background: var(--color-success-subtle); color: var(--color-success);">MS</div>
+                                <span style="color: var(--color-ink-2);">Maria Santos</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="w-12 text-slate-400 font-medium">Fri–Sun</span>
-                                <div class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 font-bold text-[10px] flex items-center justify-center shrink-0">JP</div>
-                                <span class="text-slate-600">Jordan Park</span>
+                                <span class="w-12 font-medium" style="color: var(--color-ink-3);">Fri–Sun</span>
+                                <div class="w-6 h-6 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0"
+                                     style="background: var(--color-warning-subtle); color: var(--color-warning);">JP</div>
+                                <span style="color: var(--color-ink-2);">Jordan Park</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Alert Rules card -->
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                        <span class="text-sm font-bold text-slate-800">Alert Rules</span>
-                        <span id="rulesCount" class="text-xs text-slate-400">4 / 5 enabled</span>
+                <div class="dp-card">
+                    <div class="dp-card__head">
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">Alert Rules</span>
+                        <span id="rulesCount" class="text-xs" style="color: var(--color-ink-3);">4 / 5 enabled</span>
                     </div>
-                    <div id="alertRulesList" class="divide-y divide-slate-50 text-xs"></div>
-                    <div class="px-5 py-3 border-t border-slate-100">
-                        <button onclick="openNewAlertRule()" class="w-full text-xs font-semibold text-indigo-600 hover:text-indigo-800 py-1 transition-colors">
+                    <div id="alertRulesList" class="divide-y text-xs" style="border-color: var(--color-border);"></div>
+                    <div class="px-5 py-3" style="border-top: 1px solid var(--color-border);">
+                        <button onclick="openNewAlertRule()"
+                                class="w-full text-xs font-semibold py-1 transition-colors"
+                                style="color: var(--color-accent);">
                             <i class="fas fa-plus mr-1.5"></i>Add rule
                         </button>
                     </div>
@@ -341,7 +470,10 @@ function renderAlerts() {
     const list = document.getElementById('alertsList');
 
     if (!filtered.length) {
-        list.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-slate-400"><i class="fas fa-check-circle text-3xl text-emerald-400 mb-2"></i><p class="text-sm font-medium text-slate-500">No alerts in this view</p></div>';
+        list.innerHTML = `<div class="flex flex-col items-center justify-center py-12 gap-2">
+            <i class="fas fa-check-circle text-3xl" style="color:var(--color-success);"></i>
+            <p class="text-sm font-medium" style="color:var(--color-ink-3);">No alerts in this view</p>
+        </div>`;
         return;
     }
 
@@ -349,18 +481,18 @@ function renderAlerts() {
         const sc = SEV[a.sev]   || SEV.info;
         const st = STATE[a.state]||STATE.resolved;
         return `
-        <div class="px-5 py-4 hover:bg-slate-50 transition-colors">
+        <div class="px-5 py-4 transition-colors">
             <div class="flex items-start gap-3">
                 <span class="w-2.5 h-2.5 rounded-full ${sc.dot} shrink-0 mt-1.5"></span>
                 <div class="flex-1 min-w-0">
                     <div class="flex flex-wrap items-center gap-2 mb-1">
                         <span class="${sc.badge} text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">${a.sev}</span>
-                        <span class="text-sm font-semibold text-slate-800">${a.title}</span>
+                        <span class="text-sm font-semibold" style="color:var(--color-ink);">${a.title}</span>
                     </div>
-                    <p class="text-xs text-slate-500 mb-1.5">
-                        <span class="font-semibold text-slate-700">${a.pipeline}</span> &middot; ${a.cond}
+                    <p class="text-xs mb-1.5" style="color:var(--color-ink-3);">
+                        <span class="font-semibold" style="color:var(--color-ink-2);">${a.pipeline}</span> &middot; ${a.cond}
                     </p>
-                    <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+                    <div class="flex flex-wrap items-center gap-3 text-[11px]" style="color:var(--color-ink-3);">
                         <span><i class="fas fa-clock mr-1"></i>${a.fired}</span>
                         <span class="${st.cls} flex items-center gap-1.5">
                             <span class="w-1.5 h-1.5 rounded-full ${st.dot} inline-block"></span>${st.label}
@@ -369,8 +501,8 @@ function renderAlerts() {
                     </div>
                 </div>
                 <div class="flex gap-1.5 shrink-0">
-                    ${a.state==='firing'?`<button onclick="ackAlert(${a.id})" class="text-[11px] bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 px-2.5 py-1 rounded-lg font-semibold transition-colors"><i class="fas fa-check mr-1"></i>Ack</button>`:''}
-                    ${a.state!=='resolved'?`<button onclick="resolveAlert(${a.id})" class="text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-lg font-semibold transition-colors"><i class="fas fa-check-double mr-1"></i>Resolve</button>`:''}
+                    ${a.state==='firing'?`<button onclick="ackAlert(${a.id})" class="text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-colors" style="background:var(--color-warning-subtle);border:1px solid var(--color-warning);color:var(--color-warning);"><i class="fas fa-check mr-1"></i>Ack</button>`:''}
+                    ${a.state!=='resolved'?`<button onclick="resolveAlert(${a.id})" class="text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-colors" style="background:var(--color-success-subtle);border:1px solid var(--color-success);color:var(--color-success);"><i class="fas fa-check-double mr-1"></i>Resolve</button>`:''}
                 </div>
             </div>
         </div>`;
@@ -381,7 +513,13 @@ function filterAlerts(state) {
     activeFilter = state;
     document.querySelectorAll('.afbtn').forEach(b => {
         const isActive = b.id === 'flt-'+state;
-        b.className = 'afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all ' + (isActive ? 'afbtn-active' : 'text-slate-500 hover:bg-slate-100');
+        if (isActive) {
+            b.className = 'afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all afbtn-active';
+            b.removeAttribute('style');
+        } else {
+            b.className = 'afbtn text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all';
+            b.style.color = 'var(--color-ink-3)';
+        }
     });
     renderAlerts();
 }
@@ -403,16 +541,24 @@ function openNewAlertRule() { showToast('Alert rule editor — coming soon', 'in
 
 // ── Render Timeline ──────────────────────────────────────────────────────────
 function renderTimeline() {
-    const COLORS = { firing:'border-red-300 bg-red-50', acknowledged:'border-amber-300 bg-amber-50', resolved:'border-emerald-300 bg-emerald-50' };
+    const TL_STYLES = {
+        firing:       'border:2px solid var(--color-danger);background:var(--color-danger-subtle);',
+        acknowledged: 'border:2px solid var(--color-warning);background:var(--color-warning-subtle);',
+        resolved:     'border:2px solid var(--color-success);background:var(--color-success-subtle);',
+    };
+    const TL_DEFAULT_STYLE = 'border:2px solid var(--color-border);background:var(--color-paper-2);';
     const ICONS  = { firing:'fa-circle-exclamation text-red-500', acknowledged:'fa-check text-amber-500', resolved:'fa-check-double text-emerald-500' };
+    const ICON_DEFAULT = 'fa-info-circle';
     document.getElementById('alertTimeline').innerHTML = TIMELINE.map(e => `
         <div class="flex items-start gap-3">
-            <div class="w-6 h-6 rounded-full bg-white border-2 ${COLORS[e.state]||'border-slate-200'} flex items-center justify-center shrink-0 mt-0.5">
-                <i class="fas ${ICONS[e.state]||'fa-info-circle text-slate-400'} text-[9px]"></i>
+            <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                 style="${TL_STYLES[e.state]||TL_DEFAULT_STYLE}">
+                <i class="fas ${ICONS[e.state]||ICON_DEFAULT} text-[9px]"
+                   style="color:var(--color-ink-3);"></i>
             </div>
-            <div class="flex-1 min-w-0 pb-3 border-b border-slate-100 last:border-0 last:pb-0">
-                <p class="text-xs text-slate-700 leading-snug">${e.text}</p>
-                <p class="text-[10px] text-slate-400 mt-0.5">${e.time}</p>
+            <div class="flex-1 min-w-0 pb-3 last:pb-0" style="border-bottom:1px solid var(--color-border);">
+                <p class="text-xs leading-snug" style="color:var(--color-ink-2);">${e.text}</p>
+                <p class="text-[10px] mt-0.5" style="color:var(--color-ink-3);">${e.time}</p>
             </div>
         </div>`).join('');
 }
@@ -422,16 +568,17 @@ function renderAlertRules() {
     const enabled = ALERT_RULES.filter(r=>r.on).length;
     document.getElementById('rulesCount').textContent = `${enabled} / ${ALERT_RULES.length} enabled`;
     document.getElementById('alertRulesList').innerHTML = ALERT_RULES.map((r,i) => `
-        <div class="px-4 py-3.5 flex items-center gap-3 hover:bg-slate-50 transition-colors">
+        <div class="px-4 py-3.5 flex items-center gap-3 transition-colors dp-trigger-row">
             <label class="shrink-0 flex items-center">
                 <input type="checkbox" class="tog-input" ${r.on?'checked':''} onchange="toggleRule(${i})">
                 <span class="tog-track"></span>
             </label>
             <div class="flex-1 min-w-0">
-                <p class="text-xs font-semibold text-slate-700">${r.name}</p>
-                <p class="text-[10px] text-slate-400 font-mono mt-0.5 truncate">${r.cond}</p>
+                <p class="text-xs font-semibold" style="color:var(--color-ink-2);">${r.name}</p>
+                <p class="text-[10px] font-mono mt-0.5 truncate" style="color:var(--color-ink-3);">${r.cond}</p>
             </div>
-            <i class="fas fa-circle text-[8px] ${SEV_DOT_CLS[r.sev]||'text-slate-300'} shrink-0"></i>
+            <i class="fas fa-circle text-[8px] ${SEV_DOT_CLS[r.sev]||''} shrink-0"
+               style="${!SEV_DOT_CLS[r.sev]?'color:var(--color-border-2);':''}"></i>
         </div>`).join('');
 }
 
@@ -441,11 +588,129 @@ function toggleRule(i) {
     showToast(`Rule "${ALERT_RULES[i].name}" ${ALERT_RULES[i].on?'enabled':'disabled'}`, 'info');
 }
 
+// ── API: Dashboard Summary ────────────────────────────────────────────────────
+async function loadDashboardSummary() {
+    try {
+        const data = await fetch('/dashboard-summary').then(r => r.json());
+        const s = data.stats || {};
+        const bar = document.getElementById('dashSummaryBar');
+        bar.innerHTML = `
+            <i class="fas fa-layer-group mr-1" style="color:var(--color-accent);"></i>
+            <span style="color:var(--color-ink-2);font-weight:600;">${s.total_pipelines ?? '—'} total pipelines</span>
+            <span style="color:var(--color-border-2);">·</span>
+            <span style="color:var(--color-ink-3);">${s.scheduled_pipelines ?? '—'} scheduled</span>
+            <span style="color:var(--color-border-2);">·</span>
+            <span style="color:var(--color-ink-3);">${s.active_runs ?? '—'} active runs</span>
+        `;
+    } catch (e) {
+        document.getElementById('dashSummaryBar').innerHTML =
+            `<span style="color:var(--color-ink-3);">Pipeline summary unavailable</span>`;
+    }
+}
+
+// ── API: SLA Violations ───────────────────────────────────────────────────────
+async function loadSlaViolations() {
+    const body = document.getElementById('slaViolBody');
+    const countEl = document.getElementById('slaViolCount');
+    try {
+        const rows = await fetch('/sla/violations').then(r => r.json());
+        if (!Array.isArray(rows) || !rows.length) {
+            body.innerHTML = `<div class="flex flex-col items-center justify-center py-10 gap-2">
+                <i class="fas fa-check-circle text-2xl" style="color:var(--color-success);"></i>
+                <span class="dp-empty">No SLA violations detected</span>
+            </div>`;
+            countEl.textContent = '0 violations';
+            return;
+        }
+        countEl.textContent = `${rows.length} violation${rows.length!==1?'s':''}`;
+        const fmtDelta = (actual, sla) => {
+            const over = actual - sla;
+            return over > 0 ? `+${over}s over` : 'within SLA';
+        };
+        const fmtDate = d => { try { return new Date(d).toLocaleString(); } catch { return d; } };
+        body.innerHTML = `<table class="w-full text-xs">
+            <thead style="background:var(--color-paper-2);border-bottom:1px solid var(--color-border);">
+                <tr>
+                    <th class="text-left px-5 py-3 font-semibold uppercase tracking-wide" style="color:var(--color-ink-3);">Pipeline</th>
+                    <th class="text-right px-5 py-3 font-semibold uppercase tracking-wide" style="color:var(--color-ink-3);">SLA</th>
+                    <th class="text-right px-5 py-3 font-semibold uppercase tracking-wide" style="color:var(--color-ink-3);">Actual</th>
+                    <th class="text-right px-5 py-3 font-semibold uppercase tracking-wide" style="color:var(--color-ink-3);">Delta</th>
+                    <th class="text-right px-5 py-3 font-semibold uppercase tracking-wide" style="color:var(--color-ink-3);">Violated At</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows.map(r => `<tr class="dp-sla-row transition-colors" style="border-bottom:1px solid var(--color-border);">
+                    <td class="px-5 py-3 font-mono font-medium" style="color:var(--color-ink);">${r.pipeline_name}</td>
+                    <td class="px-5 py-3 text-right" style="color:var(--color-ink-3);">${r.sla_seconds}s</td>
+                    <td class="px-5 py-3 text-right font-semibold" style="color:var(--color-danger);">${r.actual_seconds}s</td>
+                    <td class="px-5 py-3 text-right" style="color:var(--color-danger);">${fmtDelta(r.actual_seconds, r.sla_seconds)}</td>
+                    <td class="px-5 py-3 text-right" style="color:var(--color-ink-3);">${fmtDate(r.violated_at)}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+    } catch (e) {
+        body.innerHTML = `<div class="flex flex-col items-center justify-center py-8 gap-2">
+            <span class="dp-empty">Failed to load SLA violations</span>
+        </div>`;
+    }
+}
+
+// ── API: Triggers ─────────────────────────────────────────────────────────────
+async function loadTriggers() {
+    const body = document.getElementById('triggerBody');
+    const countEl = document.getElementById('triggerCount');
+    try {
+        const rows = await fetch('/triggers').then(r => r.json());
+        if (!Array.isArray(rows) || !rows.length) {
+            body.innerHTML = `<div class="flex flex-col items-center justify-center py-10 gap-2">
+                <i class="fas fa-bolt text-2xl" style="color:var(--color-ink-3);"></i>
+                <span class="dp-empty">No active triggers configured</span>
+            </div>`;
+            countEl.textContent = '0 triggers';
+            return;
+        }
+        countEl.textContent = `${rows.length} trigger${rows.length!==1?'s':''}`;
+        const fmtDate = d => { try { return new Date(d).toLocaleString(); } catch { return '—'; } };
+        const humanAgo = d => {
+            if (!d) return '—';
+            try {
+                const diff = Date.now() - new Date(d).getTime();
+                const mins = Math.floor(diff / 60000);
+                if (mins < 1) return 'just now';
+                if (mins < 60) return `${mins}m ago`;
+                return `${Math.floor(mins/60)}h ago`;
+            } catch { return d; }
+        };
+        body.innerHTML = rows.map(r => `
+            <div class="dp-trigger-row px-5 py-3.5 flex items-center gap-3 transition-colors"
+                 style="border-bottom:1px solid var(--color-border);">
+                <span class="dp-trigger-badge shrink-0">${r.trigger_type}</span>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-semibold truncate" style="color:var(--color-ink);">${r.pipeline_name}</p>
+                    <p class="text-[10px] mt-0.5" style="color:var(--color-ink-3);">
+                        Last fired: ${humanAgo(r.last_fired_at)}
+                    </p>
+                </div>
+                <label class="shrink-0 flex items-center" title="${r.enabled?'Enabled':'Disabled'}">
+                    <input type="checkbox" class="tog-input" ${r.enabled?'checked':''} disabled>
+                    <span class="tog-track"></span>
+                </label>
+            </div>`).join('');
+    } catch (e) {
+        body.innerHTML = `<div class="flex flex-col items-center justify-center py-8 gap-2">
+            <span class="dp-empty">Failed to load triggers</span>
+        </div>`;
+    }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     renderAlerts();
     renderTimeline();
     renderAlertRules();
+    loadDashboardSummary();
+    loadSlaViolations();
+    loadTriggers();
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
         await fetch('/logout', {method:'POST'});

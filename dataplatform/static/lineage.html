@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lineage Graph — Data Platform Suite</title>
+    <link rel="stylesheet" href="/static/tokens.css">
+    <link rel="stylesheet" href="/static/sidebar.css">
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>html, body { overflow-x: clip; }</style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -12,169 +16,261 @@
             from { opacity: 0; transform: translateY(-8px); }
             to   { opacity: 1; transform: translateY(0); }
         }
-        #graph-container { width: 100%; height: calc(100vh - 112px); min-height: 480px; position: relative; }
-        .node-asset circle { fill: #6366f1; stroke: #4f46e5; stroke-width: 2; }
-        .node-task  circle { fill: #10b981; stroke: #059669; stroke-width: 2; }
-        .node-label { font-size: 11px; fill: #1e293b; font-family: ui-monospace, monospace; pointer-events: none; }
-        .link { stroke: #94a3b8; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-        .link-reads_from { stroke: #38bdf8; marker-end: url(#arrow-reads); }
-        .link-writes_to  { stroke: #34d399; marker-end: url(#arrow-writes); }
+
+        /* Graph container */
+        #graph-container { width: 100%; height: calc(100vh - 155px); min-height: 480px; position: relative; }
+
+        /* D3 node/link styles — token-based */
+        .node-asset circle { fill: var(--color-accent); stroke: var(--color-accent-hover); stroke-width: 2; }
+        .node-task  circle { fill: var(--color-success); stroke: var(--color-success); stroke-width: 2; }
+        .node-label {
+            font-size: 11px;
+            fill: var(--color-ink);
+            font-family: var(--font-mono);
+            pointer-events: none;
+        }
+        .link { stroke: var(--color-ink-3); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+        .link-reads_from { stroke: var(--color-accent); marker-end: url(#arrow-reads); }
+        .link-writes_to  { stroke: var(--color-success); marker-end: url(#arrow-writes); }
+
+        /* SVG marker fills via CSS */
+        #arrow path       { fill: var(--color-ink-3); }
+        #arrow-reads path { fill: var(--color-accent); }
+        #arrow-writes path{ fill: var(--color-success); }
+
+        /* List view */
+        .dp-task-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4) var(--space-6);
+            box-shadow: var(--shadow-sm);
+        }
+        .dp-asset-chip {
+            background: var(--color-accent-subtle);
+            color: var(--color-accent);
+            border-radius: var(--radius-full);
+            font-size: var(--text-xs);
+            padding: var(--space-1) var(--space-3);
+            font-weight: 600;
+            display: inline-block;
+        }
+        .dp-arrow-label {
+            color: var(--color-ink-3);
+            font-size: var(--text-xs);
+        }
+
+        /* Section heading */
+        .dp-section-head { font-family: var(--font-display); }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
 
 <!-- Sidebar -->
-<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
-    <div class="px-4 py-5 border-b border-slate-700/50">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-                <i class="fas fa-layer-group text-white text-xs"></i>
-            </div>
-            <div>
-                <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
-                <p class="text-slate-400 text-[11px]">Suite</p>
-            </div>
-        </div>
+<button class="dp-sidebar-toggle" id="dpSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="dpSidebar">
+  <i class="fas fa-bars" aria-hidden="true"></i>
+</button>
+<div class="dp-sidebar-overlay" id="dpSidebarOverlay" aria-hidden="true"></div>
+<aside class="dp-sidebar" id="dpSidebar" role="navigation" aria-label="Main navigation">
+  <div class="dp-sidebar__brand">
+    <div class="dp-sidebar__logo" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
+    <div class="dp-sidebar__brand-text">
+      <span class="dp-sidebar__brand-name">Data Platform</span>
+      <span class="dp-sidebar__brand-sub">Suite</span>
     </div>
-    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
-        </a>
-        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
-        </a>
-        <div class="pt-3 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Build</p>
-        </div>
-        <a href="/job-builder" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-cubes w-4 text-center shrink-0"></i><span>Job Builder</span>
-        </a>
-        <a href="/generator" class="flex items-center gap-3 pl-8 pr-3 py-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors">
-            <i class="fas fa-wand-magic-sparkles w-3.5 text-center shrink-0"></i><span>NLP Generator</span>
-        </a>
-        <div class="pt-4 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p>
-        </div>
-        <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
-        </a>
-        <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
-            <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
-        </a>
-        <div class="pt-4 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p>
-        </div>
-        <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
-        </a>
-        <div class="pt-4 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p>
-        </div>
-        <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
-        </a>        <a href="/git-integration" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-code-branch w-4 text-center shrink-0"></i><span>Git Integration</span>
-        </a>
-
-            <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
-        <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
-        </a>
-    </nav>
-    <div class="px-4 py-4 border-t border-slate-700/50">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
-                <i class="fas fa-user text-indigo-300 text-xs"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-                <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
-                <p class="text-slate-500 text-xs">Data Platform</p>
-            </div>
-            <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
-                <i class="fas fa-arrow-right-from-bracket text-sm"></i>
-            </button>
-        </div>
+  </div>
+  <nav class="dp-sidebar__nav" aria-label="Application navigation">
+    <a href="/" class="dp-sidebar__item">
+      <i class="fas fa-house dp-sidebar__icon" aria-hidden="true"></i><span>Overview</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Pipelines</div>
+    <a href="/dashboard" class="dp-sidebar__item">
+      <i class="fas fa-wave-square dp-sidebar__icon" aria-hidden="true"></i><span>DP Flow</span>
+    </a>
+    <a href="/job-builder" class="dp-sidebar__item">
+      <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
+    </a>
+    <a href="/templates-ui" class="dp-sidebar__item">
+      <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
+    </a>
+    <a href="/generator" class="dp-sidebar__item">
+      <i class="fas fa-wand-magic-sparkles dp-sidebar__icon" aria-hidden="true"></i><span>Generator</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Observability</div>
+    <a href="/monitoring" class="dp-sidebar__item">
+      <i class="fas fa-chart-line dp-sidebar__icon" aria-hidden="true"></i><span>Monitoring</span>
+    </a>
+    <a href="/lineage-viz" class="dp-sidebar__item is-active" aria-current="page">
+      <i class="fas fa-diagram-project dp-sidebar__icon" aria-hidden="true"></i><span>Lineage</span>
+    </a>
+    <a href="/alerts" class="dp-sidebar__item">
+      <i class="fas fa-bell dp-sidebar__icon" aria-hidden="true"></i><span>Alerts</span>
+      <span id="navAlertBadge" class="dp-sidebar__badge hidden" aria-label="active alerts">1</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Governance</div>
+    <a href="/catalog" class="dp-sidebar__item">
+      <i class="fas fa-database dp-sidebar__icon" aria-hidden="true"></i><span>Catalog</span>
+    </a>
+    <a href="/costs" class="dp-sidebar__item">
+      <i class="fas fa-coins dp-sidebar__icon" aria-hidden="true"></i><span>Costs</span>
+    </a>
+    <a href="/git-integration" class="dp-sidebar__item">
+      <i class="fas fa-code-branch dp-sidebar__icon" aria-hidden="true"></i><span>Git Integration</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Admin</div>
+    <a href="/admin" class="dp-sidebar__item">
+      <i class="fas fa-shield-halved dp-sidebar__icon" aria-hidden="true"></i><span>Users &amp; Roles</span>
+    </a>
+  </nav>
+  <div class="dp-sidebar__footer">
+    <div class="dp-sidebar__avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
+    <div class="dp-sidebar__user-info">
+      <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
+      <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
+      <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+    </button>
+  </div>
 </aside>
+<script>
+(function(){var t=document.getElementById('dpSidebarToggle'),s=document.getElementById('dpSidebar'),o=document.getElementById('dpSidebarOverlay');if(!t||!s||!o)return;function open(){s.classList.add('is-open');o.classList.add('is-open');o.removeAttribute('aria-hidden');t.setAttribute('aria-expanded','true');t.querySelector('i').className='fas fa-xmark';}function close(){s.classList.remove('is-open');o.classList.remove('is-open');o.setAttribute('aria-hidden','true');t.setAttribute('aria-expanded','false');t.querySelector('i').className='fas fa-bars';}t.addEventListener('click',function(){s.classList.contains('is-open')?close():open();});o.addEventListener('click',close);document.addEventListener('keydown',function(e){if(e.key==='Escape'&&s.classList.contains('is-open'))close();});}());
+</script>
 
 <!-- Main area -->
-<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+<div class="pl-56 min-h-screen flex flex-col">
 
     <!-- Topbar -->
-    <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30">
+    <header class="px-6 py-3.5 flex items-center justify-between sticky top-0 z-30"
+            style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);">
         <nav class="flex items-center gap-2 text-sm">
-            <a href="/" class="text-slate-500 hover:text-slate-800 transition-colors">Home</a>
-            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
-            <span class="text-slate-900 font-semibold">Lineage Graph</span>
+            <a href="/" class="transition-colors hover:underline" style="color: var(--color-ink-3);">Home</a>
+            <i class="fas fa-chevron-right text-[10px]" style="color: var(--color-border-2);"></i>
+            <h1 class="font-semibold dp-section-head" style="color: var(--color-ink);">Lineage Graph</h1>
         </nav>
         <div class="flex items-center gap-3">
-            <button onclick="resetZoom()" class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors">
+            <!-- View toggle -->
+            <div class="flex rounded-lg overflow-hidden" style="border: 1px solid var(--color-border);">
+                <button id="btn-graph" onclick="switchView('graph')"
+                        class="px-3 py-1.5 text-sm font-medium transition-colors"
+                        style="background: var(--color-accent); color: var(--color-accent-text);">
+                    <i class="fas fa-diagram-project mr-1.5 text-xs"></i>Graph
+                </button>
+                <button id="btn-list" onclick="switchView('list')"
+                        class="px-3 py-1.5 text-sm font-medium transition-colors"
+                        style="background: var(--color-surface); color: var(--color-ink-3);">
+                    <i class="fas fa-list mr-1.5 text-xs"></i>List
+                </button>
+            </div>
+            <button onclick="resetZoom()"
+                    class="rounded-lg px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors"
+                    id="btn-reset-zoom"
+                    style="background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-ink-2);">
                 <i class="fas fa-compress-arrows-alt text-xs"></i>Reset Zoom
             </button>
         </div>
     </header>
 
-    <!-- Graph full-bleed -->
-    <main class="flex-1 p-0">
+    <!-- Graph full-bleed view -->
+    <main id="view-graph" class="flex-1 p-0">
         <div id="graph-container">
 
             <!-- Legend bar -->
-            <div class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-6 text-sm flex-wrap">
+            <div class="px-6 py-3 flex items-center gap-6 text-sm flex-wrap"
+                 style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);">
                 <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-indigo-500 inline-block shrink-0"></span>
-                    <span class="text-slate-600">Asset Node</span>
+                    <span class="w-3 h-3 rounded-full inline-block shrink-0"
+                          style="background: var(--color-accent);"></span>
+                    <span style="color: var(--color-ink-2);">Asset Node</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block shrink-0"></span>
-                    <span class="text-slate-600">Task Node</span>
+                    <span class="w-3 h-3 rounded-full inline-block shrink-0"
+                          style="background: var(--color-success);"></span>
+                    <span style="color: var(--color-ink-2);">Task Node</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="w-6 h-0.5 bg-sky-400 inline-block shrink-0"></span>
-                    <span class="text-slate-600">reads_from</span>
+                    <span class="w-6 h-0.5 inline-block shrink-0"
+                          style="background: var(--color-accent);"></span>
+                    <span style="color: var(--color-ink-2);">reads_from</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="w-6 h-0.5 bg-emerald-400 inline-block shrink-0"></span>
-                    <span class="text-slate-600">writes_to</span>
+                    <span class="w-6 h-0.5 inline-block shrink-0"
+                          style="background: var(--color-success);"></span>
+                    <span style="color: var(--color-ink-2);">writes_to</span>
                 </div>
-                <div class="text-slate-200 select-none">|</div>
-                <span id="graphStats" class="text-slate-400 text-xs"></span>
+                <div style="color: var(--color-border-2);" class="select-none">|</div>
+                <span id="graphStats" class="text-xs" style="color: var(--color-ink-3);"></span>
             </div>
 
             <!-- Graph SVG -->
-            <svg id="graph-svg" width="100%" style="height: calc(100% - 45px); display: block; background: white;">
+            <svg id="graph-svg" width="100%"
+                 style="height: calc(100% - 45px); display: block; background: var(--color-surface);">
                 <defs>
                     <marker id="arrow" markerWidth="8" markerHeight="8" refX="16" refY="4" orient="auto">
-                        <path d="M0,0 L0,8 L8,4 z" fill="#94a3b8"/>
+                        <path d="M0,0 L0,8 L8,4 z"/>
                     </marker>
                     <marker id="arrow-reads" markerWidth="8" markerHeight="8" refX="16" refY="4" orient="auto">
-                        <path d="M0,0 L0,8 L8,4 z" fill="#38bdf8"/>
+                        <path d="M0,0 L0,8 L8,4 z"/>
                     </marker>
                     <marker id="arrow-writes" markerWidth="8" markerHeight="8" refX="16" refY="4" orient="auto">
-                        <path d="M0,0 L0,8 L8,4 z" fill="#34d399"/>
+                        <path d="M0,0 L0,8 L8,4 z"/>
                     </marker>
                 </defs>
             </svg>
 
             <!-- Empty state overlay -->
-            <div id="emptyState" class="hidden absolute inset-0 top-[45px] flex flex-col items-center justify-center bg-white gap-4">
-                <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <i class="fas fa-diagram-project text-slate-400 text-3xl"></i>
+            <div id="emptyState" class="hidden absolute inset-0 top-[45px] flex flex-col items-center justify-center gap-4"
+                 style="background: var(--color-surface);">
+                <div class="w-16 h-16 rounded-2xl flex items-center justify-center"
+                     style="background: var(--color-paper-3);">
+                    <i class="fas fa-diagram-project text-3xl" style="color: var(--color-ink-3);"></i>
                 </div>
                 <div class="text-center">
-                    <p class="text-base font-semibold text-slate-900">No lineage data yet</p>
-                    <p class="text-sm text-slate-600 mt-1 max-w-xs">Run pipelines with <code class="bg-slate-100 px-1 rounded text-slate-700">reads_from</code> / <code class="bg-slate-100 px-1 rounded text-slate-700">writes_to</code> lineage declarations</p>
+                    <p class="text-base font-semibold" style="color: var(--color-ink);">No lineage data yet</p>
+                    <p class="text-sm mt-1 max-w-xs" style="color: var(--color-ink-2);">Run pipelines with
+                        <code class="px-1 rounded" style="background:var(--color-paper-3);color:var(--color-ink-2);">reads_from</code> /
+                        <code class="px-1 rounded" style="background:var(--color-paper-3);color:var(--color-ink-2);">writes_to</code>
+                        lineage declarations</p>
                 </div>
-                <a href="/dashboard" class="mt-2 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors">
+                <a href="/dashboard"
+                   class="mt-2 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                   style="background: var(--color-accent); color: var(--color-accent-text);">
                     <i class="fas fa-wave-square text-xs"></i>Go to DP Flow
                 </a>
             </div>
 
         </div>
     </main>
+
+    <!-- List view -->
+    <main id="view-list" class="hidden flex-1 p-6 space-y-4">
+        <!-- Search -->
+        <div class="flex items-center gap-3">
+            <div class="relative flex-1 max-w-sm">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs"
+                   style="color: var(--color-ink-3);"></i>
+                <input id="lineageSearch" type="text" placeholder="Filter by pipeline or asset…"
+                       oninput="filterLineageList()"
+                       class="w-full pl-8 pr-3 py-2 text-sm rounded-lg focus:outline-none"
+                       style="background:var(--color-surface);border:1px solid var(--color-border);
+                              color:var(--color-ink);font-family:var(--font-body);">
+            </div>
+        </div>
+
+        <div id="lineageList" class="space-y-3">
+            <div class="flex items-center justify-center py-12 gap-2">
+                <i class="fas fa-circle-notch fa-spin" style="color: var(--color-ink-3);"></i>
+                <span class="text-sm" style="color: var(--color-ink-3);">Loading lineage…</span>
+            </div>
+        </div>
+    </main>
+
 </div>
 
 <!-- Tooltip -->
-<div id="tooltip" class="fixed hidden bg-slate-900 text-white text-xs rounded-lg px-3 py-2 max-w-xs shadow-xl z-50 pointer-events-none leading-snug"></div>
+<div id="tooltip"
+     class="fixed hidden text-xs rounded-lg px-3 py-2 max-w-xs shadow-xl z-50 pointer-events-none leading-snug"
+     style="background: var(--color-ink); color: var(--color-accent-text);"></div>
 
 <!-- Toast container -->
 <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
@@ -196,12 +292,128 @@ function showToast(msg, type='info') {
     setTimeout(() => t && t.remove(), 5000);
 }
 
+// ── View switching ────────────────────────────────────────────────────────────
+let _currentView = 'graph';
+function switchView(view) {
+    _currentView = view;
+    document.getElementById('view-graph').classList.toggle('hidden', view !== 'graph');
+    document.getElementById('view-list').classList.toggle('hidden', view !== 'list');
+    document.getElementById('btn-reset-zoom').style.display = view === 'graph' ? '' : 'none';
+
+    const btnGraph = document.getElementById('btn-graph');
+    const btnList  = document.getElementById('btn-list');
+    if (view === 'graph') {
+        btnGraph.style.background = 'var(--color-accent)';
+        btnGraph.style.color = 'var(--color-accent-text)';
+        btnList.style.background = 'var(--color-surface)';
+        btnList.style.color = 'var(--color-ink-3)';
+    } else {
+        btnList.style.background = 'var(--color-accent)';
+        btnList.style.color = 'var(--color-accent-text)';
+        btnGraph.style.background = 'var(--color-surface)';
+        btnGraph.style.color = 'var(--color-ink-3)';
+    }
+}
+
+// ── Lineage list rendering ────────────────────────────────────────────────────
+let _lineageRecords = [];
+
+function renderLineageList(records) {
+    const list = document.getElementById('lineageList');
+    if (!records.length) {
+        list.innerHTML = `<div class="flex flex-col items-center justify-center py-16 gap-3">
+            <i class="fas fa-diagram-project text-3xl" style="color:var(--color-ink-3);"></i>
+            <p class="text-sm" style="color:var(--color-ink-3);">No lineage records yet — run a DuckDB pipeline to auto-capture lineage</p>
+        </div>`;
+        return;
+    }
+    const fmtDate = d => { try { return new Date(d).toLocaleString(); } catch { return d||''; } };
+    const chips = arr => (arr||[]).map(a =>
+        `<span class="dp-asset-chip">${a}</span>`
+    ).join(' ');
+
+    list.innerHTML = records.map(r => `
+        <div class="dp-task-card" data-pipeline="${(r.pipeline_name||'').toLowerCase()}"
+             data-assets="${[...(r.reads_from||[]),...(r.writes_to||[])].join(' ').toLowerCase()}">
+            <div class="flex items-start justify-between gap-4 mb-3">
+                <div>
+                    <p class="text-sm font-semibold" style="color:var(--color-ink);font-family:var(--font-display);">${r.task_name||'—'}</p>
+                    <p class="text-xs mt-0.5" style="color:var(--color-ink-3);">
+                        <i class="fas fa-diagram-project mr-1"></i>${r.pipeline_name||'—'}
+                    </p>
+                </div>
+                <span class="text-xs shrink-0" style="color:var(--color-ink-3);">${fmtDate(r.recorded_at)}</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                ${(r.reads_from||[]).length ? `<div class="flex flex-wrap items-center gap-2">
+                    <span class="dp-arrow-label font-medium">reads</span>
+                    ${chips(r.reads_from)}
+                </div>` : ''}
+                ${(r.reads_from||[]).length && (r.writes_to||[]).length
+                    ? `<i class="fas fa-arrow-right text-xs dp-arrow-label"></i>` : ''}
+                ${(r.writes_to||[]).length ? `<div class="flex flex-wrap items-center gap-2">
+                    <span class="dp-arrow-label font-medium">writes</span>
+                    ${chips(r.writes_to)}
+                </div>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function filterLineageList() {
+    const q = (document.getElementById('lineageSearch').value || '').toLowerCase().trim();
+    if (!q) { renderLineageList(_lineageRecords); return; }
+    const filtered = _lineageRecords.filter(r =>
+        (r.pipeline_name||'').toLowerCase().includes(q) ||
+        (r.task_name||'').toLowerCase().includes(q) ||
+        [...(r.reads_from||[]),...(r.writes_to||[])].some(a => a.toLowerCase().includes(q))
+    );
+    renderLineageList(filtered);
+}
+
+// ── Convert /lineage {records} format to D3 nodes/edges ─────────────────────
+function recordsToGraph(records) {
+    const nodeMap = new Map();
+    const edges = [];
+
+    records.forEach(r => {
+        const taskId = `task:${r.pipeline_name}/${r.task_name}`;
+        if (!nodeMap.has(taskId)) nodeMap.set(taskId, { id: taskId, type: 'task' });
+
+        (r.reads_from || []).forEach(asset => {
+            if (!nodeMap.has(asset)) nodeMap.set(asset, { id: asset, type: 'asset' });
+            edges.push({ source: asset, target: taskId, direction: 'reads_from' });
+        });
+        (r.writes_to || []).forEach(asset => {
+            if (!nodeMap.has(asset)) nodeMap.set(asset, { id: asset, type: 'asset' });
+            edges.push({ source: taskId, target: asset, direction: 'writes_to' });
+        });
+    });
+
+    return { nodes: Array.from(nodeMap.values()), edges };
+}
+
 let svgZoom;
 
 async function loadGraph() {
-    const data = await fetch('/lineage').then(r => r.json()).catch(() => ({ nodes: [], edges: [] }));
-    const nodes = data.nodes || [];
-    const edges = data.edges || [];
+    const raw = await fetch('/lineage').then(r => r.json()).catch(() => ({ nodes: [], edges: [], records: [] }));
+
+    // Support both {nodes,edges} and {records} API shapes
+    let nodes, edges;
+    if (raw.records && Array.isArray(raw.records)) {
+        _lineageRecords = raw.records;
+        const g = recordsToGraph(raw.records);
+        nodes = g.nodes;
+        edges = g.edges;
+    } else {
+        nodes = raw.nodes || [];
+        edges = raw.edges || [];
+        // Build synthetic records for list view
+        _lineageRecords = [];
+    }
+
+    // Populate list view
+    renderLineageList(_lineageRecords);
 
     if (!nodes.length) {
         document.getElementById('emptyState').classList.remove('hidden');
@@ -210,16 +422,14 @@ async function loadGraph() {
         return;
     }
 
-    // Update legend stats
-    document.getElementById('graphStats').textContent = `${nodes.length} node${nodes.length !== 1 ? 's' : ''} · ${edges.length} edge${edges.length !== 1 ? 's' : ''}`;
+    document.getElementById('graphStats').textContent =
+        `${nodes.length} node${nodes.length !== 1 ? 's' : ''} · ${edges.length} edge${edges.length !== 1 ? 's' : ''}`;
 
     const container = document.getElementById('graph-container');
     const W = container.clientWidth;
-    const H = container.clientHeight - 45; // subtract legend bar height
+    const H = container.clientHeight - 45;
 
-    const svg = d3.select('#graph-svg')
-        .attr('viewBox', `0 0 ${W} ${H}`);
-
+    const svg = d3.select('#graph-svg').attr('viewBox', `0 0 ${W} ${H}`);
     const g = svg.append('g');
 
     svgZoom = d3.zoom()
@@ -281,7 +491,9 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 });
 
 loadGraph();
-fetch('/me').then(r => r.ok ? r.json() : null).then(data => { if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username; }).catch(() => {});
+fetch('/me').then(r => r.ok ? r.json() : null).then(data => {
+    if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username;
+}).catch(() => {});
 </script>
 </body>
 </html>

@@ -1,0 +1,116 @@
+/* Hallmark · redesign · modern-minimal · Cobalt · Space Grotesk + Inter · oklch(54% 0.22 250) */
+/* pre-emit critique: P5 H5 E5 S5 R5 V4 */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ── Fonts ─────────────────────────────────────────────────────────── */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-mono:    ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
+
+  /* ── Text scale ─────────────────────────────────────────────────────── */
+  --text-xs:      0.6875rem;  /* 11px */
+  --text-sm:      0.8125rem;  /* 13px */
+  --text-base:    0.9375rem;  /* 15px */
+  --text-md:      1rem;       /* 16px */
+  --text-lg:      1.125rem;   /* 18px */
+  --text-xl:      1.375rem;   /* 22px */
+  --text-2xl:     1.75rem;    /* 28px */
+  --text-3xl:     2.25rem;    /* 36px */
+  --text-4xl:     3rem;       /* 48px */
+  --text-display: 3.75rem;    /* 60px */
+
+  /* ── Spacing (4 pt base) ─────────────────────────────────────────── */
+  --space-1:    4px;
+  --space-2:    8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-24:  96px;
+
+  /* ── Radius ─────────────────────────────────────────────────────────── */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-full: 9999px;
+
+  /* ── Easing ─────────────────────────────────────────────────────────── */
+  --ease-out:    cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-in:     cubic-bezier(0.4, 0.0, 1.0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
+
+  /* ── Duration ───────────────────────────────────────────────────────── */
+  --dur-fast:  100ms;
+  --dur-base:  180ms;
+  --dur-slow:  320ms;
+
+  /* ── Shadows ────────────────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px oklch(15% 0.015 250 / 0.06);
+  --shadow-md: 0 2px 8px oklch(15% 0.015 250 / 0.10), 0 1px 2px oklch(15% 0.015 250 / 0.06);
+  --shadow-lg: 0 4px 20px oklch(15% 0.015 250 / 0.13), 0 2px 6px oklch(15% 0.015 250 / 0.08);
+  --shadow-xl: 0 8px 32px oklch(15% 0.015 250 / 0.18), 0 4px 12px oklch(15% 0.015 250 / 0.10);
+
+  /* ── Light-mode colour palette ───────────────────────────────────── */
+  --color-paper:           oklch(99% 0.005 240);
+  --color-paper-2:         oklch(97% 0.008 240);
+  --color-paper-3:         oklch(94% 0.010 240);
+  --color-ink:             oklch(15% 0.015 250);
+  --color-ink-2:           oklch(32% 0.020 250);
+  --color-ink-3:           oklch(52% 0.015 250);
+  --color-accent:          oklch(54% 0.22 250);
+  --color-accent-hover:    oklch(47% 0.22 250);
+  --color-accent-subtle:   oklch(94% 0.05 250);
+  --color-accent-text:     oklch(99% 0.004 240);
+  --color-surface:         oklch(100% 0 0);
+  --color-border:          oklch(88% 0.010 250);
+  --color-border-2:        oklch(82% 0.012 250);
+  --color-muted:           oklch(92% 0.010 250);
+  --color-danger:          oklch(54% 0.22 25);
+  --color-danger-subtle:   oklch(96% 0.04 25);
+  --color-warning:         oklch(72% 0.17 65);
+  --color-warning-subtle:  oklch(97% 0.04 65);
+  --color-success:         oklch(55% 0.18 150);
+  --color-success-subtle:  oklch(96% 0.04 150);
+  --color-focus:           oklch(54% 0.22 250);
+
+  /* ── Sidebar tokens (dark — same in both colour schemes) ──────────── */
+  --color-sidebar-bg:          oklch(18% 0.022 250);
+  --color-sidebar-bg-2:        oklch(22% 0.022 250);
+  --color-sidebar-border:      oklch(30% 0.022 250);
+  --color-sidebar-text:        oklch(58% 0.015 250);
+  --color-sidebar-text-active: oklch(97% 0.005 250);
+  --color-sidebar-item-hover:  oklch(25% 0.022 250);
+  --color-sidebar-item-active: oklch(54% 0.22 250);
+  --color-sidebar-group-label: oklch(42% 0.015 250);
+  --color-sidebar-avatar-bg:   oklch(54% 0.22 250 / 0.20);
+  --color-sidebar-avatar-ring: oklch(62% 0.20 250 / 0.30);
+
+  /* ── Sidebar dimension ───────────────────────────────────────────── */
+  --sidebar-width: 224px;
+}
+
+/* ── Dark-mode overrides (main content area only) ──────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper:          oklch(15% 0.015 250);
+    --color-paper-2:        oklch(18% 0.018 250);
+    --color-paper-3:        oklch(21% 0.020 250);
+    --color-ink:            oklch(96% 0.005 250);
+    --color-ink-2:          oklch(78% 0.012 250);
+    --color-ink-3:          oklch(58% 0.012 250);
+    --color-surface:        oklch(20% 0.020 250);
+    --color-border:         oklch(28% 0.018 250);
+    --color-border-2:       oklch(32% 0.020 250);
+    --color-muted:          oklch(22% 0.018 250);
+    --color-accent-subtle:  oklch(25% 0.035 250);
+    --color-danger-subtle:  oklch(22% 0.040 25);
+    --color-warning-subtle: oklch(22% 0.030 65);
+    --color-success-subtle: oklch(22% 0.030 150);
+    /* Sidebar tokens are dark already — no change needed */
+  }
+}
