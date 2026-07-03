@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+<script>
+(function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
+</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Platform - Pipeline Generator</title>
     <link rel="stylesheet" href="/static/tokens.css">
@@ -84,6 +87,9 @@
       <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
       <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="darkModeBtn" class="dp-sidebar__darkmode" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+      <i class="fas fa-moon" id="darkModeIcon" aria-hidden="true"></i>
+    </button>
     <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
       <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
     </button>
@@ -626,7 +632,37 @@ Build a daily sales pipeline.
             document.getElementById('generatePipelineYamlBtn').addEventListener('click', generatePipelineYaml);
             document.getElementById('downloadGeneratedYamlBtn').addEventListener('click', downloadGeneratedPipelineYaml);
             document.getElementById('saveGeneratedYamlBtn').addEventListener('click', saveGeneratedPipelineYaml);
-            document.getElementById('logoutBtn').addEventListener('click', logout);
+            function toggleDarkMode() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (html.classList.contains('dp-dark')) {
+        // dark → system
+        html.classList.remove('dp-dark');
+        localStorage.setItem('dpDarkMode', 'system');
+        if (icon) { icon.className = 'fas fa-circle-half-stroke'; }
+    } else if (html.classList.contains('dp-light')) {
+        // light → dark
+        html.classList.remove('dp-light');
+        html.classList.add('dp-dark');
+        localStorage.setItem('dpDarkMode', 'dark');
+        if (icon) { icon.className = 'fas fa-sun'; }
+    } else {
+        // system → light
+        html.classList.add('dp-light');
+        localStorage.setItem('dpDarkMode', 'light');
+        if (icon) { icon.className = 'fas fa-moon'; }
+    }
+}
+function syncDarkModeIcon() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    if (html.classList.contains('dp-dark'))  icon.className = 'fas fa-sun';
+    else if (html.classList.contains('dp-light')) icon.className = 'fas fa-moon';
+    else icon.className = 'fas fa-circle-half-stroke';
+}
+document.addEventListener('DOMContentLoaded', syncDarkModeIcon);
+document.getElementById('logoutBtn').addEventListener('click', logout);
 
             setupCopyBtn();
 

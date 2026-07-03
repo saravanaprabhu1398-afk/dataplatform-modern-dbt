@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>
+(function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Job Builder — Data Platform</title>
     <link rel="stylesheet" href="/static/tokens.css">
@@ -199,6 +202,17 @@ hr.border-slate-100{border-color:var(--color-border)!important;}
 .log-pane{background:oklch(12% 0.015 250);color:oklch(88% 0.008 250);
   font-family:var(--font-mono,'Monaco','Menlo',monospace);font-size:var(--text-xs,11px);
   border-radius:var(--radius-lg,8px);padding:var(--space-4,16px);overflow:auto;}
+
+/* Left panel collapse/expand */
+#dp-left-panel { transition: width .2s ease, min-width .2s ease; }
+#dp-left-panel.is-collapsed { width: 0 !important; min-width: 0 !important; overflow: hidden !important; border: none !important; }
+
+@media (max-width: 767px) {
+    .dp-sidebar-toggle { display: flex !important; }
+    #dp-left-panel { display: none; }
+    #canvas-wrapper { min-height: 400px; }
+    #zoom-bar { bottom: 8px; right: 8px; }
+}
 </style>
 </head>
 <body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
@@ -265,6 +279,9 @@ hr.border-slate-100{border-color:var(--color-border)!important;}
       <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
       <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="darkModeBtn" class="dp-sidebar__darkmode" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+      <i class="fas fa-moon" id="darkModeIcon" aria-hidden="true"></i>
+    </button>
     <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
       <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
     </button>
@@ -275,7 +292,7 @@ hr.border-slate-100{border-color:var(--color-border)!important;}
 </script>
 
 <!-- MAIN -->
-<div class="ml-56 flex flex-col h-screen overflow-hidden">
+<div class="ml-0 md:ml-56 flex flex-col h-screen overflow-hidden">
 
   <!-- TOP BAR -->
   <div id="dp-topbar" class="px-5 py-2.5 flex items-center gap-3 shrink-0">
@@ -288,7 +305,12 @@ hr.border-slate-100{border-color:var(--color-border)!important;}
         class="text-sm border-b border-transparent outline-none bg-transparent px-1 py-0.5 flex-1 min-w-0 transition-colors"
         oninput="updateYAMLPreview()">
     </div>
-    <div class="flex items-center gap-1.5 shrink-0">
+    <div class="flex items-center gap-1.5 shrink-0 overflow-x-auto">
+      <!-- Left panel toggle -->
+      <button id="leftPanelToggleBtn" onclick="toggleLeftPanel()" title="Toggle palette (Ctrl+B)" class="tbtn">
+        <i class="fas fa-angles-left" id="leftPanelToggleIcon"></i>
+      </button>
+      <div class="dp-divider w-px h-5 mx-0.5" style="background:var(--color-border)"></div>
       <!-- Undo / Redo -->
       <button id="undo-btn" onclick="undo()" disabled title="Undo (Ctrl+Z)" class="tbtn">
         <i class="fas fa-rotate-left text-xs"></i>
@@ -331,11 +353,16 @@ hr.border-slate-100{border-color:var(--color-border)!important;}
   <!-- STATUS BAR -->
   <div id="statusBar" class="hidden px-5 py-1.5 text-xs font-medium flex items-center gap-2"></div>
 
+  <!-- MOBILE WARNING -->
+  <div class="md:hidden px-4 py-2 text-xs text-center font-medium" style="background:var(--color-warning-subtle);color:var(--color-ink-2);border-bottom:1px solid var(--color-warning)">
+    <i class="fas fa-triangle-exclamation mr-1"></i>Job Builder works best on a larger screen
+  </div>
+
   <!-- WORKSPACE -->
   <div class="flex flex-1 overflow-hidden">
 
     <!-- LEFT PANEL (tabbed) -->
-    <div id="dp-left-panel" class="w-64 flex flex-col shrink-0 overflow-hidden">
+    <div id="dp-left-panel" class="flex w-64 flex-col shrink-0 overflow-hidden">
       <div class="flex border-b shrink-0" style="border-color:var(--color-border)">
         <button class="tab-btn active" id="tab-tasks"  onclick="switchTab('tasks')">Tasks</button>
         <button class="tab-btn"        id="tab-meta"   onclick="switchTab('meta')">Pipeline</button>
@@ -382,7 +409,7 @@ hr.border-slate-100{border-color:var(--color-border)!important;}
         <svg id="edge-svg"></svg>
         <div id="canvas-empty" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
           <i class="fas fa-diagram-project text-6xl mb-4" style="color:var(--color-border-2)"></i>
-          <p class="text-sm font-medium" style="color:var(--color-ink-3)">Click a task type to add it</p>
+          <p class="text-sm font-medium" style="color:var(--color-ink-3)">Click or drag a task type from the left panel</p>
           <p class="text-xs mt-1" style="color:var(--color-border-2)">Connect tasks by dragging from <span class="font-semibold">right port → left port</span></p>
           <p class="text-xs mt-0.5" style="color:var(--color-border-2)">Ctrl+Wheel zoom · Space+drag pan · Ctrl+D duplicate · Ctrl+L arrange · Shift-click multi-select · Delete to remove</p>
         </div>
@@ -641,6 +668,12 @@ let zoom = 1;
 let spaceDown = false;
 let panState  = null;
 
+// ── Palette drag-drop ──
+let _palDragType = null;
+
+// ── Left panel collapse ──
+let _leftPanelOpen = true;
+
 // ─────────────────────────────────────────
 // HISTORY
 // ─────────────────────────────────────────
@@ -701,6 +734,16 @@ function setZoom(z) {
 }
 function adjustZoom(delta) { setZoom(zoom + delta); }
 function resetZoom() { setZoom(1); }
+
+function toggleLeftPanel() {
+  _leftPanelOpen = !_leftPanelOpen;
+  const panel = document.getElementById('dp-left-panel');
+  const icon  = document.getElementById('leftPanelToggleIcon');
+  panel.classList.toggle('is-collapsed', !_leftPanelOpen);
+  if (icon) icon.className = _leftPanelOpen ? 'fas fa-angles-left' : 'fas fa-angles-right';
+  // Re-render edges after width transition completes
+  setTimeout(renderSVG, 220);
+}
 
 // ─────────────────────────────────────────
 // INIT
@@ -1035,7 +1078,7 @@ function deleteTrigger(i) {
 function renderPalette() {
   const pal = document.getElementById('palette');
   pal.innerHTML = Object.entries(TT).map(([key, tt]) => `
-    <div class="pal-item" onclick="addTask('${key}')">
+    <div class="pal-item" draggable="true" data-typekey="${key}" onclick="addTask('${key}')">
       <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
            style="background:var(--color-paper-3);border:1px solid var(--color-border)">
         <i class="fas ${tt.icon} text-[11px]" style="color:${tt.color}"></i>
@@ -1085,6 +1128,20 @@ function addTask(typeKey) {
     if (noCycle) state.edges.push({from: sel.id, to: id});
     renderSVG();
   }
+  updateEmpty();
+  updateYAMLPreview();
+}
+
+function addTaskAt(typeKey, x, y) {
+  saveSnap();
+  const id    = 'task_' + state.nextId++;
+  const count = state.tasks.filter(t => t.typeKey === typeKey).length + 1;
+  const label = TT[typeKey].label.toLowerCase().replace(/\s+/g,'_');
+  const task  = {id, typeKey, name:`${label}_${count}`, x, y, retries:0,
+                 config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey]))};
+  state.tasks.push(task);
+  mountNode(task);
+  selectTask(id);
   updateEmpty();
   updateYAMLPreview();
 }
@@ -1224,6 +1281,48 @@ function bindCanvasEvents() {
     }
   }, {passive: false});
 
+  // ── Palette drag → canvas drop ──────────────────────────────────────────
+  const leftPanel = document.getElementById('dp-left-panel');
+  leftPanel.addEventListener('dragstart', e => {
+    const item = e.target.closest('[data-typekey]');
+    if (!item) return;
+    _palDragType = item.dataset.typekey;
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', _palDragType);
+    // Dim the dragged item as a ghost cue
+    requestAnimationFrame(() => { item.style.opacity = '0.45'; });
+  });
+  leftPanel.addEventListener('dragend', e => {
+    const item = e.target.closest('[data-typekey]');
+    if (item) item.style.opacity = '';
+    _palDragType = null;
+    wrapper.style.outline = '';
+  });
+
+  wrapper.addEventListener('dragover', e => {
+    if (!_palDragType) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    wrapper.style.outline = '2px dashed var(--color-accent)';
+    wrapper.style.outlineOffset = '-2px';
+  });
+  wrapper.addEventListener('dragleave', e => {
+    // Only clear when leaving the wrapper entirely (not entering a child)
+    if (!wrapper.contains(e.relatedTarget)) {
+      wrapper.style.outline = '';
+    }
+  });
+  wrapper.addEventListener('drop', e => {
+    e.preventDefault();
+    wrapper.style.outline = '';
+    const typeKey = _palDragType || e.dataTransfer.getData('text/plain');
+    _palDragType = null;
+    if (!typeKey || !TT[typeKey]) return;
+    // Convert viewport coords → canvas coords, centering node on drop point
+    const pos = canvasPos(e);
+    addTaskAt(typeKey, Math.max(0, pos.x - NODE_W / 2), Math.max(0, pos.y - NODE_H / 2));
+  });
+
   // Space+drag pan (start on wrapper)
   wrapper.addEventListener('mousedown', e => {
     if (spaceDown && !edgeDraw) {
@@ -1338,6 +1437,7 @@ function bindCanvasEvents() {
       if (e.key === 'd' && state.selected) { duplicateTask(state.selected); e.preventDefault(); }
       if (e.key === 'l') { arrangeNow(); e.preventDefault(); }
       if (e.key === 'a') { selectAllTasks(); e.preventDefault(); }
+      if (e.key === 'b') { toggleLeftPanel(); e.preventDefault(); }
     }
     // Delete key removes selected nodes
     if (!inInput && (e.key === 'Delete' || e.key === 'Backspace') && (state.selection && state.selection.length)) {
@@ -2956,6 +3056,37 @@ document.addEventListener('input', function() {
     _checkCredentialWarning();
   }
 });
+function toggleDarkMode() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (html.classList.contains('dp-dark')) {
+        // dark → system
+        html.classList.remove('dp-dark');
+        localStorage.setItem('dpDarkMode', 'system');
+        if (icon) { icon.className = 'fas fa-circle-half-stroke'; }
+    } else if (html.classList.contains('dp-light')) {
+        // light → dark
+        html.classList.remove('dp-light');
+        html.classList.add('dp-dark');
+        localStorage.setItem('dpDarkMode', 'dark');
+        if (icon) { icon.className = 'fas fa-sun'; }
+    } else {
+        // system → light
+        html.classList.add('dp-light');
+        localStorage.setItem('dpDarkMode', 'light');
+        if (icon) { icon.className = 'fas fa-moon'; }
+    }
+}
+function syncDarkModeIcon() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    if (html.classList.contains('dp-dark'))  icon.className = 'fas fa-sun';
+    else if (html.classList.contains('dp-light')) icon.className = 'fas fa-moon';
+    else icon.className = 'fas fa-circle-half-stroke';
+}
+document.addEventListener('DOMContentLoaded', syncDarkModeIcon);
+
 </script>
 </body>
 </html>

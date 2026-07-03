@@ -2,13 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+<script>
+(function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
+</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management — Data Platform Suite</title>
     <link rel="stylesheet" href="/static/tokens.css">
     <link rel="stylesheet" href="/static/sidebar.css">
 
     <link rel="stylesheet" href="/static/tailwind-static.css">
-    <style>html, body { overflow-x: clip; }</style>
+    <style>
+html, body { overflow-x: clip; }
+@media (max-width: 767px) {
+    .dp-sidebar-toggle { display: flex !important; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 8px !important; }
+    #admin-main { padding-left: 0 !important; }
+}
+</style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body style="background: var(--color-paper); overflow-x: clip;">
@@ -75,6 +86,9 @@
       <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
       <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="darkModeBtn" class="dp-sidebar__darkmode" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+      <i class="fas fa-moon" id="darkModeIcon" aria-hidden="true"></i>
+    </button>
     <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
       <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
     </button>
@@ -85,10 +99,10 @@
 </script>
 
 <!-- ─────────────────────────────── MAIN LAYOUT ─────────────────────────── -->
-<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+<div class="pl-56 min-h-screen bg-slate-50 flex flex-col" id="admin-main">
 
     <!-- Top Bar -->
-    <header class="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between shadow-sm">
+    <header class="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 md:px-6 py-3.5 pl-14 md:pl-6 flex items-center justify-between shadow-sm">
         <nav class="flex items-center gap-1.5 text-sm">
             <a href="/" class="text-slate-400 hover:text-slate-600 transition-colors">Home</a>
             <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
@@ -144,6 +158,7 @@
 
         <!-- Users Table -->
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div style="overflow-x:auto">
             <table class="w-full">
                 <thead class="bg-slate-50 border-b border-slate-200">
                     <tr>
@@ -167,6 +182,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
 
     </main>
@@ -811,7 +827,37 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('openCreateModal').addEventListener('click', openCreateModal);
 
     // Logout
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
+    function toggleDarkMode() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (html.classList.contains('dp-dark')) {
+        // dark → system
+        html.classList.remove('dp-dark');
+        localStorage.setItem('dpDarkMode', 'system');
+        if (icon) { icon.className = 'fas fa-circle-half-stroke'; }
+    } else if (html.classList.contains('dp-light')) {
+        // light → dark
+        html.classList.remove('dp-light');
+        html.classList.add('dp-dark');
+        localStorage.setItem('dpDarkMode', 'dark');
+        if (icon) { icon.className = 'fas fa-sun'; }
+    } else {
+        // system → light
+        html.classList.add('dp-light');
+        localStorage.setItem('dpDarkMode', 'light');
+        if (icon) { icon.className = 'fas fa-moon'; }
+    }
+}
+function syncDarkModeIcon() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    if (html.classList.contains('dp-dark'))  icon.className = 'fas fa-sun';
+    else if (html.classList.contains('dp-light')) icon.className = 'fas fa-moon';
+    else icon.className = 'fas fa-circle-half-stroke';
+}
+document.addEventListener('DOMContentLoaded', syncDarkModeIcon);
+document.getElementById('logoutBtn').addEventListener('click', async () => {
         await fetch('/logout', { method: 'POST' }).catch(() => {});
         window.location.href = '/login';
     });

@@ -1493,3 +1493,144 @@ def recover_orphaned_runs() -> int:
             "Recovered %d orphaned run(s) from previous server instance", recovered
         )
     return recovered
+
+
+# ---------------------------------------------------------------------------
+# Timeseries metrics (for monitoring charts)
+# ---------------------------------------------------------------------------
+
+def get_run_timeseries(range_hours: int = 24) -> dict:
+    """Return bucketed run counts and per-pipeline stats for the monitoring charts.
+
+    Queries pipeline_queue (has timestamps) + pipeline_runs (has per-pipeline
+    history).  All heavy bucketing is done in Python to stay DB-agnostic.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(hours=range_hours)
+    since_str = since.isoformat()
+
+    with _get_engine().connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT pipeline_name, status, queued_at, started_at, completed_at "
+                "FROM pipeline_queue "
+                "WHERE queued_at >= :since "
+                "ORDER BY queued_at ASC"
+            ),
+            {"since": since_str},
+        ).fetchall()
+
+    runs = [dict(r._mapping) for r in rows]
+
+    # ── 24 h exec-volume & error-rate (2-hour buckets, 12 slots) ────────────
+    bucket_hours = max(1, range_hours // 12)
+    buckets: dict[int, dict] = {i: {"total": 0, "failed": 0} for i in range(12)}
+
+    for r in runs:
+        try:
+            ts = datetime.fromisoformat(r["queued_at"].replace("Z", "+00:00"))
+            age_hours = (now - ts).total_seconds() / 3600
+            slot = min(11, int(age_hours // bucket_hours))
+            idx = 11 - slot   # most-recent bucket last
+            buckets[idx]["total"] += 1
+            if r["status"] == "failed":
+                buckets[idx]["failed"] += 1
+        except Exception:
+            pass
+
+    exec_volume = [buckets[i]["total"]  for i in range(12)]
+    error_count = [buckets[i]["failed"] for i in range(12)]
+
+    # ── Hour labels ──────────────────────────────────────────────────────────
+    if range_hours <= 24:
+        labels = [
+            (now - timedelta(hours=(11 - i) * bucket_hours)).strftime("%H:%M")
+            for i in range(12)
+        ]
+    else:
+        labels = [
+            (now - timedelta(hours=(11 - i) * bucket_hours)).strftime("%d/%m")
+            for i in range(12)
+        ]
+
+    # ── 7-day throughput (daily buckets) ────────────────────────────────────
+    day_labels, throughput_ok, throughput_fail = [], [], []
+    for d in range(6, -1, -1):
+        day_start = (now - timedelta(days=d)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end   = day_start + timedelta(days=1)
+        ok   = sum(1 for r in runs
+                   if r["status"] == "completed"
+                   and day_start.isoformat() <= r.get("queued_at","") < day_end.isoformat())
+        fail = sum(1 for r in runs
+                   if r["status"] == "failed"
+                   and day_start.isoformat() <= r.get("queued_at","") < day_end.isoformat())
+        day_labels.append(day_start.strftime("%a"))
+        throughput_ok.append(ok)
+        throughput_fail.append(fail)
+
+    # ── Per-pipeline P95 durations (seconds) ────────────────────────────────
+    from collections import defaultdict
+    pipe_durations: dict[str, list] = defaultdict(list)
+    for r in runs:
+        if r.get("started_at") and r.get("completed_at") and r["status"] == "completed":
+            try:
+                s = datetime.fromisoformat(r["started_at"].replace("Z", "+00:00"))
+                e = datetime.fromisoformat(r["completed_at"].replace("Z", "+00:00"))
+                pipe_durations[r["pipeline_name"]].append((e - s).total_seconds())
+            except Exception:
+                pass
+
+    # Get all known pipeline names from pipeline_runs for completeness
+    with _get_engine().connect() as conn:
+        name_rows = conn.execute(
+            text("SELECT DISTINCT pipeline_name FROM pipeline_runs LIMIT 10")
+        ).fetchall()
+    pipeline_names = [r[0] for r in name_rows] or list(pipe_durations.keys())[:6]
+
+    def p95(vals):
+        if not vals:
+            return 0
+        s = sorted(vals)
+        idx = max(0, int(len(s) * 0.95) - 1)
+        return round(s[idx])
+
+    p95_durations = [p95(pipe_durations.get(n, [])) for n in pipeline_names]
+
+    # ── SLA compliance (from sla_violations table if it exists, else from queue) ─
+    sla_total = len(runs)
+    sla_ok    = sum(1 for r in runs if r["status"] == "completed")
+
+    # ── 7-day health map ─────────────────────────────────────────────────────
+    health_map = []
+    for name in pipeline_names[:6]:
+        row = []
+        for d in range(6, -1, -1):
+            day_start = (now - timedelta(days=d)).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end   = day_start + timedelta(days=1)
+            day_runs  = [r for r in runs
+                         if r["pipeline_name"] == name
+                         and day_start.isoformat() <= r.get("queued_at","") < day_end.isoformat()]
+            if not day_runs:
+                row.append("idle")
+            elif any(r["status"] == "failed" for r in day_runs):
+                row.append("fail")
+            else:
+                row.append("ok")
+        health_map.append(row)
+
+    return {
+        "range_hours":     range_hours,
+        "hour_labels":     labels,
+        "exec_volume":     exec_volume,
+        "error_count":     error_count,
+        "day_labels":      day_labels,
+        "throughput_ok":   throughput_ok,
+        "throughput_fail": throughput_fail,
+        "pipeline_names":  pipeline_names,
+        "p95_durations":   p95_durations,
+        "sla_ok":          sla_ok,
+        "sla_total":       sla_total,
+        "health_map":      health_map,
+    }

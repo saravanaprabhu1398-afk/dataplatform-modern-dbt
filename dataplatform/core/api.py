@@ -44,6 +44,7 @@ from dataplatform.core.database import (
     set_run_status_in_queue,
     get_queue_runs,
     recover_orphaned_runs,
+    get_run_timeseries,
 )
 from dataplatform.core.lineage import build_lineage_graph, get_asset_lineage
 from dataplatform.core.metrics import generate_prometheus_text, _CONTENT_TYPE as _METRICS_CONTENT_TYPE
@@ -1555,6 +1556,20 @@ async def prometheus_metrics():
         return PlainTextResponse(content=text, media_type=_METRICS_CONTENT_TYPE)
     except Exception as e:
         logger.error(f"Failed to generate metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/metrics/timeseries")
+async def metrics_timeseries(range: str = "24h"):
+    """Return bucketed time-series data for monitoring charts."""
+    range_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168}
+    hours = range_map.get(range, 24)
+    try:
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: get_run_timeseries(range_hours=hours))
+        return data
+    except Exception as e:
+        logger.error(f"Failed to get timeseries: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

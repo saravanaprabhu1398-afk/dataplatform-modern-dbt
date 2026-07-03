@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+<script>
+(function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
+</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lineage Graph — Data Platform Suite</title>
     <link rel="stylesheet" href="/static/tokens.css">
     <link rel="stylesheet" href="/static/sidebar.css">
-
     <link rel="stylesheet" href="/static/tailwind-static.css">
     <style>html, body { overflow-x: clip; }</style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -16,29 +18,92 @@
             from { opacity: 0; transform: translateY(-8px); }
             to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes panelSlideIn {
+            from { opacity: 0; transform: translateX(16px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
 
-        /* Graph container */
-        #graph-container { width: 100%; height: calc(100vh - 155px); min-height: 480px; position: relative; }
+        /* ── Graph container ──────────────────────────────────────────────── */
+        #graph-container {
+            width: 100%;
+            height: calc(100vh - 155px);
+            min-height: 480px;
+            position: relative;
+        }
 
-        /* D3 node/link styles — token-based */
-        .node-asset circle { fill: var(--color-accent); stroke: var(--color-accent-hover); stroke-width: 2; }
-        .node-task  circle { fill: var(--color-success); stroke: var(--color-success); stroke-width: 2; }
+        /* ── Node shapes ──────────────────────────────────────────────────── */
+        .node-asset rect {
+            fill: var(--color-accent);
+            stroke: var(--color-accent);
+            stroke-width: 1.5;
+            filter: url(#node-shadow);
+        }
+        .node-task circle {
+            fill: var(--color-success);
+            stroke: var(--color-success);
+            stroke-width: 1.5;
+            filter: url(#node-shadow);
+        }
+
+        /* Selected ring + glow */
+        .node-asset.is-selected rect,
+        .node-task.is-selected circle {
+            stroke: var(--color-accent);
+            stroke-width: 3;
+        }
+        .node-asset.is-selected,
+        .node-task.is-selected {
+            filter: drop-shadow(0 0 6px oklch(54% 0.22 250 / 0.5));
+        }
+
+        /* Search match ring */
+        .node-asset.is-match rect,
+        .node-task.is-match circle {
+            stroke: var(--color-accent);
+            stroke-width: 2.5;
+            stroke-dasharray: none;
+        }
+
+        /* Hover */
+        .node-asset:not(.is-selected):hover rect,
+        .node-task:not(.is-selected):hover circle {
+            stroke-width: 2.5;
+        }
+        .node-asset, .node-task { cursor: pointer; }
+
+        /* ── Labels ───────────────────────────────────────────────────────── */
         .node-label {
-            font-size: 11px;
+            font-size: 10px;
             fill: var(--color-ink);
             font-family: var(--font-mono);
             pointer-events: none;
         }
-        .link { stroke: var(--color-ink-3); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-        .link-reads_from { stroke: var(--color-accent); marker-end: url(#arrow-reads); }
-        .link-writes_to  { stroke: var(--color-success); marker-end: url(#arrow-writes); }
 
-        /* SVG marker fills via CSS */
+        /* ── Edges ────────────────────────────────────────────────────────── */
+        .link {
+            fill: none;
+            stroke: var(--color-ink-3);
+            stroke-width: 1.5;
+            stroke-opacity: 0.6;
+            marker-end: url(#arrow);
+        }
+        .link-reads_from {
+            stroke: var(--color-accent);
+            stroke-opacity: 0.6;
+            marker-end: url(#arrow-reads);
+        }
+        .link-writes_to {
+            stroke: var(--color-success);
+            stroke-opacity: 0.6;
+            marker-end: url(#arrow-writes);
+        }
+
+        /* Marker fills via CSS */
         #arrow path       { fill: var(--color-ink-3); }
         #arrow-reads path { fill: var(--color-accent); }
-        #arrow-writes path{ fill: var(--color-success); }
+        #arrow-writes path { fill: var(--color-success); }
 
-        /* List view */
+        /* ── List view cards ──────────────────────────────────────────────── */
         .dp-task-card {
             background: var(--color-surface);
             border: 1px solid var(--color-border);
@@ -59,14 +124,90 @@
             color: var(--color-ink-3);
             font-size: var(--text-xs);
         }
-
-        /* Section heading */
         .dp-section-head { font-family: var(--font-display); }
+
+        /* ── In-graph search input ────────────────────────────────────────── */
+        #graph-search-input {
+            background: var(--color-paper);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md, 6px);
+            color: var(--color-ink);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 0.3rem 0.6rem 0.3rem 2rem;
+            width: 175px;
+            outline: none;
+            transition: border-color 0.15s ease, width 0.2s ease;
+        }
+        #graph-search-input:focus {
+            border-color: var(--color-accent);
+            width: 215px;
+        }
+        #graph-search-input::placeholder { color: var(--color-ink-3); opacity: 1; }
+
+        /* ── Node detail panel ────────────────────────────────────────────── */
+        #node-detail-panel {
+            position: fixed;
+            top: 0;
+            right: -340px;
+            width: 320px;
+            height: 100%;
+            z-index: 40;
+            background: var(--color-surface);
+            border-left: 1px solid var(--color-border);
+            box-shadow: -4px 0 28px oklch(0% 0 0 / 0.08);
+            overflow-y: auto;
+            transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #node-detail-panel.is-open { right: 0; }
+
+        .panel-section-label {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            color: var(--color-ink-3);
+            margin-bottom: 0.5rem;
+            font-family: var(--font-mono);
+        }
+        .panel-conn-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.5rem;
+            border-radius: var(--radius-md, 6px);
+            font-size: 0.72rem;
+            font-family: var(--font-mono);
+            color: var(--color-ink-2);
+            background: var(--color-paper);
+            border: 1px solid var(--color-border);
+            margin-bottom: 0.375rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .panel-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            padding: 0.25rem 0.625rem;
+            border-radius: var(--radius-full, 9999px);
+        }
+        .panel-type-badge.is-asset {
+            background: var(--color-accent-subtle);
+            color: var(--color-accent);
+        }
+        .panel-type-badge.is-task {
+            background: color-mix(in oklch, var(--color-success) 14%, transparent);
+            color: var(--color-success);
+        }
     </style>
 </head>
 <body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
 
-<!-- Sidebar -->
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
 <button class="dp-sidebar-toggle" id="dpSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="dpSidebar">
   <i class="fas fa-bars" aria-hidden="true"></i>
 </button>
@@ -128,6 +269,9 @@
       <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
       <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="darkModeBtn" class="dp-sidebar__darkmode" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+      <i class="fas fa-moon" id="darkModeIcon" aria-hidden="true"></i>
+    </button>
     <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
       <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
     </button>
@@ -137,7 +281,44 @@
 (function(){var t=document.getElementById('dpSidebarToggle'),s=document.getElementById('dpSidebar'),o=document.getElementById('dpSidebarOverlay');if(!t||!s||!o)return;function open(){s.classList.add('is-open');o.classList.add('is-open');o.removeAttribute('aria-hidden');t.setAttribute('aria-expanded','true');t.querySelector('i').className='fas fa-xmark';}function close(){s.classList.remove('is-open');o.classList.remove('is-open');o.setAttribute('aria-hidden','true');t.setAttribute('aria-expanded','false');t.querySelector('i').className='fas fa-bars';}t.addEventListener('click',function(){s.classList.contains('is-open')?close():open();});o.addEventListener('click',close);document.addEventListener('keydown',function(e){if(e.key==='Escape'&&s.classList.contains('is-open'))close();});}());
 </script>
 
-<!-- Main area -->
+<!-- ── Node detail panel (fixed, outside scroll wrapper) ───────────────────── -->
+<div id="node-detail-panel" role="complementary" aria-label="Node details">
+    <!-- Panel header -->
+    <div class="px-5 py-4 flex items-start justify-between gap-3 sticky top-0 z-10"
+         style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);">
+        <div class="min-w-0 flex-1">
+            <p id="panel-node-name"
+               class="text-sm font-semibold leading-snug break-all"
+               style="color: var(--color-ink); font-family: var(--font-mono);"></p>
+        </div>
+        <button id="panel-close-btn"
+                aria-label="Close detail panel"
+                class="shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors"
+                style="background: var(--color-paper); color: var(--color-ink-3); border: 1px solid var(--color-border);">
+            <i class="fas fa-xmark text-xs" aria-hidden="true"></i>
+        </button>
+    </div>
+    <!-- Panel body -->
+    <div class="px-5 py-5 space-y-6">
+        <div>
+            <span id="panel-type-badge" class="panel-type-badge"></span>
+        </div>
+        <div>
+            <p class="panel-section-label">
+                <i class="fas fa-arrow-left mr-1.5 opacity-50" aria-hidden="true"></i>Upstream
+            </p>
+            <div id="panel-upstream"></div>
+        </div>
+        <div>
+            <p class="panel-section-label">
+                <i class="fas fa-arrow-right mr-1.5 opacity-50" aria-hidden="true"></i>Downstream
+            </p>
+            <div id="panel-downstream"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Main content area ────────────────────────────────────────────────────── -->
 <div class="pl-56 min-h-screen flex flex-col">
 
     <!-- Topbar -->
@@ -149,6 +330,16 @@
             <h1 class="font-semibold dp-section-head" style="color: var(--color-ink);">Lineage Graph</h1>
         </nav>
         <div class="flex items-center gap-3">
+            <!-- In-graph search (hidden in list view) -->
+            <div id="graph-search-wrapper" class="relative">
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] pointer-events-none"
+                   style="color: var(--color-ink-3);" aria-hidden="true"></i>
+                <input id="graph-search-input"
+                       type="search"
+                       placeholder="Search nodes…"
+                       oninput="applyGraphSearch(this.value)"
+                       aria-label="Search lineage nodes">
+            </div>
             <!-- View toggle -->
             <div class="flex rounded-lg overflow-hidden" style="border: 1px solid var(--color-border);">
                 <button id="btn-graph" onclick="switchView('graph')"
@@ -163,63 +354,96 @@
                 </button>
             </div>
             <button onclick="resetZoom()"
-                    class="rounded-lg px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors"
                     id="btn-reset-zoom"
+                    class="rounded-lg px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors"
                     style="background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-ink-2);">
-                <i class="fas fa-compress-arrows-alt text-xs"></i>Reset Zoom
+                <i class="fas fa-compress-arrows-alt text-xs"></i>Fit View
             </button>
         </div>
     </header>
 
-    <!-- Graph full-bleed view -->
+    <!-- Graph view -->
     <main id="view-graph" class="flex-1 p-0">
         <div id="graph-container">
 
-            <!-- Legend bar -->
-            <div class="px-6 py-3 flex items-center gap-6 text-sm flex-wrap"
+            <!-- Mini stats + legend bar -->
+            <div class="px-6 py-2.5 flex items-center gap-5 text-sm flex-wrap"
                  style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);">
-                <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full inline-block shrink-0"
-                          style="background: var(--color-accent);"></span>
-                    <span style="color: var(--color-ink-2);">Asset Node</span>
+                <!-- Stats pills -->
+                <div id="graphStats" class="flex items-center gap-2.5 font-mono text-xs"
+                     style="color: var(--color-ink-3);">
+                    <!-- Populated by JS -->
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full inline-block shrink-0"
-                          style="background: var(--color-success);"></span>
-                    <span style="color: var(--color-ink-2);">Task Node</span>
+                <div style="color: var(--color-border-2); user-select:none;">|</div>
+                <!-- Legend -->
+                <div class="flex items-center gap-5 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" class="shrink-0">
+                            <rect x="0" y="1.5" width="20" height="10" rx="3" fill="var(--color-accent)" opacity="0.85"/>
+                        </svg>
+                        <span style="color: var(--color-ink-2);">Asset</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full inline-block shrink-0"
+                              style="background: var(--color-success);"></span>
+                        <span style="color: var(--color-ink-2);">Task</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg width="26" height="8" viewBox="0 0 26 8" aria-hidden="true">
+                            <line x1="0" y1="4" x2="20" y2="4"
+                                  stroke="var(--color-accent)" stroke-width="1.5" stroke-opacity="0.8"/>
+                            <polygon points="20,1 26,4 20,7" fill="var(--color-accent)" opacity="0.8"/>
+                        </svg>
+                        <span style="color: var(--color-ink-2);">reads_from</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg width="26" height="8" viewBox="0 0 26 8" aria-hidden="true">
+                            <line x1="0" y1="4" x2="20" y2="4"
+                                  stroke="var(--color-success)" stroke-width="1.5" stroke-opacity="0.8"/>
+                            <polygon points="20,1 26,4 20,7" fill="var(--color-success)" opacity="0.8"/>
+                        </svg>
+                        <span style="color: var(--color-ink-2);">writes_to</span>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="w-6 h-0.5 inline-block shrink-0"
-                          style="background: var(--color-accent);"></span>
-                    <span style="color: var(--color-ink-2);">reads_from</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="w-6 h-0.5 inline-block shrink-0"
-                          style="background: var(--color-success);"></span>
-                    <span style="color: var(--color-ink-2);">writes_to</span>
-                </div>
-                <div style="color: var(--color-border-2);" class="select-none">|</div>
-                <span id="graphStats" class="text-xs" style="color: var(--color-ink-3);"></span>
             </div>
 
             <!-- Graph SVG -->
             <svg id="graph-svg" width="100%"
-                 style="height: calc(100% - 45px); display: block; background: var(--color-surface);">
+                 style="height: calc(100% - 44px); display: block;">
                 <defs>
-                    <marker id="arrow" markerWidth="8" markerHeight="8" refX="16" refY="4" orient="auto">
+                    <!-- Radial gradient for SVG background -->
+                    <radialGradient id="svgBg" cx="50%" cy="50%" r="60%"
+                                    gradientUnits="objectBoundingBox">
+                        <stop offset="0%"   style="stop-color: oklch(97% 0.008 250);"/>
+                        <stop offset="100%" style="stop-color: var(--color-surface, oklch(100% 0 0));"/>
+                    </radialGradient>
+                    <!-- Subtle drop shadow for nodes -->
+                    <filter id="node-shadow" x="-30%" y="-30%" width="160%" height="160%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3"
+                                      flood-color="oklch(0% 0 0)" flood-opacity="0.12"/>
+                    </filter>
+                    <!-- Arrow markers — refX=8 places tip at path endpoint -->
+                    <marker id="arrow"
+                            markerWidth="8" markerHeight="8"
+                            refX="8" refY="4" orient="auto">
                         <path d="M0,0 L0,8 L8,4 z"/>
                     </marker>
-                    <marker id="arrow-reads" markerWidth="8" markerHeight="8" refX="16" refY="4" orient="auto">
+                    <marker id="arrow-reads"
+                            markerWidth="8" markerHeight="8"
+                            refX="8" refY="4" orient="auto">
                         <path d="M0,0 L0,8 L8,4 z"/>
                     </marker>
-                    <marker id="arrow-writes" markerWidth="8" markerHeight="8" refX="16" refY="4" orient="auto">
+                    <marker id="arrow-writes"
+                            markerWidth="8" markerHeight="8"
+                            refX="8" refY="4" orient="auto">
                         <path d="M0,0 L0,8 L8,4 z"/>
                     </marker>
                 </defs>
             </svg>
 
             <!-- Empty state overlay -->
-            <div id="emptyState" class="hidden absolute inset-0 top-[45px] flex flex-col items-center justify-center gap-4"
+            <div id="emptyState"
+                 class="hidden absolute inset-0 top-[44px] flex flex-col items-center justify-center gap-4"
                  style="background: var(--color-surface);">
                 <div class="w-16 h-16 rounded-2xl flex items-center justify-center"
                      style="background: var(--color-paper-3);">
@@ -244,7 +468,6 @@
 
     <!-- List view -->
     <main id="view-list" class="hidden flex-1 p-6 space-y-4">
-        <!-- Search -->
         <div class="flex items-center gap-3">
             <div class="relative flex-1 max-w-sm">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs"
@@ -256,7 +479,6 @@
                               color:var(--color-ink);font-family:var(--font-body);">
             </div>
         </div>
-
         <div id="lineageList" class="space-y-3">
             <div class="flex items-center justify-center py-12 gap-2">
                 <i class="fas fa-circle-notch fa-spin" style="color: var(--color-ink-3);"></i>
@@ -276,6 +498,7 @@
 <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
 
 <script>
+// ── Toast ─────────────────────────────────────────────────────────────────────
 function showToast(msg, type='info') {
     const c = document.getElementById('toastContainer');
     const cfg = {
@@ -299,6 +522,7 @@ function switchView(view) {
     document.getElementById('view-graph').classList.toggle('hidden', view !== 'graph');
     document.getElementById('view-list').classList.toggle('hidden', view !== 'list');
     document.getElementById('btn-reset-zoom').style.display = view === 'graph' ? '' : 'none';
+    document.getElementById('graph-search-wrapper').style.display = view === 'graph' ? '' : 'none';
 
     const btnGraph = document.getElementById('btn-graph');
     const btnList  = document.getElementById('btn-list');
@@ -371,7 +595,7 @@ function filterLineageList() {
     renderLineageList(filtered);
 }
 
-// ── Convert /lineage {records} format to D3 nodes/edges ─────────────────────
+// ── Records → D3 graph ────────────────────────────────────────────────────────
 function recordsToGraph(records) {
     const nodeMap = new Map();
     const edges = [];
@@ -393,10 +617,188 @@ function recordsToGraph(records) {
     return { nodes: Array.from(nodeMap.values()), edges };
 }
 
-let svgZoom;
+// ── Graph module state ────────────────────────────────────────────────────────
+let svgZoom       = null;
+let _simNodes     = [];
+let _simEdges     = [];
+let _linkSel      = null;
+let _nodeSel      = null;
+let _selectedId   = null;
+let _hasAutoFit   = false;
 
+// ── Arc path generator ────────────────────────────────────────────────────────
+// Draws an arc from source-node-edge to target-node-edge with cubic-bezier sweep.
+function linkArcPath(d) {
+    const dx   = d.target.x - d.source.x;
+    const dy   = d.target.y - d.source.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1) return `M${d.source.x},${d.source.y}`;
+
+    const ux = dx / dist;
+    const uy = dy / dist;
+
+    // Offset from node center to its visual boundary
+    const sR = d.source.type === 'asset' ? 20 : 14;
+    const tR = d.target.type === 'asset' ? 20 : 14;
+
+    const sx = d.source.x + ux * sR;
+    const sy = d.source.y + uy * sR;
+    const tx = d.target.x - ux * tR;
+    const ty = d.target.y - uy * tR;
+
+    const ddx = tx - sx;
+    const ddy = ty - sy;
+    const dr  = Math.sqrt(ddx * ddx + ddy * ddy) * 0.6;
+
+    return `M${sx},${sy} A${dr},${dr} 0 0,1 ${tx},${ty}`;
+}
+
+// ── Node detail panel ─────────────────────────────────────────────────────────
+function openDetailPanel(d) {
+    _selectedId = d.id;
+
+    // Highlight selected node
+    if (_nodeSel) _nodeSel.classed('is-selected', n => n.id === d.id);
+
+    // Populate name
+    document.getElementById('panel-node-name').textContent = d.id;
+
+    // Type badge
+    const badge = document.getElementById('panel-type-badge');
+    if (d.type === 'asset') {
+        badge.className = 'panel-type-badge is-asset';
+        badge.innerHTML = '<i class="fas fa-database" style="font-size:10px;" aria-hidden="true"></i> Asset';
+    } else {
+        badge.className = 'panel-type-badge is-task';
+        badge.innerHTML = '<i class="fas fa-cog" style="font-size:10px;" aria-hidden="true"></i> Task';
+    }
+
+    // Resolve upstream / downstream from edges
+    // After D3 simulation starts, edge source/target are node objects
+    const resolveId = x => (x && typeof x === 'object') ? x.id : x;
+    const upstream   = _simEdges.filter(e => resolveId(e.target) === d.id).map(e => resolveId(e.source));
+    const downstream = _simEdges.filter(e => resolveId(e.source) === d.id).map(e => resolveId(e.target));
+
+    function renderConnList(ids, containerId) {
+        const el = document.getElementById(containerId);
+        if (!ids.length) {
+            el.innerHTML = '<p style="font-size:0.75rem;color:var(--color-ink-3);">None</p>';
+            return;
+        }
+        el.innerHTML = ids.map(id => {
+            const nodeType = (_simNodes.find(n => n.id === id) || {}).type || 'asset';
+            const icon     = nodeType === 'task' ? 'fa-cog' : 'fa-database';
+            const label    = id.length > 38 ? id.slice(0, 36) + '…' : id;
+            return `<div class="panel-conn-item" title="${id}">
+                <i class="fas ${icon} shrink-0" style="font-size:10px;color:var(--color-ink-3);" aria-hidden="true"></i>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</span>
+            </div>`;
+        }).join('');
+    }
+
+    renderConnList(upstream,   'panel-upstream');
+    renderConnList(downstream, 'panel-downstream');
+
+    document.getElementById('node-detail-panel').classList.add('is-open');
+}
+
+function closeDetailPanel() {
+    _selectedId = null;
+    if (_nodeSel) _nodeSel.classed('is-selected', false);
+    document.getElementById('node-detail-panel').classList.remove('is-open');
+}
+
+document.getElementById('panel-close-btn').addEventListener('click', closeDetailPanel);
+
+// ── In-graph search ───────────────────────────────────────────────────────────
+function applyGraphSearch(query) {
+    if (!_linkSel || !_nodeSel) return;
+    const q = (query || '').trim().toLowerCase();
+
+    if (!q) {
+        _nodeSel.style('opacity', null).classed('is-match', false);
+        _linkSel.style('opacity', null);
+        return;
+    }
+
+    const matchIds = new Set(
+        _simNodes.filter(n => n.id.toLowerCase().includes(q)).map(n => n.id)
+    );
+
+    const resolveId = x => (x && typeof x === 'object') ? x.id : x;
+
+    _nodeSel
+        .style('opacity', d => matchIds.has(d.id) ? 1 : 0.15)
+        .classed('is-match', d => matchIds.has(d.id));
+
+    _linkSel.style('opacity', d => {
+        const sid = resolveId(d.source);
+        const tid = resolveId(d.target);
+        return (matchIds.has(sid) || matchIds.has(tid)) ? null : 0.07;
+    });
+}
+
+// ── Mini stats bar ────────────────────────────────────────────────────────────
+function updateStats(nodes, edges) {
+    const pipelines = new Set(
+        nodes.filter(n => n.type === 'task')
+             .map(n => n.id.replace(/^task:/, '').split('/').slice(0, -1).join('/'))
+             .filter(Boolean)
+    );
+    const nc = nodes.length;
+    const ec = edges.length;
+    const pc = pipelines.size;
+
+    document.getElementById('graphStats').innerHTML =
+        `<span><strong style="color:var(--color-ink-2);">${nc}</strong> node${nc !== 1 ? 's' : ''}</span>` +
+        `<span style="color:var(--color-border-2);">·</span>` +
+        `<span><strong style="color:var(--color-ink-2);">${ec}</strong> edge${ec !== 1 ? 's' : ''}</span>` +
+        `<span style="color:var(--color-border-2);">·</span>` +
+        `<span><strong style="color:var(--color-ink-2);">${pc}</strong> pipeline${pc !== 1 ? 's' : ''}</span>`;
+}
+
+// ── Fit to content ────────────────────────────────────────────────────────────
+function resetZoom() {
+    if (!svgZoom || !_simNodes.length) return;
+
+    const container = document.getElementById('graph-container');
+    const W = container.clientWidth;
+    const H = container.clientHeight - 44; // subtract legend bar height
+
+    const xs = _simNodes.map(d => d.x).filter(isFinite);
+    const ys = _simNodes.map(d => d.y).filter(isFinite);
+    if (!xs.length) return;
+
+    const padding = 40;
+    const minX = Math.min(...xs) - 32;
+    const maxX = Math.max(...xs) + 32;
+    const minY = Math.min(...ys) - 24;
+    const maxY = Math.max(...ys) + 24;
+
+    const bW = Math.max(maxX - minX, 1);
+    const bH = Math.max(maxY - minY, 1);
+
+    const rawScale = Math.min(
+        (W - padding * 2) / bW,
+        (H - padding * 2) / bH
+    );
+    const scale  = Math.max(0.2, Math.min(rawScale, 3));
+    const midX   = (minX + maxX) / 2;
+    const midY   = (minY + maxY) / 2;
+
+    const fitTransform = d3.zoomIdentity
+        .translate(W / 2 - scale * midX, H / 2 - scale * midY)
+        .scale(scale);
+
+    d3.select('#graph-svg').transition().duration(500)
+        .call(svgZoom.transform, fitTransform);
+}
+
+// ── Load graph ────────────────────────────────────────────────────────────────
 async function loadGraph() {
-    const raw = await fetch('/lineage').then(r => r.json()).catch(() => ({ nodes: [], edges: [], records: [] }));
+    const raw = await fetch('/lineage')
+        .then(r => r.json())
+        .catch(() => ({ nodes: [], edges: [], records: [] }));
 
     // Support both {nodes,edges} and {records} API shapes
     let nodes, edges;
@@ -408,83 +810,184 @@ async function loadGraph() {
     } else {
         nodes = raw.nodes || [];
         edges = raw.edges || [];
-        // Build synthetic records for list view
         _lineageRecords = [];
     }
 
-    // Populate list view
     renderLineageList(_lineageRecords);
 
     if (!nodes.length) {
         document.getElementById('emptyState').classList.remove('hidden');
         document.getElementById('graph-svg').style.display = 'none';
-        document.getElementById('graphStats').textContent = '0 nodes · 0 edges';
+        updateStats([], []);
         return;
     }
 
-    document.getElementById('graphStats').textContent =
-        `${nodes.length} node${nodes.length !== 1 ? 's' : ''} · ${edges.length} edge${edges.length !== 1 ? 's' : ''}`;
+    updateStats(nodes, edges);
+    _simNodes = nodes;
+    _simEdges = edges;
 
     const container = document.getElementById('graph-container');
     const W = container.clientWidth;
-    const H = container.clientHeight - 45;
+    const H = container.clientHeight - 44;
 
     const svg = d3.select('#graph-svg').attr('viewBox', `0 0 ${W} ${H}`);
+
+    // Gradient background rect (outside zoom group — stays fixed while panning)
+    svg.append('rect')
+        .attr('id', 'svg-bg-rect')
+        .attr('width', W)
+        .attr('height', H)
+        .attr('fill', 'url(#svgBg)')
+        .style('cursor', 'default')
+        .on('click', () => closeDetailPanel());
+
     const g = svg.append('g');
 
+    // Zoom behaviour
     svgZoom = d3.zoom()
-        .scaleExtent([0.2, 4])
+        .scaleExtent([0.15, 5])
         .on('zoom', e => g.attr('transform', e.transform));
     svg.call(svgZoom);
 
-    const sim = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(edges).id(d => d.id).distance(130))
-        .force('charge', d3.forceManyBody().strength(-320))
-        .force('center', d3.forceCenter(W / 2, H / 2))
-        .force('collision', d3.forceCollide(40));
+    // Click on SVG background closes panel
+    svg.on('click', function(e) {
+        if (e.target === this) closeDetailPanel();
+    });
 
-    const link = g.append('g').selectAll('line')
-        .data(edges).enter().append('line')
+    // Force simulation
+    const sim = d3.forceSimulation(nodes)
+        .force('link',      d3.forceLink(edges).id(d => d.id).distance(140))
+        .force('charge',    d3.forceManyBody().strength(-350))
+        .force('center',    d3.forceCenter(W / 2, H / 2))
+        .force('collision', d3.forceCollide(44));
+
+    // ── Links as curved arc paths ────────────────────────────────────────────
+    _linkSel = g.append('g').attr('class', 'links')
+        .selectAll('path')
+        .data(edges)
+        .enter().append('path')
         .attr('class', d => `link link-${d.direction}`);
 
-    const node = g.append('g').selectAll('g')
-        .data(nodes).enter().append('g')
+    // ── Node groups ──────────────────────────────────────────────────────────
+    _nodeSel = g.append('g').attr('class', 'nodes')
+        .selectAll('g')
+        .data(nodes)
+        .enter().append('g')
         .attr('class', d => `node-${d.type}`)
         .call(d3.drag()
-            .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+            .on('start', (e, d) => {
+                if (!e.active) sim.alphaTarget(0.3).restart();
+                d.fx = d.x; d.fy = d.y;
+            })
             .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
-            .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+            .on('end',   (e, d) => {
+                if (!e.active) sim.alphaTarget(0);
+                d.fx = null; d.fy = null;
+            }));
 
-    node.append('circle').attr('r', d => d.type === 'asset' ? 18 : 14);
-    node.append('text').attr('class', 'node-label')
-        .attr('dy', 30).attr('text-anchor', 'middle')
+    // Node shapes: rect for assets, circle for tasks
+    _nodeSel.each(function(d) {
+        const el = d3.select(this);
+        if (d.type === 'asset') {
+            el.append('rect')
+              .attr('x', -18).attr('y', -10)
+              .attr('width', 36).attr('height', 20)
+              .attr('rx', 5).attr('ry', 5);
+        } else {
+            el.append('circle').attr('r', 14);
+        }
+    });
+
+    // Labels: monospace 10px, clipped to 22 chars
+    _nodeSel.append('text')
+        .attr('class', 'node-label')
+        .attr('dy', d => d.type === 'asset' ? 26 : 30)
+        .attr('text-anchor', 'middle')
         .text(d => {
-            const label = d.id.includes('://') ? d.id.split('://')[1] : d.id;
-            return label.length > 28 ? label.slice(0, 26) + '…' : label;
+            // Show the most meaningful fragment of the id
+            const raw   = d.id.includes('://') ? d.id.split('://')[1] : d.id;
+            const label = raw.split('/').pop() || raw;
+            return label.length > 22 ? label.slice(0, 21) + '…' : label;
         });
 
+    // ── Tooltip on hover ─────────────────────────────────────────────────────
     const tooltip = document.getElementById('tooltip');
-    node.on('mouseover', (e, d) => {
-        tooltip.textContent = d.id;
-        tooltip.classList.remove('hidden');
-    }).on('mousemove', e => {
-        tooltip.style.left = (e.clientX + 12) + 'px';
-        tooltip.style.top  = (e.clientY - 28) + 'px';
-    }).on('mouseout', () => tooltip.classList.add('hidden'));
 
+    _nodeSel
+        .on('mouseover', (e, d) => {
+            if (d.id === _selectedId) return;
+            const resolveId = x => (x && typeof x === 'object') ? x.id : x;
+            const connCount = _simEdges.filter(ed =>
+                resolveId(ed.source) === d.id || resolveId(ed.target) === d.id
+            ).length;
+            tooltip.innerHTML =
+                `<span style="font-family:var(--font-mono);word-break:break-all;">${d.id}</span>` +
+                `<br><span style="opacity:0.6;">${connCount} connection${connCount !== 1 ? 's' : ''}</span>`;
+            tooltip.classList.remove('hidden');
+        })
+        .on('mousemove', e => {
+            tooltip.style.left = (e.clientX + 14) + 'px';
+            tooltip.style.top  = (e.clientY - 36) + 'px';
+        })
+        .on('mouseout', () => tooltip.classList.add('hidden'));
+
+    // ── Click → detail panel ─────────────────────────────────────────────────
+    _nodeSel.on('click', (e, d) => {
+        e.stopPropagation();
+        tooltip.classList.add('hidden');
+        if (d.id === _selectedId) {
+            closeDetailPanel();
+        } else {
+            openDetailPanel(d);
+        }
+    });
+
+    // ── Tick ─────────────────────────────────────────────────────────────────
     sim.on('tick', () => {
-        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-        node.attr('transform', d => `translate(${d.x},${d.y})`);
+        _linkSel.attr('d', linkArcPath);
+        _nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    // Auto-fit once after simulation settles
+    sim.on('end', () => {
+        if (!_hasAutoFit) {
+            _hasAutoFit = true;
+            resetZoom();
+        }
     });
 }
 
-function resetZoom() {
-    if (!svgZoom) return;
-    d3.select('#graph-svg').transition().duration(400)
-        .call(svgZoom.transform, d3.zoomIdentity);
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function toggleDarkMode() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (html.classList.contains('dp-dark')) {
+        // dark → system
+        html.classList.remove('dp-dark');
+        localStorage.setItem('dpDarkMode', 'system');
+        if (icon) { icon.className = 'fas fa-circle-half-stroke'; }
+    } else if (html.classList.contains('dp-light')) {
+        // light → dark
+        html.classList.remove('dp-light');
+        html.classList.add('dp-dark');
+        localStorage.setItem('dpDarkMode', 'dark');
+        if (icon) { icon.className = 'fas fa-sun'; }
+    } else {
+        // system → light
+        html.classList.add('dp-light');
+        localStorage.setItem('dpDarkMode', 'light');
+        if (icon) { icon.className = 'fas fa-moon'; }
+    }
 }
-
+function syncDarkModeIcon() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    if (html.classList.contains('dp-dark'))  icon.className = 'fas fa-sun';
+    else if (html.classList.contains('dp-light')) icon.className = 'fas fa-moon';
+    else icon.className = 'fas fa-circle-half-stroke';
+}
+document.addEventListener('DOMContentLoaded', syncDarkModeIcon);
 document.getElementById('logoutBtn').addEventListener('click', async () => {
     await fetch('/logout', { method: 'POST' });
     window.location.href = '/login';

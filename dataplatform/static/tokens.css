@@ -94,6 +94,42 @@
   --sidebar-width: 224px;
 }
 
+/* ── Forced dark mode (class-based, overrides media query) ─────────── */
+html.dp-dark {
+  --color-paper:          oklch(15% 0.015 250);
+  --color-paper-2:        oklch(18% 0.018 250);
+  --color-paper-3:        oklch(21% 0.020 250);
+  --color-ink:            oklch(96% 0.005 250);
+  --color-ink-2:          oklch(78% 0.012 250);
+  --color-ink-3:          oklch(58% 0.012 250);
+  --color-surface:        oklch(20% 0.020 250);
+  --color-border:         oklch(28% 0.018 250);
+  --color-border-2:       oklch(32% 0.020 250);
+  --color-muted:          oklch(22% 0.018 250);
+  --color-accent-subtle:  oklch(25% 0.035 250);
+  --color-danger-subtle:  oklch(22% 0.040 25);
+  --color-warning-subtle: oklch(22% 0.030 65);
+  --color-success-subtle: oklch(22% 0.030 150);
+}
+
+/* ── Forced light mode (class-based, wins over dark media query) ────── */
+html.dp-light {
+  --color-paper:           oklch(99% 0.005 240);
+  --color-paper-2:         oklch(97% 0.008 240);
+  --color-paper-3:         oklch(94% 0.010 240);
+  --color-ink:             oklch(15% 0.015 250);
+  --color-ink-2:           oklch(32% 0.020 250);
+  --color-ink-3:           oklch(52% 0.015 250);
+  --color-surface:         oklch(100% 0 0);
+  --color-border:          oklch(88% 0.010 250);
+  --color-border-2:        oklch(82% 0.012 250);
+  --color-muted:           oklch(92% 0.010 250);
+  --color-accent-subtle:   oklch(94% 0.05 250);
+  --color-danger-subtle:   oklch(96% 0.04 25);
+  --color-warning-subtle:  oklch(97% 0.04 65);
+  --color-success-subtle:  oklch(96% 0.04 150);
+}
+
 /* ── Dark-mode overrides (main content area only) ──────────────────── */
 @media (prefers-color-scheme: dark) {
   :root {

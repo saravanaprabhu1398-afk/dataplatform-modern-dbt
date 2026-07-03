@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+<script>
+(function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
+</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Metrics — Data Platform Suite</title>
     <link rel="stylesheet" href="/static/tokens.css">
@@ -106,6 +109,9 @@
       <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
       <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="darkModeBtn" class="dp-sidebar__darkmode" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+      <i class="fas fa-moon" id="darkModeIcon" aria-hidden="true"></i>
+    </button>
     <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
       <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
     </button>
@@ -298,29 +304,8 @@
 <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
 
 <script>
-// ── Static chart data ─────────────────────────────────────────────────────────
-const EXEC_VOLUME_24H = [1,0,1,0,1,1,2,4,12,15,13,14,11,16,13,12,10,8,6,5,4,3,2,3];
-const ERROR_COUNT_24H = [0,0,0,0,0,0,0,1,1,2,0,1,1,2,1,0,1,0,1,0,0,0,0,0];
-const PIPELINES       = ['sales_intel','etl_orders','mkt_attrib','user_profile','data_quality','finance_rpt'];
-const P95_DURATIONS   = [42,78,15,34,91,28];
-const SLA_OK          = 11;
-const SLA_TOTAL       = 12;
-const DAY_LABELS      = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-const THROUGHPUT_OK   = [24,31,27,29,35,18,23];
-const THROUGHPUT_FAIL = [2,1,3,1,2,1,0];
-const HEALTH_MAP      = [
-    ['ok','ok','ok','ok','fail','ok','ok'],
-    ['ok','ok','warn','ok','ok','ok','fail'],
-    ['ok','ok','ok','ok','ok','ok','ok'],
-    ['ok','warn','ok','ok','ok','ok','ok'],
-    ['fail','ok','ok','ok','warn','ok','ok'],
-    ['ok','ok','ok','fail','ok','ok','ok'],
-];
-
-const HOUR_LABELS = Array.from({length:24}, (_,i) => {
-    const h = ((new Date().getHours()-23+i)+24)%24;
-    return h%6===0 ? String(h).padStart(2,'0')+':00' : '';
-});
+// ── Live timeseries data (replaced by loadTimeseries) ─────────────────────────
+let tsData = null;  // holds the last /metrics/timeseries response
 
 let currentRange    = '24h';
 let liveTotal       = 0;
@@ -381,18 +366,25 @@ function renderKpiStrip(total, successful, failed, active) {
 
 // ── Health Map ────────────────────────────────────────────────────────────────
 function renderHealthMap() {
+    const pipelines  = tsData ? tsData.pipeline_names : [];
+    const dayLabels  = tsData ? tsData.day_labels     : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const healthMap  = tsData ? tsData.health_map     : [];
     const HC = {
         ok:   'var(--color-success)',
         fail: 'var(--color-danger)',
         warn: 'var(--color-warning)',
         none: 'var(--color-border)'
     };
+    if (!pipelines.length) {
+        document.getElementById('healthMap').innerHTML = `<p style="color:var(--color-ink-3);font-size:var(--text-sm);text-align:center;padding:16px 0;">No pipeline data yet</p>`;
+        return;
+    }
     let h = `<div style="display:grid;grid-template-columns:84px repeat(7,1fr);gap:3px;align-items:center">`;
-    h += `<div></div>` + DAY_LABELS.map(d=>`<div style="text-align:center;font-size:10px;color:var(--color-ink-3);font-weight:600;padding-bottom:3px">${d}</div>`).join('');
-    PIPELINES.forEach((name,pi) => {
+    h += `<div></div>` + dayLabels.map(d=>`<div style="text-align:center;font-size:10px;color:var(--color-ink-3);font-weight:600;padding-bottom:3px">${d}</div>`).join('');
+    pipelines.forEach((name,pi) => {
         h += `<div style="font-size:10px;color:var(--color-ink-2);font-weight:500;padding-right:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</div>`;
-        HEALTH_MAP[pi].forEach((s,di) => {
-            h += `<div title="${name} · ${DAY_LABELS[di]}: ${s}" style="height:22px;border-radius:4px;background:${HC[s]||HC.none};opacity:0.85;transition:opacity var(--dur-fast);cursor:default" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='.85'"></div>`;
+        (healthMap[pi] || []).forEach((s,di) => {
+            h += `<div title="${name} · ${dayLabels[di]}: ${s}" style="height:22px;border-radius:4px;background:${HC[s]||HC.none};opacity:0.85;transition:opacity var(--dur-fast);cursor:default" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='.85'"></div>`;
         });
     });
     h += `</div>`;
@@ -401,6 +393,18 @@ function renderHealthMap() {
 
 // ── Charts ────────────────────────────────────────────────────────────────────
 function buildCharts() {
+    const d = tsData || {};
+    const hourLabels     = d.hour_labels     || [];
+    const execVolume     = d.exec_volume     || [];
+    const errorCount     = d.error_count     || [];
+    const pipelineNames  = d.pipeline_names  || [];
+    const p95Durations   = d.p95_durations   || [];
+    const slaOk          = d.sla_ok          != null ? d.sla_ok   : 0;
+    const slaTotal       = d.sla_total       != null ? d.sla_total : 0;
+    const dayLabels      = d.day_labels      || ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const throughputOk   = d.throughput_ok   || [];
+    const throughputFail = d.throughput_fail || [];
+
     const BASE = {
         responsive:true, maintainAspectRatio:false, animation:{duration:500},
         plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
@@ -410,58 +414,93 @@ function buildCharts() {
         }
     };
 
-    charts.exec = new Chart(document.getElementById('chartExecVolume'), {
-        type:'line',
-        data:{labels:HOUR_LABELS, datasets:[{data:EXEC_VOLUME_24H, borderColor:C.accent, backgroundColor:C.accentFill, fill:true, tension:.4, borderWidth:2, pointRadius:0, pointHoverRadius:4}]},
-        options:{...BASE}
-    });
+    if (charts.exec) {
+        charts.exec.data.labels = hourLabels;
+        charts.exec.data.datasets[0].data = execVolume;
+        charts.exec.update();
+    } else {
+        charts.exec = new Chart(document.getElementById('chartExecVolume'), {
+            type:'line',
+            data:{labels:hourLabels, datasets:[{data:execVolume, borderColor:C.accent, backgroundColor:C.accentFill, fill:true, tension:.4, borderWidth:2, pointRadius:0, pointHoverRadius:4}]},
+            options:{...BASE}
+        });
+    }
 
-    // Success Rate doughnut — data updated after live fetch
-    charts.success = new Chart(document.getElementById('chartSuccessRate'), {
-        type:'doughnut',
-        data:{labels:['Success','Failed'], datasets:[{data:[liveSuccessCount || 1, liveFailCount || 0],
-            backgroundColor:[
-                getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || 'oklch(55% 0.18 150)',
-                'oklch(54% 0.22 25)'
-            ], borderWidth:0}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
-    });
+    if (charts.success) {
+        charts.success.data.datasets[0].data = [liveSuccessCount || 1, liveFailCount || 0];
+        charts.success.update();
+    } else {
+        charts.success = new Chart(document.getElementById('chartSuccessRate'), {
+            type:'doughnut',
+            data:{labels:['Success','Failed'], datasets:[{data:[liveSuccessCount || 1, liveFailCount || 0],
+                backgroundColor:[
+                    getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || 'oklch(55% 0.18 150)',
+                    'oklch(54% 0.22 25)'
+                ], borderWidth:0}]},
+            options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
+        });
+    }
 
-    charts.error = new Chart(document.getElementById('chartErrorRate'), {
-        type:'line',
-        data:{labels:HOUR_LABELS, datasets:[{data:ERROR_COUNT_24H, borderColor:C.danger, backgroundColor:C.dangerFill, fill:true, tension:.4, borderWidth:2, pointRadius:0, pointHoverRadius:4}]},
-        options:{...BASE}
-    });
+    if (charts.error) {
+        charts.error.data.labels = hourLabels;
+        charts.error.data.datasets[0].data = errorCount;
+        charts.error.update();
+    } else {
+        charts.error = new Chart(document.getElementById('chartErrorRate'), {
+            type:'line',
+            data:{labels:hourLabels, datasets:[{data:errorCount, borderColor:C.danger, backgroundColor:C.dangerFill, fill:true, tension:.4, borderWidth:2, pointRadius:0, pointHoverRadius:4}]},
+            options:{...BASE}
+        });
+    }
 
-    charts.p95 = new Chart(document.getElementById('chartP95Duration'), {
-        type:'bar',
-        data:{labels:PIPELINES, datasets:[{data:P95_DURATIONS,
-            backgroundColor:P95_DURATIONS.map(v=>v>60?C.dangerBar:v>30?C.warnBar:C.successBar),
-            borderRadius:4, borderSkipped:false}]},
-        options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, animation:{duration:500},
-            plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw}s`}}},
-            scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,font:{size:9},callback:v=>`${v}s`}},
-                    y:{grid:{display:false},ticks:{color:C.tick,font:{size:9}}}}}
-    });
+    if (charts.p95) {
+        charts.p95.data.labels = pipelineNames;
+        charts.p95.data.datasets[0].data = p95Durations;
+        charts.p95.data.datasets[0].backgroundColor = p95Durations.map(v=>v>60?C.dangerBar:v>30?C.warnBar:C.successBar);
+        charts.p95.update();
+    } else {
+        charts.p95 = new Chart(document.getElementById('chartP95Duration'), {
+            type:'bar',
+            data:{labels:pipelineNames, datasets:[{data:p95Durations,
+                backgroundColor:p95Durations.map(v=>v>60?C.dangerBar:v>30?C.warnBar:C.successBar),
+                borderRadius:4, borderSkipped:false}]},
+            options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, animation:{duration:500},
+                plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw}s`}}},
+                scales:{x:{grid:{color:C.grid},ticks:{color:C.tick,font:{size:9},callback:v=>`${v}s`}},
+                        y:{grid:{display:false},ticks:{color:C.tick,font:{size:9}}}}}
+        });
+    }
 
-    charts.sla = new Chart(document.getElementById('chartSLA'), {
-        type:'doughnut',
-        data:{labels:['Within SLA','SLA Breach'], datasets:[{data:[SLA_OK,SLA_TOTAL-SLA_OK], backgroundColor:[C.accent, C.warning], borderWidth:0}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
-    });
+    if (charts.sla) {
+        charts.sla.data.datasets[0].data = [slaOk, slaTotal - slaOk];
+        charts.sla.update();
+    } else {
+        charts.sla = new Chart(document.getElementById('chartSLA'), {
+            type:'doughnut',
+            data:{labels:['Within SLA','SLA Breach'], datasets:[{data:[slaOk, slaTotal - slaOk], backgroundColor:[C.accent, C.warning], borderWidth:0}]},
+            options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
+        });
+    }
 
-    charts.throughput = new Chart(document.getElementById('chartThroughput'), {
-        type:'bar',
-        data:{labels:DAY_LABELS, datasets:[
-            {label:'Success', data:THROUGHPUT_OK,   backgroundColor:C.successBar, borderRadius:3, stack:'s'},
-            {label:'Failed',  data:THROUGHPUT_FAIL, backgroundColor:C.dangerBar,  borderRadius:3, stack:'s'},
-        ]},
-        options:{responsive:true, maintainAspectRatio:false, animation:{duration:500},
-            plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10},color:C.tick}}},
-            scales:{x:{grid:{display:false},ticks:{color:C.tick,font:{size:10}}},
-                    y:{grid:{color:C.grid},ticks:{color:C.tick,font:{size:9}},stacked:true},
-                    x2:{display:false,stacked:true}}}
-    });
+    if (charts.throughput) {
+        charts.throughput.data.labels = dayLabels;
+        charts.throughput.data.datasets[0].data = throughputOk;
+        charts.throughput.data.datasets[1].data = throughputFail;
+        charts.throughput.update();
+    } else {
+        charts.throughput = new Chart(document.getElementById('chartThroughput'), {
+            type:'bar',
+            data:{labels:dayLabels, datasets:[
+                {label:'Success', data:throughputOk,   backgroundColor:C.successBar, borderRadius:3, stack:'s'},
+                {label:'Failed',  data:throughputFail, backgroundColor:C.dangerBar,  borderRadius:3, stack:'s'},
+            ]},
+            options:{responsive:true, maintainAspectRatio:false, animation:{duration:500},
+                plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10},color:C.tick}}},
+                scales:{x:{grid:{display:false},ticks:{color:C.tick,font:{size:10}}},
+                        y:{grid:{color:C.grid},ticks:{color:C.tick,font:{size:9}},stacked:true},
+                        x2:{display:false,stacked:true}}}
+        });
+    }
 }
 
 // ── Live stats ────────────────────────────────────────────────────────────────
@@ -556,6 +595,19 @@ async function loadQueueBadge() {
     } catch(e) {}
 }
 
+// ── Timeseries loader ─────────────────────────────────────────────────────────
+async function loadTimeseries(range) {
+    range = range || currentRange;
+    try {
+        const data = await fetch(`/metrics/timeseries?range=${range}`).then(r => r.ok ? r.json() : null);
+        if (data) {
+            tsData = data;
+            renderHealthMap();
+            buildCharts();
+        }
+    } catch(e) {}
+}
+
 // ── Time range ────────────────────────────────────────────────────────────────
 function setTimeRange(range) {
     currentRange = range;
@@ -568,22 +620,14 @@ function setTimeRange(range) {
             b.style.color = 'var(--color-ink-3)';
         }
     });
-    const scale    = {'1h':.1,'6h':.4,'24h':1,'7d':7}[range] || 1;
-    const fallback = 187;
-    const total    = Math.round((liveTotal || fallback) * scale);
-    const failed   = Math.round((liveFailCount || 9) * scale);
-    const el1 = document.getElementById('metTotalRuns');
-    const el2 = document.getElementById('kpiTotalRuns');
-    const el3 = document.getElementById('kpiFailed');
-    if (el1) el1.textContent = total;
-    if (el2) el2.textContent = total;
-    if (el3) el3.textContent = failed;
+    loadTimeseries(range);
     showToast(`Metrics updated · ${range} window`, 'info');
 }
 
 function refreshMetrics() {
     loadLiveStats();
     loadSlaViolations();
+    loadTimeseries(currentRange);
     showToast(`Metrics refreshed · ${currentRange}`, 'success');
 }
 
@@ -624,16 +668,45 @@ function connectLiveStream() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initColors();
-    renderHealthMap();
-    buildCharts();
+    await loadTimeseries('24h');  // fetch live data, then render health map + charts
     loadLiveStats();
     loadSlaViolations();
     loadQueueBadge();
     connectLiveStream();
 
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
+    function toggleDarkMode() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (html.classList.contains('dp-dark')) {
+        // dark → system
+        html.classList.remove('dp-dark');
+        localStorage.setItem('dpDarkMode', 'system');
+        if (icon) { icon.className = 'fas fa-circle-half-stroke'; }
+    } else if (html.classList.contains('dp-light')) {
+        // light → dark
+        html.classList.remove('dp-light');
+        html.classList.add('dp-dark');
+        localStorage.setItem('dpDarkMode', 'dark');
+        if (icon) { icon.className = 'fas fa-sun'; }
+    } else {
+        // system → light
+        html.classList.add('dp-light');
+        localStorage.setItem('dpDarkMode', 'light');
+        if (icon) { icon.className = 'fas fa-moon'; }
+    }
+}
+function syncDarkModeIcon() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    if (html.classList.contains('dp-dark'))  icon.className = 'fas fa-sun';
+    else if (html.classList.contains('dp-light')) icon.className = 'fas fa-moon';
+    else icon.className = 'fas fa-circle-half-stroke';
+}
+document.addEventListener('DOMContentLoaded', syncDarkModeIcon);
+document.getElementById('logoutBtn').addEventListener('click', async () => {
         await fetch('/logout', {method:'POST'});
         window.location.href = '/login';
     });
