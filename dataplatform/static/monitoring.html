@@ -587,6 +587,42 @@ function refreshMetrics() {
     showToast(`Metrics refreshed · ${currentRange}`, 'success');
 }
 
+// ── Real-time updates via /events/stream ─────────────────────────────────────
+function connectLiveStream() {
+    const es = new EventSource('/events/stream');
+
+    es.addEventListener('stats_update', e => {
+        try {
+            const s = JSON.parse(e.data);
+            // Update active runs badge immediately without a full reload
+            const badge = document.getElementById('activeRunsBadge');
+            const count = document.getElementById('activeRunsCount');
+            if (badge && count) {
+                if (s.active > 0) {
+                    count.textContent = s.active;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+            // Reload KPI strip on any status change
+            loadLiveStats();
+        } catch (_) {}
+    });
+
+    es.addEventListener('queue_update', () => {
+        // A run changed — update charts + SLA
+        loadLiveStats();
+    });
+
+    es.addEventListener('heartbeat', () => {});
+
+    es.onerror = () => {
+        es.close();
+        setTimeout(connectLiveStream, 8000);
+    };
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     initColors();
@@ -595,6 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLiveStats();
     loadSlaViolations();
     loadQueueBadge();
+    connectLiveStream();
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
         await fetch('/logout', {method:'POST'});

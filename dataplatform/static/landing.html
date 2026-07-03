@@ -425,6 +425,47 @@ function renderPipelineCards(pipelines) {
     }).join('');
 }
 
+// ── Real-time updates via /events/stream ─────────────────────────────────────
+function connectLiveStream() {
+    const es = new EventSource('/events/stream');
+
+    es.addEventListener('snapshot', e => {
+        // Initial queue snapshot — use to set active run count badge
+        try {
+            const runs = JSON.parse(e.data);
+            const active = runs.filter(r => r.status === 'running' || r.status === 'queued').length;
+            const failed = runs.filter(r => r.status === 'failed').length;
+            // Refresh the full summary if snapshot shows things have changed
+            if (active > 0 || failed > 0) {
+                fetch('/dashboard-summary').then(r => r.ok ? r.json() : null).then(data => {
+                    if (!data) return;
+                    const s = data.stats || {};
+                    applyHealth(s.active_runs || 0, s.failed_pipelines || 0, s.total_pipelines || 0);
+                    renderPipelineCards((data.pipeline_summaries || []).slice(0, 4));
+                }).catch(() => {});
+            }
+        } catch (_) {}
+    });
+
+    es.addEventListener('queue_update', () => {
+        // A run changed status — refresh dashboard summary to update cards + health
+        fetch('/dashboard-summary').then(r => r.ok ? r.json() : null).then(data => {
+            if (!data) return;
+            const s = data.stats || {};
+            applyHealth(s.active_runs || 0, s.failed_pipelines || 0, s.total_pipelines || 0);
+            renderPipelineCards((data.pipeline_summaries || []).slice(0, 4));
+        }).catch(() => {});
+    });
+
+    es.addEventListener('heartbeat', () => {});
+
+    es.onerror = () => {
+        es.close();
+        // Reconnect after 8 s on error
+        setTimeout(connectLiveStream, 8000);
+    };
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     fetch('/dashboard-summary')
@@ -439,6 +480,8 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPipelineCards((data.pipeline_summaries || []).slice(0, 4));
         })
         .catch(() => { applyHealth(0, 0, 0); renderPipelineCards([]); });
+
+    connectLiveStream();
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
         await fetch('/logout', { method: 'POST' });

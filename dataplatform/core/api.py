@@ -1411,6 +1411,74 @@ async def stream_run_logs(run_id: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Dashboard SSE — real-time run-status push
+# ---------------------------------------------------------------------------
+
+_SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+async def _dashboard_event_generator(request: Request):
+    """Push run-status changes to the browser without polling from the client.
+
+    Protocol:
+      event: snapshot        — sent once on connect; full queue state as JSON array
+      event: queue_update    — sent when any run changes status; array of changed runs
+      event: stats_update    — sent alongside queue_update; current summary counts
+      event: heartbeat       — sent every 30 s to keep the connection alive
+    """
+    import json as _json
+    loop = asyncio.get_event_loop()
+
+    def _fetch_queue():
+        return get_queue_runs(limit=100)
+
+    def _make_stats(runs: list) -> dict:
+        statuses = [r["status"] for r in runs]
+        return {
+            "active":    statuses.count("running") + statuses.count("queued"),
+            "running":   statuses.count("running"),
+            "queued":    statuses.count("queued"),
+            "completed": statuses.count("completed"),
+            "failed":    statuses.count("failed"),
+        }
+
+    # Initial snapshot
+    runs = await loop.run_in_executor(None, _fetch_queue)
+    last_states: dict[str, str] = {r["run_id"]: r["status"] for r in runs}
+    yield f"event: snapshot\ndata: {_json.dumps(runs)}\n\n"
+
+    tick = 0
+    while True:
+        if await request.is_disconnected():
+            break
+        await asyncio.sleep(2)
+        tick += 1
+
+        # Heartbeat every 30 s (15 × 2 s ticks)
+        if tick % 15 == 0:
+            yield "event: heartbeat\ndata: {}\n\n"
+
+        runs = await loop.run_in_executor(None, _fetch_queue)
+        current_states: dict[str, str] = {r["run_id"]: r["status"] for r in runs}
+
+        changed = [r for r in runs if last_states.get(r["run_id"]) != r["status"]]
+        if changed:
+            last_states = current_states
+            yield f"event: queue_update\ndata: {_json.dumps(changed)}\n\n"
+            yield f"event: stats_update\ndata: {_json.dumps(_make_stats(runs))}\n\n"
+
+
+@app.get("/events/stream")
+async def dashboard_events_stream(request: Request):
+    """Real-time run-status push stream for dashboard pages."""
+    return StreamingResponse(
+        _dashboard_event_generator(request),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Observability — lineage
 # ---------------------------------------------------------------------------
 

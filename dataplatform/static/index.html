@@ -389,12 +389,20 @@ let allPipelines = [];
 // ═══════════════════════════════════════════
 //  Boot
 // ═══════════════════════════════════════════
+function connectLiveStream() {
+    const es = new EventSource('/events/stream');
+    es.addEventListener('queue_update', () => loadDashboardSummary());
+    es.addEventListener('heartbeat', () => {});
+    es.onerror = () => { es.close(); setTimeout(connectLiveStream, 8000); };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     checkConnection();
     loadDashboardSummary();
     loadPipelines();
     loadScheduledPipelines();
     startStatusUpdates();
+    connectLiveStream();
 
     document.getElementById('refreshBtn').addEventListener('click', refreshAll);
     document.getElementById('logoutBtn').addEventListener('click', async () => {
