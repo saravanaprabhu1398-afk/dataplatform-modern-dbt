@@ -4,90 +4,137 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cost Attribution — Data Platform Suite</title>
+    <link rel="stylesheet" href="/static/tokens.css">
+    <link rel="stylesheet" href="/static/sidebar.css">
+
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>html, body { overflow-x: clip; }</style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Card / table row tokens */
+        .dp-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+        .dp-card__head {
+            padding: var(--space-3) var(--space-6);
+            border-bottom: 1px solid var(--color-border);
+            background: var(--color-paper-2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        #pipelineTable tr:hover,
+        #teamTable tr:hover {
+            background: var(--color-paper-2);
+        }
+
+        /* Cost bar */
+        .dp-cost-bar-track {
+            height: 8px;
+            background: var(--color-paper-3);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+        .dp-cost-bar-fill {
+            height: 100%;
+            background: var(--color-accent);
+            border-radius: var(--radius-full);
+            transition: width var(--dur-slow) var(--ease-out);
+        }
+
+        /* Section heading */
+        .dp-section-head { font-family: var(--font-display); }
+    </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
 
 <!-- Sidebar -->
-<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
-    <div class="px-4 py-5 border-b border-slate-700/50">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-                <i class="fas fa-layer-group text-white text-xs"></i>
-            </div>
-            <div>
-                <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
-                <p class="text-slate-400 text-[11px]">Suite</p>
-            </div>
-        </div>
+<button class="dp-sidebar-toggle" id="dpSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="dpSidebar">
+  <i class="fas fa-bars" aria-hidden="true"></i>
+</button>
+<div class="dp-sidebar-overlay" id="dpSidebarOverlay" aria-hidden="true"></div>
+<aside class="dp-sidebar" id="dpSidebar" role="navigation" aria-label="Main navigation">
+  <div class="dp-sidebar__brand">
+    <div class="dp-sidebar__logo" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
+    <div class="dp-sidebar__brand-text">
+      <span class="dp-sidebar__brand-name">Data Platform</span>
+      <span class="dp-sidebar__brand-sub">Suite</span>
     </div>
-    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
-        </a>
-        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
-        </a>
-        <div class="pt-3 pb-1">
-            <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Build</p>
-        </div>
-        <a href="/job-builder" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-cubes w-4 text-center shrink-0"></i><span>Job Builder</span>
-        </a>
-        <a href="/generator" class="flex items-center gap-3 pl-8 pr-3 py-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors">
-            <i class="fas fa-wand-magic-sparkles w-3.5 text-center shrink-0"></i><span>NLP Generator</span>
-        </a>
-        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p></div>
-        <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
-        </a>
-        <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
-        </a>
-        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p></div>
-        <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
-            <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
-        </a>
-        <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p></div>
-        <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
-        </a>        <a href="/git-integration" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-code-branch w-4 text-center shrink-0"></i><span>Git Integration</span>
-        </a>
-
-            <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
-        <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-            <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
-        </a>
-    </nav>
-    <div class="px-4 py-4 border-t border-slate-700/50">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
-                <i class="fas fa-user text-indigo-300 text-xs"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-                <p class="text-slate-200 text-sm font-medium truncate" id="sidebarUsername">Admin</p>
-                <p class="text-slate-500 text-xs">Data Platform</p>
-            </div>
-            <button id="logoutBtn" title="Sign out" class="text-slate-400 hover:text-red-400 transition-colors p-1 rounded">
-                <i class="fas fa-arrow-right-from-bracket text-sm"></i>
-            </button>
-        </div>
+  </div>
+  <nav class="dp-sidebar__nav" aria-label="Application navigation">
+    <a href="/" class="dp-sidebar__item">
+      <i class="fas fa-house dp-sidebar__icon" aria-hidden="true"></i><span>Overview</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Pipelines</div>
+    <a href="/dashboard" class="dp-sidebar__item">
+      <i class="fas fa-wave-square dp-sidebar__icon" aria-hidden="true"></i><span>DP Flow</span>
+    </a>
+    <a href="/job-builder" class="dp-sidebar__item">
+      <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
+    </a>
+    <a href="/templates-ui" class="dp-sidebar__item">
+      <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
+    </a>
+    <a href="/generator" class="dp-sidebar__item">
+      <i class="fas fa-wand-magic-sparkles dp-sidebar__icon" aria-hidden="true"></i><span>Generator</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Observability</div>
+    <a href="/monitoring" class="dp-sidebar__item">
+      <i class="fas fa-chart-line dp-sidebar__icon" aria-hidden="true"></i><span>Monitoring</span>
+    </a>
+    <a href="/lineage-viz" class="dp-sidebar__item">
+      <i class="fas fa-diagram-project dp-sidebar__icon" aria-hidden="true"></i><span>Lineage</span>
+    </a>
+    <a href="/alerts" class="dp-sidebar__item">
+      <i class="fas fa-bell dp-sidebar__icon" aria-hidden="true"></i><span>Alerts</span>
+      <span id="navAlertBadge" class="dp-sidebar__badge hidden" aria-label="active alerts">1</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Governance</div>
+    <a href="/catalog" class="dp-sidebar__item">
+      <i class="fas fa-database dp-sidebar__icon" aria-hidden="true"></i><span>Catalog</span>
+    </a>
+    <a href="/costs" class="dp-sidebar__item is-active" aria-current="page">
+      <i class="fas fa-coins dp-sidebar__icon" aria-hidden="true"></i><span>Costs</span>
+    </a>
+    <a href="/git-integration" class="dp-sidebar__item">
+      <i class="fas fa-code-branch dp-sidebar__icon" aria-hidden="true"></i><span>Git Integration</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Admin</div>
+    <a href="/admin" class="dp-sidebar__item">
+      <i class="fas fa-shield-halved dp-sidebar__icon" aria-hidden="true"></i><span>Users &amp; Roles</span>
+    </a>
+  </nav>
+  <div class="dp-sidebar__footer">
+    <div class="dp-sidebar__avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
+    <div class="dp-sidebar__user-info">
+      <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
+      <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
+      <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+    </button>
+  </div>
 </aside>
+<script>
+(function(){var t=document.getElementById('dpSidebarToggle'),s=document.getElementById('dpSidebar'),o=document.getElementById('dpSidebarOverlay');if(!t||!s||!o)return;function open(){s.classList.add('is-open');o.classList.add('is-open');o.removeAttribute('aria-hidden');t.setAttribute('aria-expanded','true');t.querySelector('i').className='fas fa-xmark';}function close(){s.classList.remove('is-open');o.classList.remove('is-open');o.setAttribute('aria-hidden','true');t.setAttribute('aria-expanded','false');t.querySelector('i').className='fas fa-bars';}t.addEventListener('click',function(){s.classList.contains('is-open')?close():open();});o.addEventListener('click',close);document.addEventListener('keydown',function(e){if(e.key==='Escape'&&s.classList.contains('is-open'))close();});}());
+</script>
 
 <!-- Page wrapper -->
-<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+<div class="pl-56 min-h-screen flex flex-col">
 
     <!-- Top bar -->
-    <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30">
+    <header class="px-6 py-3.5 flex items-center justify-between sticky top-0 z-30"
+            style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);">
         <nav class="flex items-center gap-2 text-sm">
-            <a href="/" class="text-slate-500 hover:text-slate-800 transition-colors">Home</a>
-            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
-            <a href="/costs" class="text-slate-500 hover:text-slate-800 transition-colors">FinOps</a>
-            <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
-            <span class="text-slate-900 font-semibold">Cost Attribution</span>
+            <a href="/" class="transition-colors hover:underline" style="color: var(--color-ink-3);">Home</a>
+            <i class="fas fa-chevron-right text-[10px]" style="color: var(--color-border-2);"></i>
+            <a href="/costs" class="transition-colors hover:underline" style="color: var(--color-ink-3);">FinOps</a>
+            <i class="fas fa-chevron-right text-[10px]" style="color: var(--color-border-2);"></i>
+            <span class="font-semibold" style="color: var(--color-ink);">Cost Attribution</span>
         </nav>
         <div class="flex items-center gap-3">
             <!-- right side reserved -->
@@ -97,22 +144,49 @@
     <!-- Main content -->
     <main class="flex-1 p-6 space-y-6">
 
-        <!-- Stats row -->
+        <!-- Page heading -->
+        <div>
+            <h1 class="text-xl font-bold dp-section-head" style="color: var(--color-ink);">Cost Attribution</h1>
+            <p id="dashSubtitle" class="text-sm mt-1" style="color: var(--color-ink-3);">Loading pipeline data…</p>
+        </div>
+
+        <!-- Stats row (from /costs/summary) -->
         <div id="summaryCards" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <!-- dynamically populated -->
         </div>
 
+        <!-- Compute units bar chart (from /dashboard-summary) -->
+        <div class="dp-card">
+            <div class="dp-card__head">
+                <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">Estimated Compute Units by Pipeline</span>
+                <span class="text-xs" style="color: var(--color-ink-3);">run_count × 1.0 compute units</span>
+            </div>
+            <div id="computeChart" class="p-5 space-y-3">
+                <div class="flex items-center justify-center py-6 gap-2">
+                    <i class="fas fa-circle-notch fa-spin" style="color: var(--color-ink-3);"></i>
+                    <span class="text-sm" style="color: var(--color-ink-3);">Loading…</span>
+                </div>
+            </div>
+            <div class="px-5 pb-4">
+                <p class="text-xs" style="color: var(--color-ink-3); font-style: italic;">
+                    Costs shown as compute_units (dimensionless) — not real USD
+                </p>
+            </div>
+        </div>
+
         <!-- Tabs + table panel -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="dp-card">
 
             <!-- Tab bar -->
-            <div class="border-b border-slate-200 px-4 flex gap-0">
+            <div class="flex gap-0" style="border-bottom: 1px solid var(--color-border);">
                 <button id="tab-pipeline" onclick="showTab('pipeline')"
-                    class="border-b-2 border-indigo-600 text-indigo-600 font-semibold text-sm px-5 py-3.5">
+                        class="text-sm px-5 py-3.5 font-semibold border-b-2 transition-colors"
+                        style="border-color: var(--color-accent); color: var(--color-accent);">
                     <i class="fas fa-diagram-project mr-2"></i>By Pipeline
                 </button>
                 <button id="tab-team" onclick="showTab('team')"
-                    class="text-slate-500 hover:text-slate-800 text-sm px-5 py-3.5 border-b-2 border-transparent">
+                        class="text-sm px-5 py-3.5 border-b-2 border-transparent transition-colors"
+                        style="color: var(--color-ink-3);">
                     <i class="fas fa-users mr-2"></i>By Team
                 </button>
             </div>
@@ -120,27 +194,30 @@
             <!-- Pipeline table panel -->
             <div id="panel-pipeline">
                 <table class="w-full text-sm">
-                    <thead class="bg-slate-50 border-b border-slate-200">
+                    <thead style="background: var(--color-paper-2); border-bottom: 1px solid var(--color-border);">
                         <tr>
-                            <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Pipeline</th>
-                            <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Team</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Runs</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Duration</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Est. Cost</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Last Run</th>
+                            <th class="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Pipeline</th>
+                            <th class="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Team</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Runs</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Duration</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Est. Cost</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Last Run</th>
                         </tr>
                     </thead>
-                    <tbody id="pipelineTable" class="divide-y divide-slate-100"></tbody>
+                    <tbody id="pipelineTable" class="divide-y" style="border-color: var(--color-border);"></tbody>
                 </table>
                 <div id="pipelineEmpty" class="hidden flex flex-col items-center justify-center py-20 gap-4">
-                    <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-                        <i class="fas fa-coins text-slate-400 text-2xl"></i>
+                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center"
+                         style="background: var(--color-paper-3);">
+                        <i class="fas fa-coins text-2xl" style="color: var(--color-ink-3);"></i>
                     </div>
                     <div class="text-center">
-                        <p class="text-slate-700 font-semibold">No cost data yet</p>
-                        <p class="text-slate-400 text-sm max-w-sm mt-1">Run some pipelines first to see cost attribution</p>
+                        <p class="font-semibold" style="color: var(--color-ink-2);">No cost data yet</p>
+                        <p class="text-sm max-w-sm mt-1" style="color: var(--color-ink-3);">Run some pipelines first to see cost attribution</p>
                     </div>
-                    <a href="/dashboard" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-semibold">
+                    <a href="/dashboard"
+                       class="rounded-lg px-4 py-2 text-sm font-semibold"
+                       style="background: var(--color-accent); color: var(--color-accent-text);">
                         Go to DP Flow
                     </a>
                 </div>
@@ -149,24 +226,25 @@
             <!-- Team table panel -->
             <div id="panel-team" class="hidden">
                 <table class="w-full text-sm">
-                    <thead class="bg-slate-50 border-b border-slate-200">
+                    <thead style="background: var(--color-paper-2); border-bottom: 1px solid var(--color-border);">
                         <tr>
-                            <th class="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Team</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Pipelines</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Runs</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Duration</th>
-                            <th class="text-right px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Est. Cost</th>
+                            <th class="text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Team</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Pipelines</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Runs</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Duration</th>
+                            <th class="text-right px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" style="color: var(--color-ink-3);">Est. Cost</th>
                         </tr>
                     </thead>
-                    <tbody id="teamTable" class="divide-y divide-slate-100"></tbody>
+                    <tbody id="teamTable" class="divide-y" style="border-color: var(--color-border);"></tbody>
                 </table>
                 <div id="teamEmpty" class="hidden flex flex-col items-center justify-center py-20 gap-4">
-                    <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-                        <i class="fas fa-users text-slate-400 text-2xl"></i>
+                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center"
+                         style="background: var(--color-paper-3);">
+                        <i class="fas fa-users text-2xl" style="color: var(--color-ink-3);"></i>
                     </div>
                     <div class="text-center">
-                        <p class="text-slate-700 font-semibold">No team data yet</p>
-                        <p class="text-slate-400 text-sm max-w-sm mt-1">Assign teams to your pipelines to see cost breakdown by team</p>
+                        <p class="font-semibold" style="color: var(--color-ink-2);">No team data yet</p>
+                        <p class="text-sm max-w-sm mt-1" style="color: var(--color-ink-3);">Assign teams to your pipelines to see cost breakdown by team</p>
                     </div>
                 </div>
             </div>
@@ -174,9 +252,10 @@
         </div>
 
         <!-- Footer note -->
-        <p class="text-xs text-slate-400 text-center pb-2">
+        <p class="text-xs text-center pb-2" style="color: var(--color-ink-3);">
             Cost model: task_count &times; duration_seconds &times; $0.0001/task-second &nbsp;&middot;&nbsp;
-            Configurable via <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-500">COST_PER_TASK_SECOND</code> env var
+            Configurable via <code class="px-1 py-0.5 rounded"
+                style="background: var(--color-paper-3); color: var(--color-ink-2);">COST_PER_TASK_SECOND</code> env var
         </p>
 
     </main>
@@ -209,9 +288,13 @@ function showTab(name) {
         document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== name);
         const btn = document.getElementById(`tab-${t}`);
         if (t === name) {
-            btn.className = 'border-b-2 border-indigo-600 text-indigo-600 font-semibold text-sm px-5 py-3.5';
+            btn.style.color = 'var(--color-accent)';
+            btn.style.borderColor = 'var(--color-accent)';
+            btn.classList.add('font-semibold');
         } else {
-            btn.className = 'text-slate-500 hover:text-slate-800 text-sm px-5 py-3.5 border-b-2 border-transparent';
+            btn.style.color = 'var(--color-ink-3)';
+            btn.style.borderColor = 'transparent';
+            btn.classList.remove('font-semibold');
         }
     });
 }
@@ -226,34 +309,83 @@ function renderSummary() {
     const totalRuns = _byPipeline.reduce((s, r) => s + (r.run_count || 0), 0);
     const totalDur  = _byPipeline.reduce((s, r) => s + (r.total_duration_seconds || 0), 0);
     document.getElementById('summaryCards').innerHTML = `
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
-            <div class="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                <i class="fas fa-coins text-amber-500 text-lg"></i>
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);"
+             class="p-5 flex items-center gap-4">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                 style="background:var(--color-warning-subtle);">
+                <i class="fas fa-coins text-lg" style="color:var(--color-warning);"></i>
             </div>
             <div>
-                <p class="text-2xl font-bold text-amber-500">$${totalCost.toFixed(4)}</p>
-                <p class="text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wide">Total Est. Cost</p>
+                <p class="text-2xl font-bold" style="color:var(--color-warning);">$${totalCost.toFixed(4)}</p>
+                <p class="text-xs mt-0.5 font-medium uppercase tracking-wide" style="color:var(--color-ink-3);">Total Est. Cost</p>
             </div>
         </div>
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
-            <div class="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                <i class="fas fa-play-circle text-slate-500 text-lg"></i>
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);"
+             class="p-5 flex items-center gap-4">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                 style="background:var(--color-paper-3);">
+                <i class="fas fa-play-circle text-lg" style="color:var(--color-ink-3);"></i>
             </div>
             <div>
-                <p class="text-2xl font-bold text-slate-700">${totalRuns}</p>
-                <p class="text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wide">Total Runs</p>
+                <p class="text-2xl font-bold" style="color:var(--color-ink);">${totalRuns}</p>
+                <p class="text-xs mt-0.5 font-medium uppercase tracking-wide" style="color:var(--color-ink-3);">Total Runs</p>
             </div>
         </div>
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
-            <div class="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                <i class="fas fa-clock text-slate-500 text-lg"></i>
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);"
+             class="p-5 flex items-center gap-4">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                 style="background:var(--color-paper-3);">
+                <i class="fas fa-clock text-lg" style="color:var(--color-ink-3);"></i>
             </div>
             <div>
-                <p class="text-2xl font-bold text-slate-700">${fmt(totalDur)}</p>
-                <p class="text-xs text-slate-500 mt-0.5 font-medium uppercase tracking-wide">Total Compute Time</p>
+                <p class="text-2xl font-bold" style="color:var(--color-ink);">${fmt(totalDur)}</p>
+                <p class="text-xs mt-0.5 font-medium uppercase tracking-wide" style="color:var(--color-ink-3);">Total Compute Time</p>
             </div>
         </div>
     `;
+}
+
+// ── API: Compute units from /dashboard-summary ────────────────────────────────
+async function loadComputeChart() {
+    const chart = document.getElementById('computeChart');
+    const subtitle = document.getElementById('dashSubtitle');
+    try {
+        const data = await fetch('/dashboard-summary').then(r => r.json());
+        const summaries = data.pipeline_summaries || [];
+        const totalPipelines = summaries.length;
+        const totalRuns = summaries.reduce((s, p) => s + (p.run_count || 0), 0);
+
+        subtitle.textContent = `${totalPipelines} total pipeline${totalPipelines!==1?'s':''} · ${totalRuns} total runs tracked`;
+
+        if (!summaries.length) {
+            chart.innerHTML = `<div class="flex flex-col items-center justify-center py-8 gap-2">
+                <span class="text-sm" style="color:var(--color-ink-3);">No pipeline data yet</span>
+            </div>`;
+            return;
+        }
+
+        // Sort by run_count descending, take top 10
+        const sorted = [...summaries]
+            .sort((a, b) => (b.run_count || 0) - (a.run_count || 0))
+            .slice(0, 10);
+        const maxUnits = sorted[0]?.run_count || 1;
+
+        chart.innerHTML = sorted.map(p => {
+            const units = (p.run_count || 0) * 1.0;
+            const pct = Math.round((units / maxUnits) * 100);
+            return `<div class="flex items-center gap-3">
+                <span class="w-40 truncate text-xs font-mono shrink-0"
+                      style="color:var(--color-ink-2);" title="${p.pipeline_name||p.name||'pipeline'}">${p.pipeline_name||p.name||'—'}</span>
+                <div class="flex-1 dp-cost-bar-track">
+                    <div class="dp-cost-bar-fill" style="width:${pct}%;"></div>
+                </div>
+                <span class="w-16 text-right text-xs shrink-0" style="color:var(--color-ink-3);">${units.toFixed(0)} cu</span>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        chart.innerHTML = `<p class="text-sm py-4 text-center" style="color:var(--color-ink-3);">Could not load compute data</p>`;
+        subtitle.textContent = 'Pipeline summary unavailable';
+    }
 }
 
 async function loadData() {
@@ -275,17 +407,17 @@ async function loadData() {
     } else {
         pe.classList.add('hidden');
         pt.innerHTML = _byPipeline.map(r => `
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="px-5 py-4 font-mono text-sm font-medium text-slate-800">${r.pipeline_name}</td>
+            <tr class="transition-colors" style="border-bottom:1px solid var(--color-border);">
+                <td class="px-5 py-4 font-mono text-sm font-medium" style="color:var(--color-ink);">${r.pipeline_name}</td>
                 <td class="px-5 py-4">
                     ${r.team
-                        ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${r.team}</span>`
-                        : `<span class="text-slate-300">—</span>`}
+                        ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full" style="background:var(--color-paper-3);color:var(--color-ink-2);">${r.team}</span>`
+                        : `<span style="color:var(--color-border-2);">—</span>`}
                 </td>
-                <td class="px-5 py-4 text-right text-slate-700">${r.run_count}</td>
-                <td class="px-5 py-4 text-right text-slate-600">${fmt(r.total_duration_seconds || 0)}</td>
-                <td class="px-5 py-4 text-right font-semibold text-amber-600">$${(r.total_cost_usd || 0).toFixed(4)}</td>
-                <td class="px-5 py-4 text-right text-xs text-slate-400">${r.last_run_at ? new Date(r.last_run_at).toLocaleString() : '—'}</td>
+                <td class="px-5 py-4 text-right" style="color:var(--color-ink-2);">${r.run_count}</td>
+                <td class="px-5 py-4 text-right" style="color:var(--color-ink-3);">${fmt(r.total_duration_seconds || 0)}</td>
+                <td class="px-5 py-4 text-right font-semibold" style="color:var(--color-warning);">$${(r.total_cost_usd || 0).toFixed(4)}</td>
+                <td class="px-5 py-4 text-right text-xs" style="color:var(--color-ink-3);">${r.last_run_at ? new Date(r.last_run_at).toLocaleString() : '—'}</td>
             </tr>
         `).join('');
     }
@@ -299,12 +431,12 @@ async function loadData() {
     } else {
         te.classList.add('hidden');
         tt.innerHTML = _byTeam.map(r => `
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="px-5 py-4 font-semibold text-slate-800">${r.team}</td>
-                <td class="px-5 py-4 text-right text-slate-700">${r.pipeline_count}</td>
-                <td class="px-5 py-4 text-right text-slate-700">${r.run_count}</td>
-                <td class="px-5 py-4 text-right text-slate-600">${fmt(r.total_duration_seconds || 0)}</td>
-                <td class="px-5 py-4 text-right font-semibold text-amber-600">$${(r.total_cost_usd || 0).toFixed(4)}</td>
+            <tr class="transition-colors" style="border-bottom:1px solid var(--color-border);">
+                <td class="px-5 py-4 font-semibold" style="color:var(--color-ink);">${r.team}</td>
+                <td class="px-5 py-4 text-right" style="color:var(--color-ink-2);">${r.pipeline_count}</td>
+                <td class="px-5 py-4 text-right" style="color:var(--color-ink-2);">${r.run_count}</td>
+                <td class="px-5 py-4 text-right" style="color:var(--color-ink-3);">${fmt(r.total_duration_seconds || 0)}</td>
+                <td class="px-5 py-4 text-right font-semibold" style="color:var(--color-warning);">$${(r.total_cost_usd || 0).toFixed(4)}</td>
             </tr>
         `).join('');
     }
@@ -316,7 +448,10 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 });
 
 loadData();
-fetch('/me').then(r => r.ok ? r.json() : null).then(data => { if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username; }).catch(() => {});
+loadComputeChart();
+fetch('/me').then(r => r.ok ? r.json() : null).then(data => {
+    if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username;
+}).catch(() => {});
 </script>
 </body>
 </html>

@@ -4,26 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Job Builder — Data Platform</title>
+    <link rel="stylesheet" href="/static/tokens.css">
+    <link rel="stylesheet" href="/static/sidebar.css">
+
 <script src="https://cdn.tailwindcss.com"></script>
+    <style>html, body { overflow-x: clip; }</style>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <style>
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .animate-fadeIn{animation:fadeIn .15s ease-out}
 
-#canvas-wrapper{position:relative;overflow:auto;flex:1;background:#f8fafc;
-  background-image:radial-gradient(circle,#cbd5e1 1px,transparent 1px);
-  background-size:24px 24px;}
-#canvas-inner{position:relative;min-width:1500px;min-height:760px;transform-origin:top left;}
+#canvas-wrapper{position:relative;overflow:auto;flex:1;background:var(--color-paper-2);
+  background-image:radial-gradient(var(--color-border) 1px,transparent 1px);
+  background-size:20px 20px;border:1px solid var(--color-border);border-radius:var(--radius-lg);}
+#canvas-inner{position:relative;min-width:0;min-height:760px;transform-origin:top left;}
 #edge-svg{position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible;z-index:5;}
 
 .task-node{position:absolute;width:210px;z-index:10;user-select:none;}
-.node-card{background:white;border-radius:10px;
-  box-shadow:0 2px 8px rgba(0,0,0,.09);border:1.5px solid #e2e8f0;
+.node-card{background:var(--color-surface);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-sm,0 2px 8px rgba(0,0,0,.09));border:1.5px solid var(--color-border);
   transition:box-shadow .15s;position:relative;}
 .task-node.selected .node-card{
-  box-shadow:0 0 0 2px #6366f1,0 4px 20px rgba(99,102,241,.18);
-  border-color:#6366f1;}
-.node-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.13);}
+  box-shadow:0 0 0 2px var(--color-accent-subtle,rgba(99,102,241,.25));
+  border-color:var(--color-accent);}
+.node-card:hover{box-shadow:var(--shadow-md,0 4px 16px rgba(0,0,0,.13));}
 .node-header{border-radius:8px 8px 0 0;padding:7px 10px;
   display:flex;align-items:center;gap:8px;cursor:move;}
 .node-body{padding:9px 12px;cursor:pointer;}
@@ -32,192 +36,256 @@
   border:2.5px solid white;top:50%;transform:translateY(-50%);
   z-index:20;transition:transform .12s;cursor:crosshair;}
 .port:hover{transform:translateY(-50%) scale(1.45);}
-.port-input{left:-7px;background:#6366f1;}
+.port-input{left:-7px;background:var(--color-accent);}
 .port-output{right:-7px;}
 
 .pal-item{display:flex;align-items:center;gap:10px;padding:9px 12px;
-  border-radius:8px;cursor:pointer;border:1.5px solid transparent;
-  transition:all .13s;margin-bottom:2px;}
-.pal-item:hover{border-color:#e2e8f0;background:white;
-  box-shadow:0 2px 8px rgba(0,0,0,.07);}
+  border-radius:var(--radius-md,8px);cursor:pointer;border:1.5px solid var(--color-border);
+  background:var(--color-paper-2);transition:all .13s;margin-bottom:2px;}
+.pal-item:hover{border-color:var(--color-accent);background:var(--color-accent-subtle);}
 .pal-item:active{transform:scale(.97);}
 
 #config-panel{width:0;min-width:0;overflow:hidden;
-  background:white;border-left:1px solid #e2e8f0;
+  background:var(--color-surface);border-left:1px solid var(--color-border);
   transition:width .2s ease,min-width .2s ease;
   display:flex;flex-direction:column;}
 #config-panel.open{width:320px;min-width:320px;}
 #config-scroll{flex:1;overflow-y:auto;padding:16px;}
 
-.flabel{display:block;font-size:11px;font-weight:600;color:#6b7280;
-  text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
-.finput{width:100%;padding:6px 10px;border:1px solid #d1d5db;
-  border-radius:6px;font-size:12.5px;outline:none;color:#374151;
-  transition:border-color .15s;box-sizing:border-box;}
-.finput:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.12);}
-textarea.finput{resize:vertical;font-family:'Monaco','Menlo',monospace;font-size:11.5px;}
+.flabel{display:block;font-size:var(--text-sm,11px);font-weight:600;color:var(--color-ink-2);
+  font-family:var(--font-display);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
+.finput{width:100%;padding:var(--space-2,6px) var(--space-3,10px);border:1px solid var(--color-border);
+  border-radius:var(--radius-md,6px);font-size:12.5px;outline:none;color:var(--color-ink);
+  background:var(--color-paper);transition:border-color .15s;box-sizing:border-box;}
+.finput:focus{border-color:var(--color-focus,#6366f1);outline:2px solid var(--color-focus,#6366f1);outline-offset:-1px;}
+textarea.finput{resize:vertical;font-family:var(--font-mono,'Monaco','Menlo',monospace);font-size:11.5px;}
 select.finput{appearance:auto;}
 .frow{margin-bottom:12px;}
 
-.yaml-code{font-family:'Monaco','Menlo',monospace;font-size:12px;line-height:1.65;
-  background:#0f172a;color:#e2e8f0;padding:16px;border-radius:8px;
+.yaml-code{font-family:var(--font-mono,'Monaco','Menlo',monospace);font-size:var(--text-sm,12px);line-height:1.65;
+  background:oklch(12% 0.015 250);color:oklch(88% 0.008 250);padding:var(--space-4,16px);border-radius:var(--radius-lg,8px);
   overflow:auto;white-space:pre;max-height:65vh;}
 
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+::-webkit-scrollbar-thumb{background:var(--color-border-2);border-radius:3px;}
+
+/* ── Structural token overrides ──────────────────────────────────────── */
+#dp-topbar{background:var(--color-surface);border-bottom:1px solid var(--color-border);}
+#dp-left-panel{background:var(--color-surface);border-right:1px solid var(--color-border);}
+#pipelineName{font-family:var(--font-display);font-weight:600;color:var(--color-ink);}
+#pipelineDesc{color:var(--color-ink-3);}
+#dp-topbar .dp-divider{background:var(--color-border);}
+
+/* Toolbar — secondary buttons */
+.btn-sec{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+  border-radius:var(--radius-md);font-size:var(--text-xs);font-weight:500;
+  color:var(--color-ink-2);background:var(--color-surface);border:1px solid var(--color-border);
+  cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast);white-space:nowrap;}
+.btn-sec:hover{background:var(--color-paper-2);color:var(--color-ink);}
+.btn-sec.btn-code{color:var(--color-accent);border-color:var(--color-accent);}
+.btn-sec.btn-code:hover{background:var(--color-accent-subtle);}
+/* Toolbar — primary buttons */
+.btn-pri{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+  border-radius:var(--radius-md);font-size:var(--text-xs);font-weight:600;
+  background:var(--color-ink);color:var(--color-accent-text);border:none;
+  cursor:pointer;transition:opacity var(--dur-fast);white-space:nowrap;}
+.btn-pri:hover{opacity:.85;}
+.btn-pri.btn-run{background:var(--color-accent);}
+.btn-pri.btn-warn{background:var(--color-warning);color:var(--color-ink);}
+
+/* Modal surfaces */
+#open-modal > div,#yaml-modal > div,#ver-modal > div,#sched-modal > div{background:var(--color-surface);}
+/* Modal / panel dividers */
+#open-modal .border-b,#yaml-modal .border-b,#ver-modal .border-b,
+#sched-modal .border-b,#sched-modal .border-t,
+#ver-modal .border-r{border-color:var(--color-border)!important;}
+/* Config panel top header border */
+#config-panel > div:first-child{border-bottom-color:var(--color-border)!important;}
+/* HR separators inside config panel */
+hr.border-slate-100{border-color:var(--color-border)!important;}
+/* Left panel internal dividers */
+#dp-left-panel .border-t{border-color:var(--color-border)!important;}
+#dp-left-panel .border-b{border-color:var(--color-border)!important;}
+/* Schedule preset buttons */
+#sched-modal .bg-slate-100{background:var(--color-paper-2)!important;border-color:var(--color-border)!important;}
+#sched-modal .bg-indigo-50{background:var(--color-accent-subtle)!important;border-color:var(--color-border)!important;}
+#sched-modal .text-indigo-600{color:var(--color-accent)!important;}
+/* Open modal list item hover */
+#open-list > div:hover{border-color:var(--color-accent)!important;background:var(--color-accent-subtle)!important;}
+/* Versions list selected item */
+#ver-list .bg-indigo-100{background:var(--color-accent-subtle)!important;}
 
 .drawing-mode,.drawing-mode *{cursor:crosshair!important;}
 
 .tbtn{display:flex;align-items:center;justify-content:center;
-  width:28px;height:28px;border-radius:6px;border:1px solid #e2e8f0;
-  background:white;color:#64748b;cursor:pointer;transition:all .13s;}
-.tbtn:hover:not(:disabled){background:#f1f5f9;color:#374151;}
+  width:28px;height:28px;border-radius:var(--radius-md,6px);border:1px solid var(--color-border);
+  background:var(--color-surface);color:var(--color-ink-2);cursor:pointer;transition:all .13s;}
+.tbtn:hover:not(:disabled){background:var(--color-paper-2);color:var(--color-ink);}
 .tbtn:disabled{opacity:.35;cursor:not-allowed;}
 
 #zoom-bar{position:absolute;bottom:12px;right:12px;z-index:30;
-  display:flex;align-items:center;gap:2px;background:white;
-  border:1px solid #e2e8f0;border-radius:8px;padding:3px 6px;
-  box-shadow:0 2px 8px rgba(0,0,0,.07);font-size:11px;}
+  display:flex;align-items:center;gap:2px;background:var(--color-surface);
+  border:1px solid var(--color-border);border-radius:var(--radius-md,8px);padding:3px 6px;
+  box-shadow:var(--shadow-sm,0 2px 8px rgba(0,0,0,.07));font-size:11px;}
 
 .space-pan{cursor:grab!important;}
 .space-pan *{cursor:grab!important;}
 .panning,.panning *{cursor:grabbing!important;}
 
-.tmpl-dd{position:absolute;right:0;top:20px;background:white;
-  border:1px solid #e2e8f0;border-radius:10px;
+.tmpl-dd{position:absolute;right:0;top:20px;background:var(--color-surface);
+  border:1px solid var(--color-border);border-radius:var(--radius-md,10px);
   box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:40;width:210px;padding:4px 0;}
-.tmpl-dd-item{padding:7px 12px;font-size:11px;color:#374151;
+.tmpl-dd-item{padding:7px 12px;font-size:11px;color:var(--color-ink);
   cursor:pointer;transition:background .1s;}
-.tmpl-dd-item:hover{background:#eef2ff;color:#4f46e5;}
+.tmpl-dd-item:hover{background:var(--color-accent-subtle);color:var(--color-accent);}
 
 /* Left panel tabs */
 .tab-btn{flex:1;padding:8px 4px;font-size:10px;font-weight:700;letter-spacing:.06em;
-  text-transform:uppercase;color:#94a3b8;border-bottom:2px solid transparent;
+  text-transform:uppercase;color:var(--color-ink-3);border-bottom:2px solid transparent;
   cursor:pointer;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;}
-.tab-btn.active{color:#6366f1;border-bottom-color:#6366f1;}
-.tab-btn:hover:not(.active){color:#64748b;}
+.tab-btn.active{color:var(--color-accent);border-bottom-color:var(--color-accent);font-weight:600;}
+.tab-btn:hover:not(.active){color:var(--color-ink-2);}
 
 /* Variable / Connection items */
-.var-item,.conn-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+.var-item,.conn-item{background:var(--color-paper-2);border:1px solid var(--color-border);border-radius:var(--radius-md,8px);
   padding:10px;margin-bottom:8px;}
 .var-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;
   border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;
-  background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;
+  background:var(--color-accent-subtle);color:var(--color-accent);border:1px solid var(--color-border);
   transition:background .1s;margin:2px;}
-.var-badge:hover{background:#e0e7ff;}
+.var-badge:hover{background:var(--color-accent-subtle);opacity:.8;}
 .conn-type-badge{display:inline-block;padding:1px 6px;border-radius:4px;
   font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
 
 /* Error/failure edge */
-.edge-failure{stroke:#ef4444!important;}
+.edge-failure{stroke:var(--color-danger,#ef4444)!important;}
 
 /* Validation error markers on nodes */
 .task-node.node-error .node-card{
-  border-color:#ef4444;
-  box-shadow:0 0 0 1.5px #fca5a5,0 4px 14px rgba(239,68,68,.15);
+  border-color:var(--color-danger,#ef4444);
+  box-shadow:0 0 0 2px var(--color-danger-subtle,rgba(239,68,68,.18));
 }
 .node-err-dot{
   position:absolute;top:-5px;right:-5px;width:13px;height:13px;
-  border-radius:50%;background:#ef4444;border:2px solid white;
+  border-radius:50%;background:var(--color-danger,#ef4444);border:2px solid white;
   z-index:25;box-shadow:0 1px 4px rgba(239,68,68,.6);
   cursor:help;
 }
 
-/* Run-state markers (Phase C) */
-@keyframes nodePulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,.5)}50%{box-shadow:0 0 0 6px rgba(99,102,241,0)}}
+/* Run-state markers (Phase C) — opacity-based pulse, no box-shadow animation */
+@keyframes nodePulse{0%,100%{opacity:1}50%{opacity:.55}}
 .task-node.node-running .node-card{
-  border-color:#6366f1;
+  border-color:var(--color-warning,#6366f1);
   animation: nodePulse 1.6s ease-in-out infinite;
 }
 .task-node.node-ok .node-card{
-  border-color:#22c55e;
-  box-shadow:0 0 0 1.5px #bbf7d0,0 4px 14px rgba(34,197,94,.15);
+  border-color:var(--color-success,#22c55e);
+  box-shadow:0 0 0 2px var(--color-success-subtle,rgba(34,197,94,.2));
 }
 .task-node.node-fail .node-card{
-  border-color:#ef4444;
-  box-shadow:0 0 0 1.5px #fca5a5,0 4px 14px rgba(239,68,68,.18);
+  border-color:var(--color-danger,#ef4444);
+  box-shadow:0 0 0 2px var(--color-danger-subtle,rgba(239,68,68,.18));
 }
 
 /* Variable reference helper */
-#var-ref-helper{border-top:1px solid #f1f5f9;padding:10px 16px;background:#fafafa;}
+#var-ref-helper{border-top:1px solid var(--color-border);padding:var(--space-3,10px) var(--space-4,16px);background:var(--color-paper-2);}
+
+/* Log output line colours (SSE log stream) */
+.log-info{color:oklch(55% 0.18 150);}
+.log-error{color:oklch(54% 0.22 25);}
+.log-warn{color:oklch(72% 0.17 65);}
+.log-debug{color:oklch(52% 0.015 250);}
+.log-pane{background:oklch(12% 0.015 250);color:oklch(88% 0.008 250);
+  font-family:var(--font-mono,'Monaco','Menlo',monospace);font-size:var(--text-xs,11px);
+  border-radius:var(--radius-lg,8px);padding:var(--space-4,16px);overflow:auto;}
 </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex">
+<body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
 
 <!-- SIDEBAR -->
-<aside class="fixed inset-y-0 left-0 w-56 bg-slate-900 flex flex-col z-40 shadow-2xl">
-  <div class="px-4 py-5 border-b border-slate-700/50">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-        <i class="fas fa-layer-group text-white text-xs"></i>
-      </div>
-      <div>
-        <p class="text-white font-bold text-sm leading-tight">Data Platform</p>
-        <p class="text-slate-400 text-[11px]">Suite</p>
-      </div>
+<button class="dp-sidebar-toggle" id="dpSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="dpSidebar">
+  <i class="fas fa-bars" aria-hidden="true"></i>
+</button>
+<div class="dp-sidebar-overlay" id="dpSidebarOverlay" aria-hidden="true"></div>
+<aside class="dp-sidebar" id="dpSidebar" role="navigation" aria-label="Main navigation">
+  <div class="dp-sidebar__brand">
+    <div class="dp-sidebar__logo" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
+    <div class="dp-sidebar__brand-text">
+      <span class="dp-sidebar__brand-name">Data Platform</span>
+      <span class="dp-sidebar__brand-sub">Suite</span>
     </div>
   </div>
-  <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-    <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-house w-4 text-center shrink-0"></i><span>Overview</span>
+  <nav class="dp-sidebar__nav" aria-label="Application navigation">
+    <a href="/" class="dp-sidebar__item">
+      <i class="fas fa-house dp-sidebar__icon" aria-hidden="true"></i><span>Overview</span>
     </a>
-    <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-wave-square w-4 text-center shrink-0"></i><span>DP Flow</span>
+    <div class="dp-sidebar__group" aria-hidden="true">Pipelines</div>
+    <a href="/dashboard" class="dp-sidebar__item">
+      <i class="fas fa-wave-square dp-sidebar__icon" aria-hidden="true"></i><span>DP Flow</span>
     </a>
-    <div class="pt-3 pb-1">
-      <p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Build</p>
-    </div>
-    <a href="/job-builder" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white bg-indigo-600 text-sm font-medium">
-      <i class="fas fa-cubes w-4 text-center shrink-0"></i><span>Job Builder</span>
+    <a href="/job-builder" class="dp-sidebar__item is-active" aria-current="page">
+      <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
     </a>
-    <a href="/generator" class="flex items-center gap-3 pl-8 pr-3 py-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors">
-      <i class="fas fa-wand-magic-sparkles w-3.5 text-center shrink-0"></i><span>NLP Generator</span>
+    <a href="/templates-ui" class="dp-sidebar__item">
+      <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
     </a>
-    <div class="pt-3 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Observability</p></div>
-    <a href="/alerts" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-bell w-4 text-center shrink-0"></i><span>Alerts</span>
+    <a href="/generator" class="dp-sidebar__item">
+      <i class="fas fa-wand-magic-sparkles dp-sidebar__icon" aria-hidden="true"></i><span>Generator</span>
     </a>
-    <a href="/monitoring" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-chart-line w-4 text-center shrink-0"></i><span>Metrics</span>
+    <div class="dp-sidebar__group" aria-hidden="true">Observability</div>
+    <a href="/monitoring" class="dp-sidebar__item">
+      <i class="fas fa-chart-line dp-sidebar__icon" aria-hidden="true"></i><span>Monitoring</span>
     </a>
-    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Discovery</p></div>
-    <a href="/catalog" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-database w-4 text-center shrink-0"></i><span>Catalog</span>
+    <a href="/lineage-viz" class="dp-sidebar__item">
+      <i class="fas fa-diagram-project dp-sidebar__icon" aria-hidden="true"></i><span>Lineage</span>
     </a>
-    <a href="/lineage-viz" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-diagram-project w-4 text-center shrink-0"></i><span>Lineage</span>
+    <a href="/alerts" class="dp-sidebar__item">
+      <i class="fas fa-bell dp-sidebar__icon" aria-hidden="true"></i><span>Alerts</span>
+      <span id="navAlertBadge" class="dp-sidebar__badge hidden" aria-label="active alerts">1</span>
     </a>
-    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">FinOps</p></div>
-    <a href="/costs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-coins w-4 text-center shrink-0"></i><span>Cost Attribution</span>
+    <div class="dp-sidebar__group" aria-hidden="true">Governance</div>
+    <a href="/catalog" class="dp-sidebar__item">
+      <i class="fas fa-database dp-sidebar__icon" aria-hidden="true"></i><span>Catalog</span>
     </a>
-    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Dev Tools</p></div>
-    <a href="/templates-ui" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-store w-4 text-center shrink-0"></i><span>Templates</span>
+    <a href="/costs" class="dp-sidebar__item">
+      <i class="fas fa-coins dp-sidebar__icon" aria-hidden="true"></i><span>Costs</span>
     </a>
-    <div class="pt-4 pb-1"><p class="px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</p></div>
-    <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 text-sm font-medium transition-colors">
-      <i class="fas fa-shield-halved w-4 text-center shrink-0"></i><span>User Management</span>
+    <a href="/git-integration" class="dp-sidebar__item">
+      <i class="fas fa-code-branch dp-sidebar__icon" aria-hidden="true"></i><span>Git Integration</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Admin</div>
+    <a href="/admin" class="dp-sidebar__item">
+      <i class="fas fa-shield-halved dp-sidebar__icon" aria-hidden="true"></i><span>Users &amp; Roles</span>
     </a>
   </nav>
-  <div class="px-4 py-3 border-t border-slate-700/50">
-    <p class="text-slate-500 text-[11px]">Job Builder v2</p>
+  <div class="dp-sidebar__footer">
+    <div class="dp-sidebar__avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
+    <div class="dp-sidebar__user-info">
+      <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
+      <span class="dp-sidebar__userrole">Data Platform</span>
+    </div>
+    <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
+      <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+    </button>
   </div>
 </aside>
+<script>
+(function(){var t=document.getElementById('dpSidebarToggle'),s=document.getElementById('dpSidebar'),o=document.getElementById('dpSidebarOverlay');if(!t||!s||!o)return;function open(){s.classList.add('is-open');o.classList.add('is-open');o.removeAttribute('aria-hidden');t.setAttribute('aria-expanded','true');t.querySelector('i').className='fas fa-xmark';}function close(){s.classList.remove('is-open');o.classList.remove('is-open');o.setAttribute('aria-hidden','true');t.setAttribute('aria-expanded','false');t.querySelector('i').className='fas fa-bars';}t.addEventListener('click',function(){s.classList.contains('is-open')?close():open();});o.addEventListener('click',close);document.addEventListener('keydown',function(e){if(e.key==='Escape'&&s.classList.contains('is-open'))close();});}());
+</script>
 
 <!-- MAIN -->
 <div class="ml-56 flex flex-col h-screen overflow-hidden">
 
   <!-- TOP BAR -->
-  <div class="bg-white border-b border-slate-200 px-5 py-2.5 flex items-center gap-3 shrink-0">
+  <div id="dp-topbar" class="px-5 py-2.5 flex items-center gap-3 shrink-0">
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <input id="pipelineName" type="text" placeholder="pipeline_name"
-        class="text-slate-800 font-bold text-sm border-b border-transparent focus:border-indigo-400 outline-none bg-transparent px-1 py-0.5 w-48 transition-colors"
+        class="text-sm border-b border-transparent outline-none bg-transparent px-1 py-0.5 w-48 transition-colors" style="color:var(--color-ink)" onfocus="this.style.borderColor='var(--color-accent)'" onblur="this.style.borderColor='transparent'"
         value="my_pipeline" oninput="updateYAMLPreview()">
-      <span class="text-slate-300">·</span>
+      <span style="color:var(--color-border-2)">·</span>
       <input id="pipelineDesc" type="text" placeholder="Description (optional)"
-        class="text-slate-500 text-sm border-b border-transparent focus:border-slate-300 outline-none bg-transparent px-1 py-0.5 flex-1 min-w-0 transition-colors"
+        class="text-sm border-b border-transparent outline-none bg-transparent px-1 py-0.5 flex-1 min-w-0 transition-colors"
         oninput="updateYAMLPreview()">
     </div>
     <div class="flex items-center gap-1.5 shrink-0">
@@ -228,42 +296,33 @@ select.finput{appearance:auto;}
       <button id="redo-btn" onclick="redo()" disabled title="Redo (Ctrl+Y)" class="tbtn">
         <i class="fas fa-rotate-right text-xs"></i>
       </button>
-      <div class="w-px h-5 bg-slate-200 mx-1"></div>
-      <button onclick="showScheduleModal()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+      <div class="dp-divider w-px h-5 mx-1"></div>
+      <button onclick="showScheduleModal()" class="btn-sec">
         <i class="fas fa-clock"></i>
         <span id="schedBtn">Schedule</span>
       </button>
-      <button onclick="openPipelineModal()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+      <button onclick="openPipelineModal()" class="btn-sec">
         <i class="fas fa-folder-open"></i> Open
       </button>
-      <button onclick="openVersionsModal()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+      <button onclick="openVersionsModal()" class="btn-sec">
         <i class="fas fa-clock-rotate-left"></i> Versions
       </button>
-      <button onclick="arrangeNow()" title="Auto-arrange (Ctrl+L)"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+      <button onclick="arrangeNow()" title="Auto-arrange (Ctrl+L)" class="btn-sec">
         <i class="fas fa-sitemap"></i> Arrange
       </button>
-      <button onclick="clearCanvas()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors">
+      <button onclick="clearCanvas()" class="btn-sec">
         <i class="fas fa-trash-can"></i> Clear
       </button>
-      <button onclick="showYAML()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 text-xs font-medium border border-indigo-200 transition-colors">
+      <button onclick="showYAML()" class="btn-sec btn-code">
         <i class="fas fa-code"></i> View as YAML
       </button>
-      <button onclick="savePipeline()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold transition-colors">
+      <button onclick="savePipeline()" class="btn-pri">
         <i class="fas fa-floppy-disk"></i> Save
       </button>
-      <button onclick="validatePipeline()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors">
+      <button onclick="validatePipeline()" class="btn-pri btn-warn">
         <i class="fas fa-circle-check"></i> Validate
       </button>
-      <button onclick="runPipeline()"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors">
+      <button onclick="runPipeline()" class="btn-pri btn-run">
         <i class="fas fa-play"></i> Run
       </button>
     </div>
@@ -276,8 +335,8 @@ select.finput{appearance:auto;}
   <div class="flex flex-1 overflow-hidden">
 
     <!-- LEFT PANEL (tabbed) -->
-    <div class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
-      <div class="flex border-b border-slate-200 shrink-0">
+    <div id="dp-left-panel" class="w-64 flex flex-col shrink-0 overflow-hidden">
+      <div class="flex border-b shrink-0" style="border-color:var(--color-border)">
         <button class="tab-btn active" id="tab-tasks"  onclick="switchTab('tasks')">Tasks</button>
         <button class="tab-btn"        id="tab-meta"   onclick="switchTab('meta')">Pipeline</button>
         <button class="tab-btn"        id="tab-vars"   onclick="switchTab('vars')">Vars</button>
@@ -292,27 +351,27 @@ select.finput{appearance:auto;}
       <!-- Variables -->
       <div id="panel-vars" class="hidden flex-1 overflow-y-auto flex flex-col">
         <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
-          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pipeline Variables</p>
-          <button onclick="addVar()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200 transition-colors" title="Add variable">
+          <p class="text-[10px] font-bold uppercase tracking-widest" style="color:var(--color-ink-2)">Pipeline Variables</p>
+          <button onclick="addVar()" class="w-5 h-5 rounded flex items-center justify-center transition-colors" style="background:var(--color-accent-subtle);color:var(--color-accent)" title="Add variable">
             <i class="fas fa-plus text-[9px]"></i>
           </button>
         </div>
         <div id="vars-list" class="flex-1 overflow-y-auto px-3 pb-3"></div>
-        <div class="px-3 py-2 border-t border-slate-100 shrink-0">
-          <p class="text-[10px] text-slate-400 leading-relaxed">Reference anywhere with <code class="bg-slate-100 px-1 rounded">${var.name}</code></p>
+        <div class="px-3 py-2 border-t shrink-0" style="border-color:var(--color-border)">
+          <p class="text-[10px] leading-relaxed" style="color:var(--color-ink-3)">Reference anywhere with <code class="px-1 rounded" style="background:var(--color-paper-3)">${var.name}</code></p>
         </div>
       </div>
       <!-- Connections -->
       <div id="panel-conns" class="hidden flex-1 overflow-y-auto flex flex-col">
         <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
-          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Connections</p>
-          <button onclick="addConn()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200 transition-colors" title="Add connection">
+          <p class="text-[10px] font-bold uppercase tracking-widest" style="color:var(--color-ink-2)">Connections</p>
+          <button onclick="addConn()" class="w-5 h-5 rounded flex items-center justify-center transition-colors" style="background:var(--color-accent-subtle);color:var(--color-accent)" title="Add connection">
             <i class="fas fa-plus text-[9px]"></i>
           </button>
         </div>
         <div id="conns-list" class="flex-1 overflow-y-auto px-3 pb-3"></div>
-        <div class="px-3 py-2 border-t border-slate-100 shrink-0">
-          <p class="text-[10px] text-slate-400 leading-relaxed">Reference with <code class="bg-slate-100 px-1 rounded">${conn.name}</code></p>
+        <div class="px-3 py-2 border-t shrink-0" style="border-color:var(--color-border)">
+          <p class="text-[10px] leading-relaxed" style="color:var(--color-ink-3)">Reference with <code class="px-1 rounded" style="background:var(--color-paper-3)">${conn.name}</code></p>
         </div>
       </div>
     </div>
@@ -322,26 +381,26 @@ select.finput{appearance:auto;}
       <div id="canvas-inner">
         <svg id="edge-svg"></svg>
         <div id="canvas-empty" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-          <i class="fas fa-diagram-project text-slate-200 text-6xl mb-4"></i>
-          <p class="text-slate-400 text-sm font-medium">Click a task type to add it</p>
-          <p class="text-slate-300 text-xs mt-1">Connect tasks by dragging from <span class="font-semibold">right port → left port</span></p>
-          <p class="text-slate-300 text-xs mt-0.5">Ctrl+Wheel zoom · Space+drag pan · Ctrl+D duplicate · Ctrl+L arrange · Shift-click multi-select · Delete to remove</p>
+          <i class="fas fa-diagram-project text-6xl mb-4" style="color:var(--color-border-2)"></i>
+          <p class="text-sm font-medium" style="color:var(--color-ink-3)">Click a task type to add it</p>
+          <p class="text-xs mt-1" style="color:var(--color-border-2)">Connect tasks by dragging from <span class="font-semibold">right port → left port</span></p>
+          <p class="text-xs mt-0.5" style="color:var(--color-border-2)">Ctrl+Wheel zoom · Space+drag pan · Ctrl+D duplicate · Ctrl+L arrange · Shift-click multi-select · Delete to remove</p>
         </div>
       </div>
       <!-- Zoom bar -->
       <div id="zoom-bar">
         <button onclick="adjustZoom(-0.1)" class="tbtn border-0 w-6 h-6" title="Zoom out"><i class="fas fa-minus text-[9px]"></i></button>
-        <span id="zoom-label" class="font-semibold text-slate-500 w-9 text-center select-none">100%</span>
+        <span id="zoom-label" class="font-semibold w-9 text-center select-none" style="color:var(--color-ink-3)">100%</span>
         <button onclick="adjustZoom(0.1)" class="tbtn border-0 w-6 h-6" title="Zoom in"><i class="fas fa-plus text-[9px]"></i></button>
-        <button onclick="resetZoom()" class="tbtn border-0 px-1 w-auto h-6 text-[10px] font-semibold text-slate-400" title="Reset zoom">fit</button>
+        <button onclick="resetZoom()" class="tbtn border-0 px-1 w-auto h-6 text-[10px] font-semibold" style="color:var(--color-ink-3)" title="Reset zoom">fit</button>
       </div>
     </div>
 
     <!-- CONFIG PANEL -->
     <div id="config-panel">
-      <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
-        <p class="text-xs font-bold text-slate-700 uppercase tracking-wider" id="config-title">Configure Task</p>
-        <button onclick="deselectAll()" class="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+      <div class="px-4 py-3 flex items-center justify-between shrink-0" style="border-bottom:1px solid var(--color-border)">
+        <p class="text-xs font-bold uppercase tracking-wider" id="config-title" style="color:var(--color-ink-2)">Configure Task</p>
+        <button onclick="deselectAll()" class="w-6 h-6 rounded flex items-center justify-center transition-colors" style="color:var(--color-ink-3)" onmouseover="this.style.background='var(--color-paper-2)';this.style.color='var(--color-ink)'" onmouseout="this.style.background='';this.style.color='var(--color-ink-3)'">
           <i class="fas fa-times text-xs"></i>
         </button>
       </div>
@@ -353,59 +412,59 @@ select.finput{appearance:auto;}
 
 <!-- OPEN PIPELINE MODAL -->
 <div id="open-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onclick="if(event.target===this)closeOpenModal()">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-fadeIn flex flex-col max-h-[80vh]">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+  <div class="rounded-2xl shadow-2xl w-full max-w-lg animate-fadeIn flex flex-col max-h-[80vh]" style="background:var(--color-surface)">
+    <div class="flex items-center justify-between px-6 py-4 shrink-0" style="border-bottom:1px solid var(--color-border)">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-          <i class="fas fa-folder-open text-indigo-500 text-sm"></i>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--color-accent-subtle);border:1px solid var(--color-border)">
+          <i class="fas fa-folder-open text-sm" style="color:var(--color-accent)"></i>
         </div>
         <div>
-          <p class="text-sm font-bold text-slate-800">Open Pipeline</p>
-          <p class="text-xs text-slate-400">Load an existing pipeline into the canvas</p>
+          <p class="text-sm font-bold" style="color:var(--color-ink)">Open Pipeline</p>
+          <p class="text-xs" style="color:var(--color-ink-3)">Load an existing pipeline into the canvas</p>
         </div>
       </div>
-      <button onclick="closeOpenModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+      <button onclick="closeOpenModal()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="color:var(--color-ink-3)" onmouseover="this.style.background='var(--color-paper-2)'" onmouseout="this.style.background=''">
         <i class="fas fa-times"></i>
       </button>
     </div>
-    <div class="p-4 border-b border-slate-100 shrink-0">
+    <div class="p-4 shrink-0" style="border-bottom:1px solid var(--color-border)">
       <input id="open-search" type="text" placeholder="Search pipelines…"
         class="finput" oninput="filterOpenList(this.value)">
     </div>
     <div id="open-list" class="flex-1 overflow-y-auto p-3 space-y-1">
-      <p class="text-xs text-slate-400 text-center py-4">Loading pipelines…</p>
+      <p class="text-xs text-center py-4" style="color:var(--color-ink-3)">Loading pipelines…</p>
     </div>
   </div>
 </div>
 
 <!-- YAML MODAL -->
 <div id="yaml-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onclick="if(event.target===this)closeYAML()">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-full animate-fadeIn">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+  <div class="rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-full animate-fadeIn" style="background:var(--color-surface)">
+    <div class="flex items-center justify-between px-6 py-4" style="border-bottom:1px solid var(--color-border)">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
-          <i class="fas fa-code text-slate-300 text-xs"></i>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--color-ink)">
+          <i class="fas fa-code text-xs" style="color:var(--color-accent-text)"></i>
         </div>
         <div>
-          <p class="text-sm font-bold text-slate-800">Pipeline YAML</p>
-          <p class="text-xs text-slate-400" id="yaml-pipeline-label"></p>
+          <p class="text-sm font-bold" style="color:var(--color-ink)">Pipeline YAML</p>
+          <p class="text-xs" id="yaml-pipeline-label" style="color:var(--color-ink-3)"></p>
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="copyYAML()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-600 transition-colors">
+        <button onclick="copyYAML()" class="btn-sec text-xs font-semibold">
           <i class="fas fa-copy"></i> Copy
         </button>
-        <button onclick="closeYAML()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+        <button onclick="closeYAML()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="color:var(--color-ink-3)" onmouseover="this.style.background='var(--color-paper-2)'" onmouseout="this.style.background=''">
           <i class="fas fa-times"></i>
         </button>
       </div>
     </div>
     <div class="p-6 overflow-auto flex-1">
       <pre class="yaml-code" id="yaml-output"></pre>
-      <div id="credential-warning" style="display:none"
-           class="mt-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-xs leading-relaxed">
+      <div id="credential-warning" style="display:none;background:var(--color-warning-subtle);border:1px solid var(--color-warning);color:var(--color-ink-2);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4)"
+           class="mt-3 text-xs leading-relaxed">
         <strong>Warning:</strong> Your YAML contains sensitive values (passwords, tokens, keys).
-        Use environment variable references like <code class="bg-amber-100 px-1 rounded">${MY_SECRET}</code> instead of hardcoded values.
+        Use environment variable references like <code class="px-1 rounded" style="background:var(--color-warning-subtle)">${MY_SECRET}</code> instead of hardcoded values.
       </div>
     </div>
   </div>
@@ -413,24 +472,24 @@ select.finput{appearance:auto;}
 
 <!-- VERSIONS MODAL -->
 <div id="ver-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onclick="if(event.target===this)closeVersionsModal()">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] animate-fadeIn">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+  <div class="rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] animate-fadeIn" style="background:var(--color-surface)">
+    <div class="flex items-center justify-between px-6 py-4 shrink-0" style="border-bottom:1px solid var(--color-border)">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
-          <i class="fas fa-clock-rotate-left text-slate-300 text-xs"></i>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--color-ink)">
+          <i class="fas fa-clock-rotate-left text-xs" style="color:var(--color-accent-text)"></i>
         </div>
         <div>
-          <p class="text-sm font-bold text-slate-800">Pipeline Versions</p>
-          <p class="text-xs text-slate-400" id="ver-label">Every Save creates a new version (deduped by content hash)</p>
+          <p class="text-sm font-bold" style="color:var(--color-ink)">Pipeline Versions</p>
+          <p class="text-xs" id="ver-label" style="color:var(--color-ink-3)">Every Save creates a new version (deduped by content hash)</p>
         </div>
       </div>
-      <button onclick="closeVersionsModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+      <button onclick="closeVersionsModal()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="color:var(--color-ink-3)" onmouseover="this.style.background='var(--color-paper-2)'" onmouseout="this.style.background=''">
         <i class="fas fa-times"></i>
       </button>
     </div>
     <div class="flex flex-1 overflow-hidden">
-      <div id="ver-list" class="w-64 border-r border-slate-100 overflow-y-auto p-3 space-y-1">
-        <p class="text-xs text-slate-400 text-center py-6">Loading…</p>
+      <div id="ver-list" class="w-64 overflow-y-auto p-3 space-y-1" style="border-right:1px solid var(--color-border)">
+        <p class="text-xs text-center py-6" style="color:var(--color-ink-3)">Loading…</p>
       </div>
       <div class="flex-1 overflow-auto p-4">
         <pre class="yaml-code" id="ver-yaml" style="max-height:none;height:100%">Select a version on the left to view its YAML.</pre>
@@ -441,30 +500,30 @@ select.finput{appearance:auto;}
 
 <!-- SCHEDULE MODAL -->
 <div id="sched-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onclick="if(event.target===this)closeScheduleModal()">
-  <div class="bg-white rounded-2xl shadow-2xl w-80 animate-fadeIn">
-    <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-      <p class="font-bold text-slate-800 text-sm">Set Schedule</p>
-      <button onclick="clearSchedule()" class="text-xs text-red-500 hover:underline">Clear</button>
+  <div class="rounded-2xl shadow-2xl w-80 animate-fadeIn" style="background:var(--color-surface)">
+    <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid var(--color-border)">
+      <p class="font-bold text-sm" style="color:var(--color-ink)">Set Schedule</p>
+      <button onclick="clearSchedule()" class="text-xs hover:underline" style="color:var(--color-danger)">Clear</button>
     </div>
     <div class="p-5 space-y-3">
       <div class="grid grid-cols-3 gap-2 mb-4">
-        <button onclick="setPreset('0 6 * * *')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Daily 6am</button>
-        <button onclick="setPreset('0 * * * *')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Hourly</button>
-        <button onclick="setPreset('0 6 * * 1-5')" class="py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-medium border border-slate-200 transition-colors">Weekdays</button>
+        <button onclick="setPreset('0 6 * * *')" class="py-1.5 px-2 rounded-lg text-xs font-medium transition-colors" style="background:var(--color-paper-2);border:1px solid var(--color-border);color:var(--color-ink-2)" onmouseover="this.style.background='var(--color-accent-subtle)';this.style.borderColor='var(--color-accent)';this.style.color='var(--color-accent)'" onmouseout="this.style.background='var(--color-paper-2)';this.style.borderColor='var(--color-border)';this.style.color='var(--color-ink-2)'">Daily 6am</button>
+        <button onclick="setPreset('0 * * * *')" class="py-1.5 px-2 rounded-lg text-xs font-medium transition-colors" style="background:var(--color-paper-2);border:1px solid var(--color-border);color:var(--color-ink-2)" onmouseover="this.style.background='var(--color-accent-subtle)';this.style.borderColor='var(--color-accent)';this.style.color='var(--color-accent)'" onmouseout="this.style.background='var(--color-paper-2)';this.style.borderColor='var(--color-border)';this.style.color='var(--color-ink-2)'">Hourly</button>
+        <button onclick="setPreset('0 6 * * 1-5')" class="py-1.5 px-2 rounded-lg text-xs font-medium transition-colors" style="background:var(--color-paper-2);border:1px solid var(--color-border);color:var(--color-ink-2)" onmouseover="this.style.background='var(--color-accent-subtle)';this.style.borderColor='var(--color-accent)';this.style.color='var(--color-accent)'" onmouseout="this.style.background='var(--color-paper-2)';this.style.borderColor='var(--color-border)';this.style.color='var(--color-ink-2)'">Weekdays</button>
       </div>
 <div><label class="flabel">Minute</label><input id="sched-min" class="finput" placeholder="0" value="0" oninput="renderCronPreview()"></div>
       <div><label class="flabel">Hour</label><input id="sched-hr" class="finput" placeholder="6" value="6" oninput="renderCronPreview()"></div>
       <div><label class="flabel">Day of month</label><input id="sched-dom" class="finput" placeholder="*" value="*" oninput="renderCronPreview()"></div>
       <div><label class="flabel">Month</label><input id="sched-mo" class="finput" placeholder="*" value="*" oninput="renderCronPreview()"></div>
       <div><label class="flabel">Day of week</label><input id="sched-dow" class="finput" placeholder="* (0=Sun)" value="*" oninput="renderCronPreview()"></div>
-      <div class="mt-3 p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg">
-        <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Next runs</p>
-        <ul id="cron-preview" class="text-[11px] text-slate-600 space-y-0.5"></ul>
+      <div class="mt-3 p-2.5 rounded-lg" style="background:var(--color-accent-subtle);border:1px solid var(--color-accent)">
+        <p class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:var(--color-accent)">Next runs</p>
+        <ul id="cron-preview" class="text-[11px] space-y-0.5" style="color:var(--color-ink-2)"></ul>
       </div>
     </div>
-    <div class="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
-      <button onclick="closeScheduleModal()" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
-      <button onclick="applySchedule()" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Apply</button>
+    <div class="px-5 py-4 flex justify-end gap-2" style="border-top:1px solid var(--color-border)">
+      <button onclick="closeScheduleModal()" class="btn-sec">Cancel</button>
+      <button onclick="applySchedule()" class="btn-pri btn-run">Apply</button>
     </div>
   </div>
 </div>
@@ -473,21 +532,32 @@ select.finput{appearance:auto;}
 // ─────────────────────────────────────────
 // TASK TYPE DEFINITIONS
 // ─────────────────────────────────────────
+// OKLCH colour helpers — mirror the token palette so JS-rendered colours stay
+// in sync with CSS custom properties. var() cannot be used inside JS object
+// literals, so we carry the computed OKLCH values here.
+const TV = {
+  accent:  'oklch(54% 0.22 250)',   // --color-accent
+  success: 'oklch(55% 0.18 150)',   // --color-success
+  warning: 'oklch(72% 0.17 65)',    // --color-warning
+  danger:  'oklch(54% 0.22 25)',    // --color-danger
+  muted:   'oklch(52% 0.015 250)', // --color-ink-3
+};
+
 // NOTE: 5 task types (pipeline, loop, condition, set_var, on_error) are intentionally
 // omitted from the palette — backend executor plugins for them don't exist yet, and
 // PipelineConfig forbids the extra YAML keys (variables:/connections:/depends_on_failure:)
 // they would need. They'll be reintroduced as a follow-up alongside their plugins.
 const TT = {
-  sql:        {label:'SQL Query',    icon:'fa-database',              color:'#3b82f6', desc:'Query any database',        plugin:null},
-  python:     {label:'Python',       icon:'fa-code',                  color:'#f59e0b', desc:'Run Python code or script',  plugin:'python'},
-  shell:      {label:'Shell',        icon:'fa-terminal',              color:'#64748b', desc:'Execute shell commands',     plugin:'shell'},
-  dbt:        {label:'dbt',          icon:'fa-gear',                  color:'#f97316', desc:'Run dbt transformations',    plugin:'dbt'},
-  spark:      {label:'Spark',        icon:'fa-bolt',                  color:'#ef4444', desc:'Submit Spark jobs',          plugin:'spark'},
-  api:        {label:'REST API',     icon:'fa-cloud',                 color:'#14b8a6', desc:'Make HTTP API calls',        plugin:'api'},
-  kafka:      {label:'Kafka',        icon:'fa-arrows-spin',           color:'#8b5cf6', desc:'Publish or subscribe',       plugin:'kafka'},
-  file:       {label:'File',         icon:'fa-folder-open',           color:'#6366f1', desc:'Read, write, merge files',   plugin:'file'},
-  email:      {label:'Email',        icon:'fa-envelope',              color:'#ec4899', desc:'Send notifications',         plugin:'email'},
-  validation: {label:'Validation',   icon:'fa-circle-check',          color:'#10b981', desc:'Data quality checks',        plugin:'duckdb'},
+  sql:        {label:'SQL Query',    icon:'fa-database',   color:TV.accent,  desc:'Query any database',        plugin:null},
+  python:     {label:'Python',       icon:'fa-code',       color:TV.accent,  desc:'Run Python code or script',  plugin:'python'},
+  shell:      {label:'Shell',        icon:'fa-terminal',   color:TV.success, desc:'Execute shell commands',     plugin:'shell'},
+  dbt:        {label:'dbt',          icon:'fa-gear',       color:TV.accent,  desc:'Run dbt transformations',    plugin:'dbt'},
+  spark:      {label:'Spark',        icon:'fa-bolt',       color:TV.accent,  desc:'Submit Spark jobs',          plugin:'spark'},
+  api:        {label:'REST API',     icon:'fa-cloud',      color:TV.warning, desc:'Make HTTP API calls',        plugin:'api'},
+  kafka:      {label:'Kafka',        icon:'fa-arrows-spin',color:TV.muted,   desc:'Publish or subscribe',       plugin:'kafka'},
+  file:       {label:'File',         icon:'fa-folder-open',color:TV.muted,   desc:'Read, write, merge files',   plugin:'file'},
+  email:      {label:'Email',        icon:'fa-envelope',   color:TV.warning, desc:'Send notifications',         plugin:'email'},
+  validation: {label:'Validation',   icon:'fa-circle-check',color:TV.danger, desc:'Data quality checks',        plugin:'duckdb'},
 };
 
 const DEFAULT_CONFIGS = {
@@ -539,13 +609,13 @@ const meta = {
 };
 
 const CONN_META = {
-  postgres:  {icon:'fa-database', color:'#3b82f6', fields:['host','port','database','user','password']},
-  mysql:     {icon:'fa-database', color:'#f97316', fields:['host','port','database','user','password']},
-  bigquery:  {icon:'fa-database', color:'#4285f4', fields:['project_id','dataset_id','credentials_file']},
-  snowflake: {icon:'fa-snowflake',color:'#29b5e8', fields:['account','warehouse','database','user','password']},
-  spark:     {icon:'fa-bolt',     color:'#ef4444', fields:['spark_master','deploy_mode']},
-  kafka:     {icon:'fa-arrows-spin',color:'#8b5cf6',fields:['brokers','security_protocol']},
-  http:      {icon:'fa-cloud',    color:'#14b8a6', fields:['base_url','auth_type','token']},
+  postgres:  {icon:'fa-database',   color:TV.muted,   fields:['host','port','database','user','password']},
+  mysql:     {icon:'fa-database',   color:TV.muted,   fields:['host','port','database','user','password']},
+  bigquery:  {icon:'fa-database',   color:TV.accent,  fields:['project_id','dataset_id','credentials_file']},
+  snowflake: {icon:'fa-snowflake',  color:TV.muted,   fields:['account','warehouse','database','user','password']},
+  spark:     {icon:'fa-bolt',       color:TV.accent,  fields:['spark_master','deploy_mode']},
+  kafka:     {icon:'fa-arrows-spin',color:TV.muted,   fields:['brokers','security_protocol']},
+  http:      {icon:'fa-cloud',      color:TV.warning, fields:['base_url','auth_type','token']},
 };
 
 const CONN_DEFAULTS = {
@@ -682,9 +752,9 @@ function renderVarsPanel() {
   const list = document.getElementById('vars-list');
   if (!pipeline.variables.length) {
     list.innerHTML = `<div class="text-center py-8">
-      <i class="fas fa-sliders text-slate-200 text-3xl mb-2"></i>
-      <p class="text-[11px] text-slate-400">No variables yet</p>
-      <p class="text-[10px] text-slate-300 mt-0.5">Click + to declare one</p>
+      <i class="fas fa-sliders text-3xl mb-2" style="color:var(--color-border-2)"></i>
+      <p class="text-[11px]" style="color:var(--color-ink-3)">No variables yet</p>
+      <p class="text-[10px] mt-0.5" style="color:var(--color-border-2)">Click + to declare one</p>
     </div>`;
     return;
   }
@@ -693,7 +763,7 @@ function renderVarsPanel() {
       <div class="flex items-center gap-1.5 mb-2">
         <input class="finput text-xs font-semibold flex-1" value="${esc(v.name)}" placeholder="variable_name"
                oninput="updateVar('${v.id}','name',this.value)">
-        <button onclick="deleteVar('${v.id}')" class="text-slate-300 hover:text-red-400 text-xs shrink-0 transition-colors">✕</button>
+        <button onclick="deleteVar('${v.id}')" class="text-xs shrink-0 transition-colors" style="color:var(--color-border-2)" onmouseover="this.style.color='var(--color-danger)'" onmouseout="this.style.color='var(--color-border-2)'">✕</button>
       </div>
       <div class="flex gap-1.5 mb-1.5">
         <select class="finput text-[11px]" style="width:88px;flex-shrink:0" onchange="updateVar('${v.id}','type',this.value)">
@@ -702,7 +772,7 @@ function renderVarsPanel() {
         <input class="finput text-[11px] flex-1" value="${esc(v.default_value)}" placeholder="Default value"
                oninput="updateVar('${v.id}','default_value',this.value)">
       </div>
-      <p class="text-[10px] text-slate-400">Use: <code class="bg-white px-1 rounded border border-slate-200">\${var.${esc(v.name)}}</code></p>
+      <p class="text-[10px]" style="color:var(--color-ink-3)">Use: <code class="px-1 rounded" style="background:var(--color-paper-3);border:1px solid var(--color-border)">\${var.${esc(v.name)}}</code></p>
     </div>
   `).join('');
 }
@@ -751,9 +821,9 @@ function renderConnsPanel() {
   const list = document.getElementById('conns-list');
   if (!pipeline.connections.length) {
     list.innerHTML = `<div class="text-center py-8">
-      <i class="fas fa-plug text-slate-200 text-3xl mb-2"></i>
-      <p class="text-[11px] text-slate-400">No connections yet</p>
-      <p class="text-[10px] text-slate-300 mt-0.5">Click + to add one</p>
+      <i class="fas fa-plug text-3xl mb-2" style="color:var(--color-border-2)"></i>
+      <p class="text-[11px]" style="color:var(--color-ink-3)">No connections yet</p>
+      <p class="text-[10px] mt-0.5" style="color:var(--color-border-2)">Click + to add one</p>
     </div>`;
     return;
   }
@@ -763,20 +833,20 @@ function renderConnsPanel() {
     return `
     <div class="conn-item">
       <div class="flex items-center gap-2 cursor-pointer" onclick="toggleConnExpand('${c.id}')">
-        <div class="w-6 h-6 rounded flex items-center justify-center shrink-0" style="background:${meta.color}22;border:1px solid ${meta.color}44">
+        <div class="w-6 h-6 rounded flex items-center justify-center shrink-0" style="background:var(--color-paper-3);border:1px solid var(--color-border)">
           <i class="fas ${meta.icon} text-[9px]" style="color:${meta.color}"></i>
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-[11px] font-semibold text-slate-700 truncate">${esc(c.name)}</p>
-          <span class="conn-type-badge" style="background:${meta.color}18;color:${meta.color}">${c.conn_type}</span>
+          <p class="text-[11px] font-semibold truncate" style="color:var(--color-ink)">${esc(c.name)}</p>
+          <span class="conn-type-badge" style="background:var(--color-accent-subtle);color:var(--color-accent)">${c.conn_type}</span>
         </div>
         <div class="flex items-center gap-1 shrink-0">
-          <button onclick="event.stopPropagation();deleteConn('${c.id}')" class="text-slate-300 hover:text-red-400 text-[10px] transition-colors">✕</button>
-          <i class="fas fa-chevron-${c.expanded?'up':'down'} text-[8px] text-slate-400"></i>
+          <button onclick="event.stopPropagation();deleteConn('${c.id}')" class="text-[10px] transition-colors" style="color:var(--color-border-2)" onmouseover="this.style.color='var(--color-danger)'" onmouseout="this.style.color='var(--color-border-2)'">✕</button>
+          <i class="fas fa-chevron-${c.expanded?'up':'down'} text-[8px]" style="color:var(--color-ink-3)"></i>
         </div>
       </div>
       ${c.expanded ? `
-      <div class="mt-2 pt-2 border-t border-slate-200 space-y-1.5">
+      <div class="mt-2 pt-2 space-y-1.5" style="border-top:1px solid var(--color-border)">
         <div>
           <label class="flabel" style="font-size:9px">Name</label>
           <input class="finput text-[11px]" value="${esc(c.name)}" oninput="updateConn('${c.id}','name',this.value)">
@@ -792,7 +862,7 @@ function renderConnsPanel() {
           <label class="flabel" style="font-size:9px">${f.replace(/_/g,' ')}</label>
           <input class="finput text-[11px]" value="${esc(String(c[f]||''))}" oninput="updateConn('${c.id}','${f}',this.value)">
         </div>`).join('')}
-        <p class="text-[10px] text-slate-400 pt-1">Ref: <code class="bg-white px-1 rounded border border-slate-200">\${conn.${esc(c.name)}}</code></p>
+        <p class="text-[10px] pt-1" style="color:var(--color-ink-3)">Ref: <code class="px-1 rounded" style="background:var(--color-paper-3);border:1px solid var(--color-border)">\${conn.${esc(c.name)}}</code></p>
       </div>` : ''}
     </div>`;
   }).join('');
@@ -813,7 +883,7 @@ function renderMetaPanel() {
 
   panel.innerHTML = `
     <section>
-      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Ownership</p>
+      <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--color-ink-2)">Ownership</p>
       <div class="frow">
         <label class="flabel">Team</label>
         <input class="finput" placeholder="data-platform" value="${esc(meta.team||'')}"
@@ -823,14 +893,14 @@ function renderMetaPanel() {
         <label class="flabel">Tags (comma-separated)</label>
         <input class="finput" placeholder="finance, daily, critical" value="${esc(tagsStr)}"
                oninput="setMetaTags(this.value)">
-        <p class="text-[10px] text-slate-400 mt-1">Surfaced in /catalog and /templates-ui</p>
+        <p class="text-[10px] mt-1" style="color:var(--color-ink-3)">Surfaced in /catalog and /templates-ui</p>
       </div>
     </section>
 
     <section>
       <div class="flex items-center justify-between mb-2">
-        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SLA</p>
-        <label class="flex items-center gap-1.5 text-[10px] text-slate-500">
+        <p class="text-[10px] font-bold uppercase tracking-widest" style="color:var(--color-ink-2)">SLA</p>
+        <label class="flex items-center gap-1.5 text-[10px]" style="color:var(--color-ink-3)">
           <input type="checkbox" ${slaOn?'checked':''} onchange="toggleSLA(this.checked)">
           Enabled
         </label>
@@ -855,18 +925,18 @@ function renderMetaPanel() {
                  placeholder="${alertType==='email'?'oncall@example.com':'https://hooks.slack.com/...'}"
                  oninput="setAlertTarget(this.value)">
         </div>
-      ` : `<p class="text-[11px] text-slate-400">Pipelines without SLA never page.</p>`}
+      ` : `<p class="text-[11px]" style="color:var(--color-ink-3)">Pipelines without SLA never page.</p>`}
     </section>
 
     <section>
       <div class="flex items-center justify-between mb-2">
-        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Triggers</p>
-        <button onclick="addTrigger()" class="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200" title="Add trigger">
+        <p class="text-[10px] font-bold uppercase tracking-widest" style="color:var(--color-ink-2)">Triggers</p>
+        <button onclick="addTrigger()" class="w-5 h-5 rounded flex items-center justify-center" style="background:var(--color-accent-subtle);color:var(--color-accent)" title="Add trigger">
           <i class="fas fa-plus text-[9px]"></i>
         </button>
       </div>
       ${meta.triggers.length === 0
-        ? `<p class="text-[11px] text-slate-400">No event triggers. The pipeline runs only on schedule or manual /run.</p>`
+        ? `<p class="text-[11px]" style="color:var(--color-ink-3)">No event triggers. The pipeline runs only on schedule or manual /run.</p>`
         : meta.triggers.map((t,i) => `
           <div class="var-item">
             <div class="flex items-center justify-between mb-2">
@@ -874,7 +944,7 @@ function renderMetaPanel() {
                 <option value="file_sensor"          ${t.type==='file_sensor'?'selected':''}>File sensor</option>
                 <option value="pipeline_completion"  ${t.type==='pipeline_completion'?'selected':''}>Pipeline completion</option>
               </select>
-              <button onclick="deleteTrigger(${i})" class="text-red-400 hover:text-red-600 text-xs">
+              <button onclick="deleteTrigger(${i})" class="text-xs" style="color:var(--color-danger)">
                 <i class="fas fa-trash-can"></i>
               </button>
             </div>
@@ -967,12 +1037,12 @@ function renderPalette() {
   pal.innerHTML = Object.entries(TT).map(([key, tt]) => `
     <div class="pal-item" onclick="addTask('${key}')">
       <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-           style="background:${tt.color}20;border:1px solid ${tt.color}40">
+           style="background:var(--color-paper-3);border:1px solid var(--color-border)">
         <i class="fas ${tt.icon} text-[11px]" style="color:${tt.color}"></i>
       </div>
       <div class="min-w-0">
-        <p class="text-slate-700 text-xs font-semibold leading-tight">${tt.label}</p>
-        <p class="text-slate-400 text-[10px] truncate">${tt.desc}</p>
+        <p class="text-xs font-semibold leading-tight" style="color:var(--color-ink)">${tt.label}</p>
+        <p class="text-[10px] truncate" style="color:var(--color-ink-3)">${tt.desc}</p>
       </div>
     </div>
   `).join('');
@@ -1104,8 +1174,8 @@ function buildNodeHTML(task) {
         </button>
       </div>
       <div class="node-body" data-select="${task.id}">
-        <p class="text-slate-800 font-semibold truncate" style="font-size:12px">${esc(task.name)}</p>
-        <p class="text-slate-400 truncate mt-0.5" style="font-size:10px">${taskSummary(task)}</p>
+        <p class="font-semibold truncate" style="font-size:12px;color:var(--color-ink)">${esc(task.name)}</p>
+        <p class="truncate mt-0.5" style="font-size:10px;color:var(--color-ink-3)">${taskSummary(task)}</p>
       </div>
       <div class="port port-output" data-port="output" data-node="${task.id}"
            style="background:${tt.color}" title="Drag to connect"></div>
@@ -1354,9 +1424,16 @@ function wouldCycle(fromId, toId) {
 // ─────────────────────────────────────────
 function renderSVG() {
   const svg = document.getElementById('edge-svg');
+  // Resolve token colours at render time so SVG elements respect the active theme.
+  const cs      = getComputedStyle(document.documentElement);
+  const clrEdge = cs.getPropertyValue('--color-accent').trim()  || 'oklch(54% 0.22 250)';
+  const clrMute = cs.getPropertyValue('--color-ink-3').trim()   || 'oklch(52% 0.015 250)';
+  const clrBg   = cs.getPropertyValue('--color-surface').trim() || 'oklch(100% 0 0)';
+  const clrBdr  = cs.getPropertyValue('--color-border').trim()  || 'oklch(88% 0.010 250)';
+
   let h = `<defs>
-    <marker id="arr"      markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#6366f1"/></marker>
-    <marker id="arr-t"    markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#94a3b8"/></marker>
+    <marker id="arr"   markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="${clrEdge}"/></marker>
+    <marker id="arr-t" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="${clrMute}"/></marker>
   </defs>`;
 
   for (const edge of state.edges) {
@@ -1366,18 +1443,15 @@ function renderSVG() {
     const x2 = t.x,          y2 = t.y + NODE_H/2;
     const cx1 = x1 + 70, cx2 = x2 - 70;
     const mx = (x1+x2)/2, my = (y1+y2)/2;
-    const edgeColor = '#6366f1';
-    const markerId  = 'arr';
-    const dashArray = 'none';
     h += `<g>
       <path d="M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2}"
-            stroke="${edgeColor}" stroke-width="2" fill="none" opacity=".8"
-            stroke-dasharray="${dashArray}"
-            marker-end="url(#${markerId})"/>
-      <circle cx="${mx}" cy="${my}" r="9" fill="white" stroke="#e2e8f0" stroke-width="1.5"
+            stroke="${clrEdge}" stroke-width="2" fill="none" opacity=".8"
+            stroke-dasharray="none"
+            marker-end="url(#arr)"/>
+      <circle cx="${mx}" cy="${my}" r="9" fill="${clrBg}" stroke="${clrBdr}" stroke-width="1.5"
               style="cursor:pointer;pointer-events:all"
               onclick="removeEdge('${edge.from}','${edge.to}')"/>
-      <text x="${mx}" y="${my+4}" text-anchor="middle" fill="#94a3b8"
+      <text x="${mx}" y="${my+4}" text-anchor="middle" fill="${clrMute}"
             font-size="10" style="pointer-events:none">✕</text>
     </g>`;
   }
@@ -1385,7 +1459,7 @@ function renderSVG() {
   if (edgeDraw) {
     const cx1 = edgeDraw.x1 + 70, cx2 = edgeDraw.mouseX - 70;
     h += `<path d="M${edgeDraw.x1},${edgeDraw.y1} C${cx1},${edgeDraw.y1} ${cx2},${edgeDraw.mouseY} ${edgeDraw.mouseX},${edgeDraw.mouseY}"
-          stroke="#94a3b8" stroke-width="2" fill="none" stroke-dasharray="6,3"
+          stroke="${clrMute}" stroke-width="2" fill="none" stroke-dasharray="6,3"
           marker-end="url(#arr-t)"/>`;
   }
   svg.innerHTML = h;
@@ -1493,13 +1567,15 @@ function renderConfigPanel(task) {
     ${buildLineageFields(task)}
     <hr class="border-slate-100 my-3">
     ${buildQualityFields(task)}
-    <div class="mt-4 pt-3 border-t border-slate-100 flex gap-2">
+    <div class="mt-4 pt-3 flex gap-2" style="border-top:1px solid var(--color-border)">
       <button onclick="duplicateTask('${task.id}')"
-        class="flex-1 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 text-xs font-medium border border-indigo-100 transition-colors">
+        class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors"
+        style="color:var(--color-accent);border:1px solid var(--color-accent-subtle)" onmouseover="this.style.background='var(--color-accent-subtle)'" onmouseout="this.style.background=''">
         <i class="fas fa-copy mr-1"></i>Duplicate
       </button>
       <button onclick="deleteTask('${task.id}')"
-        class="flex-1 py-1.5 rounded-lg text-red-500 hover:bg-red-50 text-xs font-medium border border-red-100 transition-colors">
+        class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors"
+        style="color:var(--color-danger);border:1px solid var(--color-danger-subtle)" onmouseover="this.style.background='var(--color-danger-subtle)'" onmouseout="this.style.background=''">
         <i class="fas fa-trash-can mr-1"></i>Delete
       </button>
     </div>
@@ -1510,18 +1586,18 @@ function renderConfigPanel(task) {
     const helper = document.createElement('div');
     helper.id = 'var-ref-helper';
     if (pipeline.variables.length) {
-      helper.innerHTML += `<p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Variables</p>
+      helper.innerHTML += `<p class="text-[10px] font-bold uppercase tracking-widest mb-1.5" style="color:var(--color-ink-2)">Variables</p>
         <div class="flex flex-wrap">${pipeline.variables.map(v =>
           `<span class="var-badge" onclick="copyRef('\${var.${v.name}}')" title="Click to copy">\${var.${esc(v.name)}}</span>`
         ).join('')}</div>`;
     }
     if (pipeline.connections.length) {
-      helper.innerHTML += `<p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 mt-2">Connections</p>
+      helper.innerHTML += `<p class="text-[10px] font-bold uppercase tracking-widest mb-1.5 mt-2" style="color:var(--color-ink-2)">Connections</p>
         <div class="flex flex-wrap">${pipeline.connections.map(c =>
-          `<span class="var-badge" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0" onclick="copyRef('\${conn.${c.name}}')" title="Click to copy">\${conn.${esc(c.name)}}</span>`
+          `<span class="var-badge" style="background:var(--color-success-subtle);color:var(--color-success);border-color:var(--color-border)" onclick="copyRef('\${conn.${c.name}}')" title="Click to copy">\${conn.${esc(c.name)}}</span>`
         ).join('')}</div>`;
     }
-    helper.innerHTML += `<p class="text-[10px] text-slate-300 mt-2">Click a badge to copy reference</p>`;
+    helper.innerHTML += `<p class="text-[10px] mt-2" style="color:var(--color-border-2)">Click a badge to copy reference</p>`;
     scroll.appendChild(helper);
   }
 }
@@ -1539,11 +1615,11 @@ function buildConfigFields(task) {
              <option value="">— select connection —</option>
              ${sqlConns.map(cn => `<option value="${esc(cn.name)}" ${c.connection_name===cn.name?'selected':''}>${esc(cn.name)} (${cn.conn_type})</option>`).join('')}
            </select>`
-        : `<p class="text-[11px] text-amber-500">No SQL connections defined. Add one in the <strong>Conns</strong> tab.</p>`;
+        : `<p class="text-[11px]" style="color:var(--color-warning)">No SQL connections defined. Add one in the <strong>Conns</strong> tab.</p>`;
       return `
       <div class="frow flex items-center gap-2">
         <input type="checkbox" id="uc-${id}" ${usesConn?'checked':''} onchange="toggleSqlUseConn('${id}',this.checked)">
-        <label for="uc-${id}" class="text-xs text-slate-600">Use saved connection</label>
+        <label for="uc-${id}" class="text-xs" style="color:var(--color-ink-2)">Use saved connection</label>
       </div>
       ${usesConn ? `
         <div class="frow">
@@ -1580,13 +1656,13 @@ function buildConfigFields(task) {
         <textarea class="finput h-24" oninput="updateCfg('${id}','sql',this.value)">${esc(c.sql||'')}</textarea></div>
       <div class="frow flex items-center gap-2">
         <input type="checkbox" id="rd-${id}" ${c.return_data?'checked':''} onchange="updateCfg('${id}','return_data',this.checked)">
-        <label for="rd-${id}" class="text-xs text-slate-600">Return data to next task</label>
+        <label for="rd-${id}" class="text-xs" style="color:var(--color-ink-2)">Return data to next task</label>
       </div>`;
     }
 
     case 'python': return `
-      <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 mb-2 text-xs text-amber-800 flex gap-2">
-        <i class="fas fa-triangle-exclamation mt-0.5 shrink-0"></i>
+      <div class="rounded px-3 py-2 mb-2 text-xs flex gap-2" style="border:1px solid var(--color-warning);background:var(--color-warning-subtle);color:var(--color-ink-2)">
+        <i class="fas fa-triangle-exclamation mt-0.5 shrink-0" style="color:var(--color-warning)"></i>
         <span><strong>Security:</strong> Python code runs unsandboxed in the server process with full OS privileges. Only admin/editor users can save pipelines, but treat inline code as trusted operator input — not end-user input.</span>
       </div>
       <div class="frow">
@@ -1720,7 +1796,7 @@ function buildConfigFields(task) {
           <label class="flabel" style="margin-bottom:0">Quality Checks</label>
           <div class="relative">
             <button onclick="toggleTmplDd('${id}')"
-              class="flex items-center gap-1 text-[11px] text-indigo-500 hover:text-indigo-700 font-semibold">
+              class="flex items-center gap-1 text-[11px] font-semibold" style="color:var(--color-accent)" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
               <i class="fas fa-wand-magic-sparkles text-[10px]"></i> Template
             </button>
             <div id="tmpl-dd-${id}" class="tmpl-dd hidden">
@@ -1731,12 +1807,12 @@ function buildConfigFields(task) {
           </div>
         </div>
         <div id="checks-${id}" class="space-y-2">${renderChecks(task)}</div>
-        <button onclick="addCheck('${id}')" class="mt-2 w-full py-1 rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors">
+        <button onclick="addCheck('${id}')" class="mt-2 w-full py-1 rounded-lg border border-dashed text-xs transition-colors" style="border-color:var(--color-border);color:var(--color-ink-3)" onmouseover="this.style.borderColor='var(--color-accent)';this.style.color='var(--color-accent)'" onmouseout="this.style.borderColor='var(--color-border)';this.style.color='var(--color-ink-3)'">
           <i class="fas fa-plus mr-1"></i>Add custom check
         </button>
       </div>`;
 
-    default: return '<p class="text-xs text-slate-400">No configuration required.</p>';
+    default: return '<p class="text-xs" style="color:var(--color-ink-3)">No configuration required.</p>';
   }
 }
 
@@ -1773,7 +1849,7 @@ function buildLineageFields(task) {
   const reads  = (task.lineage && task.lineage.reads_from) || [];
   const writes = (task.lineage && task.lineage.writes_to)  || [];
   const chip = (uri, kind, i) => `
-    <span class="var-badge" style="background:${kind==='reads'?'#eff6ff':'#f0fdf4'};color:${kind==='reads'?'#1d4ed8':'#166534'};border-color:${kind==='reads'?'#bfdbfe':'#bbf7d0'}">
+    <span class="var-badge" style="background:${kind==='reads'?'var(--color-accent-subtle)':'var(--color-success-subtle)'};color:${kind==='reads'?'var(--color-accent)':'var(--color-success)'};border-color:var(--color-border)">
       ${esc(uri)}
       <button onclick="removeLineage('${task.id}','${kind}',${i})" class="ml-1 text-current opacity-50 hover:opacity-100">×</button>
     </span>`;
@@ -1790,7 +1866,7 @@ function buildLineageFields(task) {
       <input class="finput" placeholder="s3://bucket/orders.parquet — press Enter"
              onkeydown="if(event.key==='Enter'){addLineage('${task.id}','writes',this.value);this.value=''}">
     </div>
-    <p class="text-[10px] text-slate-400">Lineage powers /catalog and /lineage-viz</p>
+    <p class="text-[10px]" style="color:var(--color-ink-3)">Lineage powers /catalog and /lineage-viz</p>
   `;
 }
 
@@ -1825,25 +1901,25 @@ function removeLineage(taskId, kind, i) {
 function buildQualityFields(task) {
   // The validation task type has its own dedicated checks editor in buildConfigFields.
   if (task.typeKey === 'validation') {
-    return `<p class="text-[10px] text-slate-400">Quality checks are configured above (this is a validation task).</p>`;
+    return `<p class="text-[10px]" style="color:var(--color-ink-3)">Quality checks are configured above (this is a validation task).</p>`;
   }
   const checks = (task.quality && task.quality.checks) || [];
   return `
     <div class="flex items-center justify-between mb-2">
       <label class="flabel mb-0">Quality Checks (post-run)</label>
-      <button onclick="addQualityCheck('${task.id}')" class="text-indigo-500 hover:text-indigo-700 text-xs font-semibold">
+      <button onclick="addQualityCheck('${task.id}')" class="text-xs font-semibold" style="color:var(--color-accent)" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
         <i class="fas fa-plus mr-1"></i>Add
       </button>
     </div>
     ${checks.length === 0
-      ? `<p class="text-[10px] text-slate-400">SQL assertions run against the task's result. Fails the task on mismatch.</p>`
+      ? `<p class="text-[10px]" style="color:var(--color-ink-3)">SQL assertions run against the task's result. Fails the task on mismatch.</p>`
       : checks.map((ch, i) => `
         <div class="var-item">
           <div class="flex items-center justify-between mb-1">
             <input class="finput" style="flex:1;margin-right:6px" placeholder="check name"
                    value="${esc(ch.name||'')}"
                    oninput="updateQualityCheck('${task.id}',${i},'name',this.value)">
-            <button onclick="removeQualityCheck('${task.id}',${i})" class="text-red-400 hover:text-red-600 text-xs">
+            <button onclick="removeQualityCheck('${task.id}',${i})" class="text-xs" style="color:var(--color-danger)">
               <i class="fas fa-trash-can"></i>
             </button>
           </div>
@@ -1931,15 +2007,15 @@ function addTmplCheck(taskId, idx) {
 // ── Validation check helpers ──
 function renderChecks(task) {
   return (task.config.checks || []).map((ch, i) => `
-    <div class="bg-slate-50 rounded-lg p-2 border border-slate-200">
+    <div class="rounded-lg p-2" style="background:var(--color-paper-2);border:1px solid var(--color-border)">
       <div class="flex items-center justify-between mb-1">
         <input class="finput text-[11px] flex-1 mr-2" value="${esc(ch.name||'')}" placeholder="Check name"
                oninput="updateCheck('${task.id}',${i},'name',this.value)">
-        <button onclick="removeCheck('${task.id}',${i})" class="text-slate-400 hover:text-red-500 text-xs shrink-0">✕</button>
+        <button onclick="removeCheck('${task.id}',${i})" class="text-xs shrink-0" style="color:var(--color-ink-3)" onmouseover="this.style.color='var(--color-danger)'" onmouseout="this.style.color='var(--color-ink-3)'">✕</button>
       </div>
       <textarea class="finput text-[11px] h-12 mb-1" placeholder="SQL..." oninput="updateCheck('${task.id}',${i},'sql',this.value)">${esc(ch.sql||'')}</textarea>
       <div class="flex items-center gap-2">
-        <span class="text-[10px] text-slate-500">Expect:</span>
+        <span class="text-[10px]" style="color:var(--color-ink-2)">Expect:</span>
         <input class="finput text-[11px] w-20" type="number" value="${ch.expect||0}" oninput="updateCheck('${task.id}',${i},'expect',parseInt(this.value))">
       </div>
     </div>
@@ -2403,10 +2479,10 @@ function renderCronPreview() {
     i++;
   }
   if (!hits.length) {
-    out.innerHTML = `<li class="text-slate-400">No matching runs in the next 14 days.</li>`;
+    out.innerHTML = `<li style="color:var(--color-ink-3)">No matching runs in the next 14 days.</li>`;
     return;
   }
-  out.innerHTML = hits.map(d => `<li><i class="far fa-clock text-indigo-400 mr-1"></i>${d.toLocaleString()}</li>`).join('');
+  out.innerHTML = hits.map(d => `<li><i class="far fa-clock mr-1" style="color:var(--color-accent)"></i>${d.toLocaleString()}</li>`).join('');
 }
 function applySchedule() {
   state.schedule = {
@@ -2585,13 +2661,14 @@ function showStatus(msg, color) { _renderStatus(esc(msg), color); }
 function showStatusHTML(html, color) { _renderStatus(html, color); }
 function _renderStatus(innerHTML, color) {
   const bar = document.getElementById('statusBar');
-  const colors = {
-    green:  'bg-green-50 text-green-700 border-green-200',
-    red:    'bg-red-50 text-red-700 border-red-200',
-    amber:  'bg-amber-50 text-amber-700 border-amber-200',
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  const styles = {
+    green:  `background:var(--color-success-subtle);color:oklch(38% 0.18 150);border-bottom-color:var(--color-success)`,
+    red:    `background:var(--color-danger-subtle);color:oklch(38% 0.22 25);border-bottom-color:var(--color-danger)`,
+    amber:  `background:var(--color-warning-subtle);color:oklch(40% 0.17 65);border-bottom-color:var(--color-warning)`,
+    indigo: `background:var(--color-accent-subtle);color:var(--color-accent);border-bottom-color:var(--color-accent)`,
   };
-  bar.className = `px-5 py-1.5 text-xs font-medium flex items-center gap-2 border-b ${colors[color]||colors.indigo}`;
+  bar.className = 'px-5 py-1.5 text-xs font-medium flex items-center gap-2 border-b';
+  bar.style.cssText = styles[color] || styles.indigo;
   bar.innerHTML = `<i class="fas fa-circle-info"></i> ${innerHTML}`;
   bar.classList.remove('hidden');
   if (color !== 'indigo') setTimeout(() => bar.classList.add('hidden'), 6000);
@@ -2612,14 +2689,14 @@ let _allPipelines = [];
 async function openPipelineModal() {
   document.getElementById('open-modal').classList.remove('hidden');
   document.getElementById('open-search').value = '';
-  document.getElementById('open-list').innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Loading…</p>';
+  document.getElementById('open-list').innerHTML = '<p class="text-xs text-center py-4" style="color:var(--color-ink-3)">Loading…</p>';
   try {
     const r = await fetch('/pipelines');
     const d = await r.json();
     _allPipelines = d.pipelines || [];
     renderOpenList(_allPipelines);
   } catch {
-    document.getElementById('open-list').innerHTML = '<p class="text-xs text-red-400 text-center py-4">Failed to load pipelines.</p>';
+    document.getElementById('open-list').innerHTML = '<p class="text-xs text-center py-4" style="color:var(--color-danger)">Failed to load pipelines.</p>';
   }
 }
 
@@ -2632,18 +2709,18 @@ async function openVersionsModal() {
   const name = (document.getElementById('pipelineName').value || 'my_pipeline').replace(/\s+/g,'_');
   document.getElementById('ver-modal').classList.remove('hidden');
   document.getElementById('ver-label').textContent = name + ' — every Save snapshots (deduped by SHA-256)';
-  document.getElementById('ver-list').innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Loading…</p>';
+  document.getElementById('ver-list').innerHTML = '<p class="text-xs text-center py-6" style="color:var(--color-ink-3)">Loading…</p>';
   document.getElementById('ver-yaml').textContent = 'Select a version on the left to view its YAML.';
   try {
     const r = await fetch('/versions/' + encodeURIComponent(name));
     if (!r.ok) {
-      document.getElementById('ver-list').innerHTML = `<p class="text-xs text-amber-500 text-center py-6">No versions yet. Save the pipeline first.</p>`;
+      document.getElementById('ver-list').innerHTML = `<p class="text-xs text-center py-6" style="color:var(--color-warning)">No versions yet. Save the pipeline first.</p>`;
       return;
     }
     const versions = await r.json();
     renderVersionList(name, versions);
   } catch (e) {
-    document.getElementById('ver-list').innerHTML = `<p class="text-xs text-red-400 text-center py-6">Failed to load: ${esc(e.message)}</p>`;
+    document.getElementById('ver-list').innerHTML = `<p class="text-xs text-center py-6" style="color:var(--color-danger)">Failed to load: ${esc(e.message)}</p>`;
   }
 }
 
@@ -2652,7 +2729,7 @@ function closeVersionsModal() { document.getElementById('ver-modal').classList.a
 function renderVersionList(pipelineName, versions) {
   const list = document.getElementById('ver-list');
   if (!versions || !versions.length) {
-    list.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">No versions yet.</p>`;
+    list.innerHTML = `<p class="text-xs text-center py-6" style="color:var(--color-ink-3)">No versions yet.</p>`;
     return;
   }
   list.innerHTML = versions.map((v, i) => {
@@ -2661,12 +2738,13 @@ function renderVersionList(pipelineName, versions) {
     const shortHash = (v.version_hash || '').substring(0, 8);
     return `
       <div onclick="loadVersion('${esc(pipelineName)}','${esc(v.version_id)}',this)"
-           class="px-3 py-2 rounded-lg hover:bg-indigo-50 cursor-pointer border border-transparent hover:border-indigo-200 transition-colors">
+           class="px-3 py-2 rounded-lg cursor-pointer border border-transparent transition-colors"
+           onmouseover="this.style.background='var(--color-accent-subtle)';this.style.borderColor='var(--color-accent)'" onmouseout="this.style.background='';this.style.borderColor='transparent'">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold text-slate-700">${esc(ts || ('v' + v.version_id))}</span>
-          ${isHead ? '<span class="text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">HEAD</span>' : ''}
+          <span class="text-xs font-semibold" style="color:var(--color-ink)">${esc(ts || ('v' + v.version_id))}</span>
+          ${isHead ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="color:var(--color-success);background:var(--color-success-subtle)">HEAD</span>` : ''}
         </div>
-        <p class="text-[10px] text-slate-400 mt-0.5">${esc(v.saved_by||'unknown')} · <code>${shortHash}</code></p>
+        <p class="text-[10px] mt-0.5" style="color:var(--color-ink-3)">${esc(v.saved_by||'unknown')} · <code>${shortHash}</code></p>
       </div>`;
   }).join('');
 }
@@ -2694,20 +2772,21 @@ function filterOpenList(query) {
 function renderOpenList(pipelines) {
   const list = document.getElementById('open-list');
   if (!pipelines.length) {
-    list.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">No pipelines found.</p>';
+    list.innerHTML = '<p class="text-xs text-center py-6" style="color:var(--color-ink-3)">No pipelines found.</p>';
     return;
   }
   list.innerHTML = pipelines.map(p => `
     <div onclick="loadPipeline('${esc(p.file_path)}')"
-         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 border border-transparent cursor-pointer transition-all group">
-      <div class="w-9 h-9 rounded-lg bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center shrink-0 transition-colors">
-        <i class="fas fa-diagram-project text-slate-400 group-hover:text-indigo-500 text-sm transition-colors"></i>
+         class="flex items-center gap-3 px-4 py-3 rounded-xl border border-transparent cursor-pointer transition-all"
+         onmouseover="this.style.background='var(--color-accent-subtle)';this.style.borderColor='var(--color-accent)'" onmouseout="this.style.background='';this.style.borderColor='transparent'">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors" style="background:var(--color-paper-3)">
+        <i class="fas fa-diagram-project text-sm" style="color:var(--color-ink-3)"></i>
       </div>
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-semibold text-slate-800 truncate">${esc(p.display_name)}</p>
-        <p class="text-xs text-slate-400 truncate">${esc(p.description||'No description')} · ${p.task_count} task${p.task_count!==1?'s':''}</p>
+        <p class="text-sm font-semibold truncate" style="color:var(--color-ink)">${esc(p.display_name)}</p>
+        <p class="text-xs truncate" style="color:var(--color-ink-3)">${esc(p.description||'No description')} · ${p.task_count} task${p.task_count!==1?'s':''}</p>
       </div>
-      <i class="fas fa-arrow-right text-slate-300 group-hover:text-indigo-400 text-xs transition-colors"></i>
+      <i class="fas fa-arrow-right text-xs" style="color:var(--color-border-2)"></i>
     </div>
   `).join('');
 }

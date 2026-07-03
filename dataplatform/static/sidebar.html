@@ -1,0 +1,164 @@
+<!-- ══ Hallmark · Cobalt · canonical sidebar snippet ══════════════════════
+     Copy everything between these comment markers into each page.
+     Set class="is-active" and aria-current="page" on the correct nav link.
+     Requires: /static/tokens.css and /static/sidebar.css in <head>.
+  ═══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Mobile hamburger (fixed, top-left, hidden on desktop by sidebar.css) -->
+<button
+  class="dp-sidebar-toggle"
+  id="dpSidebarToggle"
+  aria-label="Open navigation"
+  aria-expanded="false"
+  aria-controls="dpSidebar"
+>
+  <i class="fas fa-bars" aria-hidden="true"></i>
+</button>
+
+<!-- Tap-away overlay (mobile only) -->
+<div class="dp-sidebar-overlay" id="dpSidebarOverlay" aria-hidden="true"></div>
+
+<!-- Sidebar -->
+<aside class="dp-sidebar" id="dpSidebar" role="navigation" aria-label="Main navigation">
+
+  <!-- Brand -->
+  <div class="dp-sidebar__brand">
+    <div class="dp-sidebar__logo" aria-hidden="true">
+      <i class="fas fa-layer-group"></i>
+    </div>
+    <div class="dp-sidebar__brand-text">
+      <span class="dp-sidebar__brand-name">Data Platform</span>
+      <span class="dp-sidebar__brand-sub">Suite</span>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="dp-sidebar__nav" aria-label="Application navigation">
+
+    <!-- Top-level: Overview -->
+    <a href="/" class="dp-sidebar__item">
+      <i class="fas fa-house dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Overview</span>
+    </a>
+
+    <!-- Group: Pipelines -->
+    <div class="dp-sidebar__group" aria-hidden="true">Pipelines</div>
+
+    <a href="/dashboard" class="dp-sidebar__item">
+      <i class="fas fa-wave-square dp-sidebar__icon" aria-hidden="true"></i>
+      <span>DP Flow</span>
+    </a>
+
+    <a href="/job-builder" class="dp-sidebar__item">
+      <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Job Builder</span>
+    </a>
+
+    <a href="/templates-ui" class="dp-sidebar__item">
+      <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Templates</span>
+    </a>
+
+    <a href="/generator" class="dp-sidebar__item">
+      <i class="fas fa-wand-magic-sparkles dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Generator</span>
+    </a>
+
+    <!-- Group: Observability -->
+    <div class="dp-sidebar__group" aria-hidden="true">Observability</div>
+
+    <a href="/monitoring" class="dp-sidebar__item">
+      <i class="fas fa-chart-line dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Monitoring</span>
+    </a>
+
+    <a href="/lineage-viz" class="dp-sidebar__item">
+      <i class="fas fa-diagram-project dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Lineage</span>
+    </a>
+
+    <a href="/alerts" class="dp-sidebar__item">
+      <i class="fas fa-bell dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Alerts</span>
+      <span id="navAlertBadge" class="dp-sidebar__badge hidden" aria-label="active alerts">1</span>
+    </a>
+
+    <!-- Group: Governance -->
+    <div class="dp-sidebar__group" aria-hidden="true">Governance</div>
+
+    <a href="/catalog" class="dp-sidebar__item">
+      <i class="fas fa-database dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Catalog</span>
+    </a>
+
+    <a href="/costs" class="dp-sidebar__item">
+      <i class="fas fa-coins dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Costs</span>
+    </a>
+
+    <a href="/git-integration" class="dp-sidebar__item">
+      <i class="fas fa-code-branch dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Git Integration</span>
+    </a>
+
+    <!-- Group: Admin -->
+    <div class="dp-sidebar__group" aria-hidden="true">Admin</div>
+
+    <a href="/admin" class="dp-sidebar__item">
+      <i class="fas fa-shield-halved dp-sidebar__icon" aria-hidden="true"></i>
+      <span>Users &amp; Roles</span>
+    </a>
+
+  </nav>
+
+  <!-- User footer -->
+  <div class="dp-sidebar__footer">
+    <div class="dp-sidebar__avatar" aria-hidden="true">
+      <i class="fas fa-user"></i>
+    </div>
+    <div class="dp-sidebar__user-info">
+      <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
+      <span class="dp-sidebar__userrole">Data Platform</span>
+    </div>
+    <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
+      <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+    </button>
+  </div>
+
+</aside>
+
+<!-- Mobile toggle script (inline — no external dependency) -->
+<script>
+(function () {
+  var toggle  = document.getElementById('dpSidebarToggle');
+  var sidebar = document.getElementById('dpSidebar');
+  var overlay = document.getElementById('dpSidebarOverlay');
+  if (!toggle || !sidebar || !overlay) return;
+
+  function open() {
+    sidebar.classList.add('is-open');
+    overlay.classList.add('is-open');
+    overlay.removeAttribute('aria-hidden');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.querySelector('i').className = 'fas fa-xmark';
+  }
+
+  function close() {
+    sidebar.classList.remove('is-open');
+    overlay.classList.remove('is-open');
+    overlay.setAttribute('aria-hidden', 'true');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.querySelector('i').className = 'fas fa-bars';
+  }
+
+  toggle.addEventListener('click', function () {
+    sidebar.classList.contains('is-open') ? close() : open();
+  });
+
+  overlay.addEventListener('click', close);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && sidebar.classList.contains('is-open')) close();
+  });
+}());
+</script>
