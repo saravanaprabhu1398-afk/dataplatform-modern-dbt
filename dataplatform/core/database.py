@@ -1469,6 +1469,16 @@ def get_queue_runs(
     return [dict(r._mapping) for r in rows]
 
 
+def get_queue_run(run_id: str) -> Optional[Dict[str, Any]]:
+    """Return one persistent queue entry by run_id, or None."""
+    with _get_conn() as conn:
+        row = conn.execute(
+            text("SELECT * FROM pipeline_queue WHERE run_id = :run_id"),
+            {"run_id": run_id},
+        ).fetchone()
+    return dict(row._mapping) if row else None
+
+
 def recover_orphaned_runs() -> int:
     """Mark any run stuck in queued/running state as failed on server restart.
 

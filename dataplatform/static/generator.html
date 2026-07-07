@@ -20,7 +20,131 @@
         }
         .animate-fadeIn { animation: fadeIn 0.25s ease-out; }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .nlp-badge { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); }
+        .nlp-badge { background: linear-gradient(135deg, oklch(61% 0.210 38) 0%, oklch(70% 0.160 66) 100%); }
+        .generator-shell {
+            background:
+                radial-gradient(circle at 18% 0%, oklch(88% 0.060 48 / 0.46), transparent 28%),
+                linear-gradient(180deg, var(--color-paper) 0%, var(--color-paper-2) 100%);
+            color: var(--color-ink);
+        }
+        .generator-topbar {
+            background: oklch(100% 0 0 / 0.88);
+            border-bottom: 1px solid var(--color-border);
+            backdrop-filter: blur(14px);
+        }
+        .generator-hero,
+        .generator-card {
+            background: oklch(100% 0 0 / 0.92);
+            border: 1px solid var(--color-border);
+            box-shadow: var(--shadow-sm);
+        }
+        .generator-hero {
+            background:
+                linear-gradient(135deg, oklch(100% 0 0 / 0.96), oklch(98% 0.010 70 / 0.9)),
+                radial-gradient(circle at 96% 0%, oklch(82% 0.120 58 / 0.30), transparent 30%);
+        }
+        .generator-section-title i {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-md);
+            background: oklch(96% 0.040 58);
+            color: oklch(58% 0.180 42);
+        }
+        .generator-field {
+            background: oklch(100% 0 0 / 0.92);
+            border-color: var(--color-border);
+        }
+        .generator-field:focus {
+            border-color: oklch(61% 0.210 38);
+            box-shadow: 0 0 0 3px oklch(61% 0.210 38 / 0.14);
+        }
+        .generator-primary {
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
+            box-shadow: 0 10px 18px oklch(61% 0.210 38 / 0.20);
+        }
+        .generator-primary:hover {
+            filter: brightness(0.97);
+        }
+        .generator-secondary {
+            background: oklch(100% 0 0 / 0.88);
+            border-color: var(--color-border);
+            color: var(--color-ink-2);
+        }
+        .generator-secondary:hover {
+            background: var(--color-paper-2);
+            border-color: var(--color-border-2);
+        }
+        .generator-codeframe {
+            min-height: 520px;
+            overflow: hidden;
+            border-radius: var(--radius-lg);
+            border: 1px solid oklch(28% 0.028 250);
+            background:
+                radial-gradient(circle at 18% 0%, oklch(32% 0.060 190 / 0.32), transparent 34%),
+                linear-gradient(180deg, oklch(16% 0.024 250), oklch(12% 0.026 250));
+            box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.06);
+        }
+        .generator-yaml-textarea {
+            min-height: 520px;
+            background: transparent !important;
+            color: oklch(84% 0.110 150);
+            caret-color: oklch(76% 0.160 72);
+        }
+        .generator-yaml-textarea:focus {
+            box-shadow: inset 0 0 0 2px oklch(61% 0.210 38 / 0.70);
+        }
+        .generator-empty-state {
+            background:
+                radial-gradient(circle at 50% 28%, oklch(42% 0.090 190 / 0.30), transparent 24%),
+                linear-gradient(180deg, oklch(15% 0.025 250 / 0.98), oklch(11% 0.026 250 / 0.98));
+        }
+        .generator-empty-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: oklch(25% 0.050 230);
+            color: oklch(76% 0.160 72);
+            box-shadow: 0 14px 30px oklch(0% 0 0 / 0.22);
+        }
+        .generator-empty-lines {
+            width: min(280px, 70%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 22px;
+        }
+        .generator-empty-line {
+            height: 8px;
+            border-radius: 999px;
+            background: oklch(100% 0 0 / 0.08);
+        }
+        .generator-accent-text { color: oklch(55% 0.180 38) !important; }
+        .generator-accent-soft {
+            background: oklch(96% 0.040 58) !important;
+            color: oklch(40% 0.120 38) !important;
+            border-color: oklch(88% 0.060 58) !important;
+        }
+        .generator-step-index {
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
+        }
+        @media (max-width: 767px) {
+            .generator-content { padding: 16px; }
+            .generator-shortcut { display: none; }
+            .generator-codeframe,
+            .generator-yaml-textarea { min-height: 380px; }
+            #toastContainer {
+                left: 16px;
+                right: 16px;
+                top: 76px;
+                width: auto;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
@@ -100,10 +224,10 @@
 </script>
 
     <!-- ═══════════════════════════ PAGE SHELL ═══════════════════════════ -->
-    <div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+    <div class="pl-56 min-h-screen flex flex-col generator-shell">
 
         <!-- Topbar -->
-        <header class="bg-white border-b border-slate-200 px-6 py-3.5 sticky top-0 z-30">
+        <header class="generator-topbar px-6 py-3.5 sticky top-0 z-30">
             <div class="flex items-center justify-between">
                 <!-- Breadcrumb -->
                 <nav class="flex items-center gap-1.5 text-sm">
@@ -112,17 +236,17 @@
                     <span class="text-slate-700 font-medium">Generator Studio</span>
                 </nav>
                 <!-- Keyboard hint -->
-                <span class="text-xs text-slate-400 select-none">
+                <span class="generator-shortcut text-xs text-slate-400 select-none">
                     <i class="fas fa-keyboard mr-1.5"></i>Ctrl+Enter to generate
                 </span>
             </div>
         </header>
 
         <!-- Content -->
-        <main class="flex-1 p-6">
+        <main class="generator-content flex-1 p-6">
 
             <!-- ── Page header card ── -->
-            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div class="generator-hero rounded-xl p-5">
                 <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
                         <h1 class="text-xl font-bold text-slate-900">Pipeline YAML Generator</h1>
@@ -143,10 +267,10 @@
                                 <span class="text-xs text-slate-500 font-medium">Engine:</span>
                                 <span id="generatorDetectedLanguage" class="text-xs text-slate-700 font-semibold">-</span>
                             </div>
-                            <div class="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-1.5">
-                                <i class="fas fa-sitemap text-indigo-400 text-xs"></i>
-                                <span class="text-xs text-indigo-500 font-medium">Pipeline:</span>
-                                <span id="generatorPipelineName" class="text-xs text-indigo-700 font-semibold">-</span>
+                            <div class="flex items-center gap-1.5 rounded-lg px-3 py-1.5" style="background:oklch(96% 0.040 58);border:1px solid oklch(88% 0.060 58);">
+                                <i class="fas fa-sitemap text-xs" style="color:oklch(58% 0.180 42);"></i>
+                                <span class="text-xs font-medium" style="color:oklch(48% 0.120 42);">Pipeline:</span>
+                                <span id="generatorPipelineName" class="text-xs font-semibold" style="color:oklch(34% 0.080 42);">-</span>
                             </div>
                             <!-- Task count badge -->
                             <div id="taskCountBadge" class="hidden items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
@@ -162,11 +286,11 @@
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
 
                 <!-- Left column: Input -->
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
+                <div class="generator-card rounded-xl p-5 flex flex-col gap-4">
 
                     <!-- Label -->
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-pen-to-square text-indigo-500 text-sm"></i>
+                    <div class="generator-section-title flex items-center gap-2">
+                        <i class="fas fa-pen-to-square text-sm"></i>
                         <span class="text-sm font-semibold text-slate-700">Instructions</span>
                     </div>
 
@@ -181,22 +305,22 @@ Build a daily sales pipeline.
 - Run dbt models: stg_orders, int_orders_enriched, fct_daily_sales
 - Load final results into Snowflake (target: analytics.sales)
 - Schedule: every day at 06:00 UTC"
-                        class="w-full border border-slate-200 rounded-lg p-3 text-sm font-sans text-slate-800 placeholder-slate-400 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+                        class="generator-field w-full border rounded-lg p-3 text-sm font-sans text-slate-800 placeholder-slate-400 resize-y focus:outline-none transition"
                     ></textarea>
 
                     <!-- Action buttons -->
                     <div class="flex flex-wrap gap-2">
                         <button id="generatePipelineYamlBtn"
-                            class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                            class="generator-primary inline-flex items-center gap-2 text-white rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
                             <i class="fas fa-wand-magic-sparkles"></i>Generate
                         </button>
                         <button id="downloadGeneratedYamlBtn"
-                            class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium transition-colors">
+                            class="generator-secondary inline-flex items-center gap-2 border rounded-lg px-4 py-2 text-sm font-medium transition-colors">
                             <i class="fas fa-download text-emerald-600"></i>Download
                         </button>
                         <button id="saveGeneratedYamlBtn"
-                            class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-                            <i class="fas fa-floppy-disk text-blue-600"></i>Save to Library
+                            class="generator-secondary inline-flex items-center gap-2 border rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                            <i class="fas fa-floppy-disk generator-accent-text"></i>Save to Library
                         </button>
                     </div>
 
@@ -209,7 +333,7 @@ Build a daily sales pipeline.
                             id="generatedPipelineFilename"
                             type="text"
                             placeholder="generated_pipeline"
-                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
+                            class="generator-field w-full border rounded-lg px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none transition"
                         >
                         <p class="text-xs text-slate-400 mt-1.5">
                             Saved as <code class="bg-slate-100 text-slate-600 px-1 py-0.5 rounded text-[11px]">pipelines/&lt;name&gt;.yaml</code>
@@ -226,7 +350,7 @@ Build a daily sales pipeline.
                 </div>
 
                 <!-- Right column: YAML preview -->
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
+                <div class="generator-card rounded-xl p-5 flex flex-col gap-4">
 
                     <!-- Label row with copy button -->
                     <div class="flex items-center justify-between">
@@ -236,26 +360,33 @@ Build a daily sales pipeline.
                         </div>
                         <button id="copyBtn"
                             title="Copy to clipboard"
-                            class="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors">
+                            class="generator-secondary inline-flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-xs font-medium transition-colors">
                             <i class="fas fa-copy"></i>
                             <span id="copyBtnLabel">Copy</span>
                         </button>
                     </div>
 
                     <!-- Code area + empty-state overlay wrapper -->
-                    <div class="relative flex-1">
+                    <div class="generator-codeframe relative flex-1">
                         <textarea
                             id="generatedPipelineYamlPreview"
                             rows="22"
-                            class="w-full bg-slate-950 text-emerald-300 font-mono text-xs resize-y rounded-lg p-4 border-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                            class="generator-yaml-textarea w-full font-mono text-xs resize-y rounded-lg p-4 border-0 focus:outline-none transition"
                         ></textarea>
 
                         <!-- Empty-state overlay -->
                         <div id="yamlEmptyState"
-                            class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none rounded-lg bg-slate-950">
-                            <i class="fas fa-code text-4xl text-slate-600 mb-3"></i>
-                            <p class="text-slate-500 font-medium text-sm">Generated YAML will appear here</p>
+                            class="generator-empty-state absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none rounded-lg">
+                            <div class="generator-empty-icon mb-4">
+                                <i class="fas fa-code text-2xl"></i>
+                            </div>
+                            <p class="text-slate-300 font-semibold text-sm">Generated YAML will appear here</p>
                             <p class="text-slate-400 text-sm mt-1">Enter instructions on the left and click Generate</p>
+                            <div class="generator-empty-lines" aria-hidden="true">
+                                <span class="generator-empty-line"></span>
+                                <span class="generator-empty-line" style="width:78%;"></span>
+                                <span class="generator-empty-line" style="width:58%;"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -268,11 +399,11 @@ Build a daily sales pipeline.
                     <!-- Panel header -->
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
-                                <i class="fas fa-brain text-violet-600 text-xs"></i>
+                            <div class="generator-accent-soft w-7 h-7 rounded-lg flex items-center justify-center shrink-0">
+                                <i class="fas fa-brain text-xs"></i>
                             </div>
                             <span class="text-sm font-semibold text-slate-700">NLP Intent Analysis</span>
-                            <span class="bg-violet-100 text-violet-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">per task</span>
+                            <span class="generator-accent-soft text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">per task</span>
                         </div>
                         <p class="text-xs text-slate-400">How the NLP engine understood each step of your description</p>
                     </div>
@@ -296,7 +427,7 @@ Build a daily sales pipeline.
                 success: ['bg-emerald-600', 'fa-circle-check'],
                 error:   ['bg-red-600',     'fa-circle-xmark'],
                 warning: ['bg-amber-500',   'fa-triangle-exclamation'],
-                info:    ['bg-indigo-600',  'fa-circle-info']
+                info:    ['bg-orange-600',  'fa-circle-info']
             }[type] || ['bg-slate-700', 'fa-circle-info'];
 
             const t = document.createElement('div');
@@ -396,9 +527,9 @@ Build a daily sales pipeline.
                 kafka:     'bg-red-100 text-red-700 border-red-200',
                 python:    'bg-green-100 text-green-700 border-green-200',
                 shell:     'bg-slate-100 text-slate-600 border-slate-200',
-                api:       'bg-purple-100 text-purple-700 border-purple-200',
+                api:       'bg-amber-100 text-amber-700 border-amber-200',
                 email:     'bg-pink-100 text-pink-700 border-pink-200',
-                file:      'bg-indigo-100 text-indigo-700 border-indigo-200',
+                file:      'bg-orange-100 text-orange-700 border-orange-200',
             };
 
             const PLUGIN_ICONS = {
@@ -419,7 +550,7 @@ Build a daily sales pipeline.
 
             function operationChip(op) {
                 if (!op) return '';
-                return `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">${op}</span>`;
+                return `<span class="generator-accent-soft border px-2 py-0.5 rounded-full text-[11px] font-semibold">${op}</span>`;
             }
 
             grid.innerHTML = summary.map((item, i) => {
@@ -435,7 +566,7 @@ Build a daily sales pipeline.
                     `<span class="bg-orange-50 text-orange-600 border border-orange-200 px-1.5 py-0.5 rounded text-[10px] font-mono">${m}</span>`
                 ).join('');
                 const parallelBadge = item.parallel
-                    ? `<span class="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">parallel</span>` : '';
+                    ? `<span class="generator-accent-soft px-1.5 py-0.5 rounded-full text-[10px] font-bold">parallel</span>` : '';
 
                 const hasDetails = srcChip || tgtChip || tables || models;
 
@@ -443,7 +574,7 @@ Build a daily sales pipeline.
                     <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-2">
                         <div class="flex items-center justify-between gap-2">
                             <div class="flex items-center gap-2">
-                                <span class="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">${i + 1}</span>
+                                <span class="generator-step-index w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0">${i + 1}</span>
                                 ${opChip}
                                 ${item.verb && item.verb !== item.operation
                                     ? `<span class="text-slate-400 text-[10px] font-medium">(${item.verb})</span>` : ''}

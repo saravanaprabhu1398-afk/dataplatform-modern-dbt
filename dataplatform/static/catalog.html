@@ -55,9 +55,20 @@
         }
         .catalog-search:focus {
             border-color: var(--color-accent);
-            box-shadow: 0 0 0 3px oklch(54% 0.22 250 / 0.12);
+            box-shadow: 0 0 0 3px oklch(61% 0.210 38 / 0.12);
         }
         .catalog-search::placeholder { color: var(--color-ink-3); }
+        #toastContainer {
+            top: 76px;
+        }
+        @media (max-width: 767px) {
+            #toastContainer {
+                left: 16px;
+                right: 16px;
+                top: 76px;
+                width: auto;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen" style="background: var(--color-paper); font-family: var(--font-body); overflow-x: clip;">
@@ -285,7 +296,7 @@ function showToast(msg, type = 'info') {
         success: ['bg-emerald-600', 'fa-circle-check'],
         error:   ['bg-red-600',     'fa-circle-xmark'],
         warning: ['bg-amber-500',   'fa-triangle-exclamation'],
-        info:    ['bg-indigo-600',  'fa-circle-info']
+        info:    ['bg-orange-600',  'fa-circle-info']
     }[type] || ['bg-slate-700', 'fa-circle-info'];
     const t = document.createElement('div');
     t.className = `${cfg[0]} text-white px-4 py-3 rounded-xl shadow-xl border border-white/20 flex items-start gap-3 pointer-events-auto`;
@@ -348,10 +359,12 @@ function renderAssetGrid(assets) {
 
     panel.innerHTML = `<div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-6); padding: var(--space-6);">
         ${assets.map(a => {
-            const bs = typeBadgeStyle(a.type);
+            const assetUri = a.asset_uri || a.name || '—';
+            const assetType = a.asset_type || a.type || 'asset';
+            const bs = typeBadgeStyle(assetType);
             const safeDesc = (a.description || '').replace(/</g,'&lt;');
-            const safeName = (a.name || '—').replace(/</g,'&lt;');
-            const safeType = (a.type || '').replace(/</g,'&lt;');
+            const safeName = assetUri.replace(/</g,'&lt;');
+            const safeType = assetType.replace(/</g,'&lt;');
             return `
             <div class="asset-card">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
@@ -359,7 +372,12 @@ function renderAssetGrid(assets) {
                     <span style="font-size:var(--text-xs);font-weight:600;padding:2px 10px;border-radius:var(--radius-full);background:${bs.bg};color:${bs.color};white-space:nowrap;flex-shrink:0;">${safeType || 'asset'}</span>
                 </div>
                 ${safeDesc ? `<p style="font-size:var(--text-sm);color:var(--color-ink-3);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${safeDesc}</p>` : ''}
-                <a href="/lineage-viz?asset=${encodeURIComponent(a.name || '')}"
+                <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:var(--text-xs);color:var(--color-ink-3);">
+                    <span>${a.pipeline_count || 0} pipeline${(a.pipeline_count || 0) === 1 ? '' : 's'}</span>
+                    <span>${a.read_count || 0} reads</span>
+                    <span>${a.write_count || 0} writes</span>
+                </div>
+                <a href="/lineage-viz?asset=${encodeURIComponent(assetUri)}"
                    style="display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);font-weight:500;color:var(--color-accent);text-decoration:none;margin-top:auto;transition:opacity var(--dur-base);"
                    onmouseenter="this.style.opacity='.7'" onmouseleave="this.style.opacity='1'">
                     <i class="fas fa-diagram-project" style="font-size:11px;"></i>View Lineage
@@ -369,7 +387,7 @@ function renderAssetGrid(assets) {
     </div>`;
 }
 
-// ── Load assets (from /catalog) ───────────────────────────────────────────────
+// ── Load assets (from /catalog/assets) ────────────────────────────────────────
 async function loadAssets() {
     const panel = document.getElementById('panel-assets');
     panel.innerHTML = `
@@ -378,7 +396,10 @@ async function loadAssets() {
             <span class="text-sm">Loading assets…</span>
         </div>`;
 
-    const data = await fetch('/catalog').then(r => r.json()).catch(() => {
+    const data = await fetch('/catalog/assets').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+    }).catch(() => {
         showToast('Failed to load assets', 'error');
         return { assets: [] };
     });
@@ -392,7 +413,7 @@ async function loadAssets() {
     }
 
     statsRow.classList.remove('hidden');
-    const types = new Set(allAssets.map(a => a.type));
+    const types = new Set(allAssets.map(a => a.asset_type || a.type || 'asset'));
     document.getElementById('statTotal').textContent = allAssets.length;
     document.getElementById('statTypes').textContent = types.size;
     document.getElementById('statPipes').textContent = allAssets.reduce((s, a) => s + (a.pipeline_count || 0), 0);
@@ -403,7 +424,7 @@ async function loadAssets() {
 // ── Client-side search filter ─────────────────────────────────────────────────
 function filterAssets() {
     const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
-    const filtered = q ? allAssets.filter(a => (a.name || '').toLowerCase().includes(q)) : allAssets;
+    const filtered = q ? allAssets.filter(a => (a.asset_uri || a.name || '').toLowerCase().includes(q)) : allAssets;
     renderAssetGrid(filtered);
 }
 

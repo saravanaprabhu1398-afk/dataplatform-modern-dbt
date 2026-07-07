@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
+from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from dataplatform.core.config import Task
 from dataplatform.plugins.base import Plugin
@@ -75,7 +76,45 @@ class TaskExecutor:
             return "Plugin returned failure status"
         return str(result)
 
-    def execute_task(self, task: Task, config: Dict[str, Any] = None, previous_data: Any = None) -> tuple[bool, Any, str]:
+    @staticmethod
+    def _utc_now() -> str:
+        return datetime.utcnow().isoformat() + "Z"
+
+    @staticmethod
+    def _build_task_run(
+        task: Task,
+        status: str,
+        started_at: str,
+        completed_at: str,
+        duration_seconds: float,
+        attempt_history: List[Dict[str, Any]],
+        error_details: str = "",
+    ) -> Dict[str, Any]:
+        return {
+            "task_name": task.name,
+            "status": status,
+            "plugin": task.plugin,
+            "type": task.type,
+            "operation": task.operation,
+            "depends_on": task.depends_on or [],
+            "timeout_seconds": task.timeout,
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "duration_seconds": round(duration_seconds, 3),
+            "attempts": len(attempt_history),
+            "max_attempts": task.retries + 1,
+            "retry_count": max(len(attempt_history) - 1, 0),
+            "attempt_history": attempt_history,
+            "error": error_details or None,
+        }
+
+    def execute_task(
+        self,
+        task: Task,
+        config: Dict[str, Any] = None,
+        previous_data: Any = None,
+        collect_timeline: bool = False,
+    ):
         """Execute a task with retries and return result data and error details."""
         if config is None:
             config = {}
@@ -101,9 +140,13 @@ class TaskExecutor:
         task_config = resolve_secrets(task_config)
 
         error_details = ""
+        task_started_monotonic = time.time()
+        task_started_at = self._utc_now()
+        attempt_history: List[Dict[str, Any]] = []
         
         for attempt in range(task.retries + 1):
             start_time = time.time()
+            attempt_started_at = self._utc_now()
             log_task_start(task.name, attempt + 1)
 
             try:
@@ -129,13 +172,40 @@ class TaskExecutor:
                     data = None
 
                 duration = time.time() - start_time
+                completed_at = self._utc_now()
 
                 if success:
                     log_task_success(task.name, duration)
+                    attempt_history.append({
+                        "attempt": attempt + 1,
+                        "status": "success",
+                        "started_at": attempt_started_at,
+                        "completed_at": completed_at,
+                        "duration_seconds": round(duration, 3),
+                        "error": None,
+                    })
+                    task_run = self._build_task_run(
+                        task,
+                        "success",
+                        task_started_at,
+                        completed_at,
+                        time.time() - task_started_monotonic,
+                        attempt_history,
+                    )
+                    if collect_timeline:
+                        return True, data, "", task_run
                     return True, data, ""
                 else:
                     error_msg = self._extract_error_details(data)
                     error_details = error_msg
+                    attempt_history.append({
+                        "attempt": attempt + 1,
+                        "status": "failed",
+                        "started_at": attempt_started_at,
+                        "completed_at": completed_at,
+                        "duration_seconds": round(duration, 3),
+                        "error": error_msg,
+                    })
                     log_task_failure(task.name, error_msg, attempt + 1, task.retries + 1)
                     if attempt < task.retries:
                         logger.info(f"Retrying task {task.name} in {attempt + 1} seconds...")
@@ -143,8 +213,17 @@ class TaskExecutor:
 
             except Exception as e:
                 duration = time.time() - start_time
+                completed_at = self._utc_now()
                 error_msg = str(e)
                 error_details = error_msg
+                attempt_history.append({
+                    "attempt": attempt + 1,
+                    "status": "failed",
+                    "started_at": attempt_started_at,
+                    "completed_at": completed_at,
+                    "duration_seconds": round(duration, 3),
+                    "error": error_msg,
+                })
                 log_task_failure(task.name, error_msg, attempt + 1, task.retries + 1)
                 logger.error(f"Task {task.name} exception: {e}", exc_info=True)
 
@@ -153,6 +232,17 @@ class TaskExecutor:
                     time.sleep(attempt + 1)  # Exponential backoff
 
         logger.error(f"Task {task.name} failed after {task.retries + 1} attempts")
+        if collect_timeline:
+            task_run = self._build_task_run(
+                task,
+                "failed",
+                task_started_at,
+                self._utc_now(),
+                time.time() - task_started_monotonic,
+                attempt_history,
+                error_details,
+            )
+            return False, None, error_details, task_run
         return False, None, error_details
 
 
@@ -217,7 +307,8 @@ class PipelineExecutor:
         max_workers: int = 4,
         pipeline_name: str = "",
         run_id: str = "",
-    ) -> Tuple[bool, Dict[str, bool], Dict[str, str]]:
+        return_task_runs: bool = False,
+    ) -> Tuple[Any, ...]:
         """Execute pipeline tasks in parallel waves.
 
         Tasks within the same wave have no mutual dependencies and run
@@ -227,25 +318,62 @@ class PipelineExecutor:
         results: Dict[str, bool] = {}
         task_data: Dict[str, Any] = {}
         errors: Dict[str, str] = {}
+        task_runs: List[Dict[str, Any]] = []
 
-        for wave in execution_waves:
+        for wave_index, wave in enumerate(execution_waves):
             with ThreadPoolExecutor(max_workers=min(max_workers, len(wave))) as pool:
                 future_to_name = {}
                 for task_name in wave:
                     task = tasks[task_name]
                     previous_data = self._collect_dependency_data(task, task_data)
-                    future = pool.submit(
-                        self.task_executor.execute_task, task, config, previous_data
-                    )
+                    if return_task_runs:
+                        future = pool.submit(
+                            self.task_executor.execute_task,
+                            task,
+                            config,
+                            previous_data,
+                            True,
+                        )
+                    else:
+                        future = pool.submit(
+                            self.task_executor.execute_task,
+                            task,
+                            config,
+                            previous_data,
+                        )
                     future_to_name[future] = task_name
 
                 for future in as_completed(future_to_name):
                     task_name = future_to_name[future]
                     task = tasks[task_name]
+                    task_run = None
                     try:
-                        success, data, error_details = future.result()
+                        task_result = future.result()
+                        if return_task_runs and len(task_result) == 4:
+                            success, data, error_details, task_run = task_result
+                        else:
+                            success, data, error_details = task_result
                     except Exception as exc:
                         success, data, error_details = False, None, str(exc)
+                        if return_task_runs:
+                            now = datetime.utcnow().isoformat() + "Z"
+                            task_run = {
+                                "task_name": task_name,
+                                "status": "failed",
+                                "plugin": task.plugin,
+                                "type": task.type,
+                                "operation": task.operation,
+                                "depends_on": task.depends_on or [],
+                                "timeout_seconds": task.timeout,
+                                "started_at": now,
+                                "completed_at": now,
+                                "duration_seconds": 0,
+                                "attempts": 0,
+                                "max_attempts": task.retries + 1,
+                                "retry_count": 0,
+                                "attempt_history": [],
+                                "error": str(exc),
+                            }
 
                     # --- Lineage recording (non-blocking, never fails the pipeline) ---
                     if success and task.lineage and pipeline_name:
@@ -266,20 +394,59 @@ class PipelineExecutor:
                             if failed:
                                 success = False
                                 error_details = f"Quality checks failed: {failed}"
+                                if task_run:
+                                    task_run["status"] = "failed"
+                                    task_run["error"] = error_details
                         except Exception as exc:
                             logger.error("Quality check runner raised an exception for '%s': %s", task_name, exc)
                             success = False
                             error_details = f"Quality check error: {exc}"
+                            if task_run:
+                                task_run["status"] = "failed"
+                                task_run["error"] = error_details
 
                     results[task_name] = success
                     task_data[task_name] = data
                     if not success and error_details:
                         errors[task_name] = error_details
+                    if return_task_runs and task_run:
+                        task_run["status"] = "success" if success else "failed"
+                        if error_details:
+                            task_run["error"] = error_details
+                        task_runs.append(task_run)
 
             wave_failed = [name for name in wave if not results.get(name, False)]
             if wave_failed:
                 logger.error(f"Pipeline failed in wave at tasks: {wave_failed}")
+                if return_task_runs:
+                    reported_tasks = {run["task_name"] for run in task_runs}
+                    now = datetime.utcnow().isoformat() + "Z"
+                    for remaining_wave in execution_waves[wave_index + 1:]:
+                        for skipped_name in remaining_wave:
+                            if skipped_name in reported_tasks:
+                                continue
+                            skipped_task = tasks[skipped_name]
+                            task_runs.append({
+                                "task_name": skipped_name,
+                                "status": "skipped",
+                                "plugin": skipped_task.plugin,
+                                "type": skipped_task.type,
+                                "operation": skipped_task.operation,
+                                "depends_on": skipped_task.depends_on or [],
+                                "timeout_seconds": skipped_task.timeout,
+                                "started_at": None,
+                                "completed_at": now,
+                                "duration_seconds": None,
+                                "attempts": 0,
+                                "max_attempts": skipped_task.retries + 1,
+                                "retry_count": 0,
+                                "attempt_history": [],
+                                "error": "Skipped because an upstream task failed",
+                            })
+                    return False, results, errors, task_runs
                 return False, results, errors
 
         logger.info("Pipeline completed successfully (parallel)")
+        if return_task_runs:
+            return True, results, errors, task_runs
         return True, results, errors

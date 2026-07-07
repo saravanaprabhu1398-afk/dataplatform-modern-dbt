@@ -1,4 +1,4 @@
-/* Hallmark · redesign · modern-minimal · Cobalt · Space Grotesk + Inter · oklch(54% 0.22 250) */
+/* Hallmark · redesign · modern-minimal · Ember Graphite · Space Grotesk + Inter · oklch(61% 0.210 38) */
 /* pre-emit critique: P5 H5 E5 S5 R5 V4 */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
@@ -62,9 +62,9 @@
   --color-ink:             oklch(15% 0.015 250);
   --color-ink-2:           oklch(32% 0.020 250);
   --color-ink-3:           oklch(52% 0.015 250);
-  --color-accent:          oklch(54% 0.22 250);
-  --color-accent-hover:    oklch(47% 0.22 250);
-  --color-accent-subtle:   oklch(94% 0.05 250);
+  --color-accent:          oklch(61% 0.210 38);
+  --color-accent-hover:    oklch(54% 0.210 38);
+  --color-accent-subtle:   oklch(96% 0.040 58);
   --color-accent-text:     oklch(99% 0.004 240);
   --color-surface:         oklch(100% 0 0);
   --color-border:          oklch(88% 0.010 250);
@@ -76,7 +76,7 @@
   --color-warning-subtle:  oklch(97% 0.04 65);
   --color-success:         oklch(55% 0.18 150);
   --color-success-subtle:  oklch(96% 0.04 150);
-  --color-focus:           oklch(54% 0.22 250);
+  --color-focus:           oklch(61% 0.210 38);
 
   /* ── Sidebar tokens (dark — same in both colour schemes) ──────────── */
   --color-sidebar-bg:          oklch(18% 0.022 250);
@@ -106,7 +106,7 @@ html.dp-dark {
   --color-border:         oklch(28% 0.018 250);
   --color-border-2:       oklch(32% 0.020 250);
   --color-muted:          oklch(22% 0.018 250);
-  --color-accent-subtle:  oklch(25% 0.035 250);
+  --color-accent-subtle:  oklch(25% 0.050 38);
   --color-danger-subtle:  oklch(22% 0.040 25);
   --color-warning-subtle: oklch(22% 0.030 65);
   --color-success-subtle: oklch(22% 0.030 150);
@@ -124,7 +124,7 @@ html.dp-light {
   --color-border:          oklch(88% 0.010 250);
   --color-border-2:        oklch(82% 0.012 250);
   --color-muted:           oklch(92% 0.010 250);
-  --color-accent-subtle:   oklch(94% 0.05 250);
+  --color-accent-subtle:   oklch(96% 0.040 58);
   --color-danger-subtle:   oklch(96% 0.04 25);
   --color-warning-subtle:  oklch(97% 0.04 65);
   --color-success-subtle:  oklch(96% 0.04 150);
@@ -143,7 +143,7 @@ html.dp-light {
     --color-border:         oklch(28% 0.018 250);
     --color-border-2:       oklch(32% 0.020 250);
     --color-muted:          oklch(22% 0.018 250);
-    --color-accent-subtle:  oklch(25% 0.035 250);
+    --color-accent-subtle:  oklch(25% 0.050 38);
     --color-danger-subtle:  oklch(22% 0.040 25);
     --color-warning-subtle: oklch(22% 0.030 65);
     --color-success-subtle: oklch(22% 0.030 150);

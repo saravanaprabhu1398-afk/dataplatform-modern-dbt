@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — Data Platform Suite</title>
     <link rel="stylesheet" href="/static/tokens.css">
+    <link rel="stylesheet" href="/static/sidebar.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,23 +22,34 @@
             justify-content: center;
             min-height: 100vh;
             padding: var(--space-4);
-            background-color: var(--color-sidebar-bg);
-            background-image:
-                radial-gradient(ellipse 60% 45% at 15% 10%, oklch(54% 0.22 250 / 0.14) 0%, transparent 65%),
-                radial-gradient(ellipse 50% 40% at 85% 88%, oklch(55% 0.18 150 / 0.08) 0%, transparent 60%);
+            background:
+                radial-gradient(circle at 14% 10%, oklch(62% 0.220 35 / 0.22), transparent 32%),
+                radial-gradient(circle at 86% 88%, oklch(60% 0.140 185 / 0.12), transparent 34%),
+                linear-gradient(135deg, oklch(19% 0.045 34) 0%, oklch(16% 0.034 250) 58%, oklch(13% 0.026 250) 100%);
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0 0 auto 0;
+            height: 4px;
+            background: linear-gradient(90deg, oklch(65% 0.230 32), oklch(76% 0.160 72), oklch(60% 0.140 185));
+            pointer-events: none;
         }
 
         /* ── Card ────────────────────────────────────────────────── */
         .lc {
             width: 100%;
             max-width: 392px;
-            background: oklch(21% 0.022 250 / 0.85);
+            background:
+                linear-gradient(180deg, oklch(24% 0.060 38 / 0.82), oklch(16% 0.030 250 / 0.90)),
+                oklch(17% 0.030 250 / 0.88);
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
-            border: 1px solid var(--color-sidebar-border);
+            border: 1px solid oklch(36% 0.060 42);
             border-radius: var(--radius-xl);
             padding: var(--space-8);
-            box-shadow: var(--shadow-xl);
+            box-shadow: 0 24px 70px oklch(8% 0.020 250 / 0.38), 0 0 0 1px oklch(80% 0.100 55 / 0.04) inset;
         }
 
         /* ── Logo ────────────────────────────────────────────────── */
@@ -48,11 +60,11 @@
             width: 52px;
             height: 52px;
             border-radius: var(--radius-lg);
-            background: var(--color-sidebar-item-active);
+            background: linear-gradient(135deg, oklch(65% 0.230 32), oklch(72% 0.160 68));
             margin: 0 auto var(--space-4);
-            box-shadow: 0 4px 16px oklch(54% 0.22 250 / 0.35);
+            box-shadow: 0 12px 28px oklch(61% 0.210 38 / 0.30);
         }
-        .lc__logo i { color: oklch(99% 0.005 250); font-size: 1.25rem; }
+        .lc__logo i { color: var(--color-sidebar-text-active); font-size: 1.25rem; }
 
         .lc__title {
             font-family: var(--font-display);
@@ -71,7 +83,7 @@
         }
         .lc__rule {
             height: 1px;
-            background: var(--color-sidebar-border);
+            background: linear-gradient(90deg, transparent, oklch(58% 0.090 48 / 0.48), transparent);
             margin-bottom: var(--space-6);
         }
 
@@ -98,8 +110,8 @@
         input[type="text"],
         input[type="password"] {
             width: 100%;
-            background: oklch(14% 0.016 250);
-            border: 1px solid var(--color-sidebar-border);
+            background: oklch(13% 0.026 250 / 0.86);
+            border: 1px solid oklch(34% 0.060 42);
             border-radius: var(--radius-md);
             padding: 10px var(--space-4) 10px 2.5rem;
             font-family: var(--font-body);
@@ -112,7 +124,7 @@
         input::placeholder { color: var(--color-sidebar-group-label); }
         input:focus {
             border-color: var(--color-sidebar-item-active);
-            box-shadow: 0 0 0 3px oklch(54% 0.22 250 / 0.18);
+            box-shadow: 0 0 0 3px oklch(61% 0.210 38 / 0.20), 0 8px 22px oklch(8% 0.020 250 / 0.20);
         }
 
         /* ── Error ───────────────────────────────────────────────── */
@@ -132,8 +144,8 @@
         /* ── Button ──────────────────────────────────────────────── */
         .lc__btn {
             width: 100%;
-            background: var(--color-sidebar-item-active);
-            color: oklch(99% 0.005 250);
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
+            color: var(--color-sidebar-text-active);
             border: none;
             border-radius: var(--radius-md);
             padding: 11px var(--space-4);
@@ -148,7 +160,7 @@
             transition: opacity var(--dur-base) var(--ease-out),
                         transform  var(--dur-fast) var(--ease-out);
             margin-top: var(--space-2);
-            box-shadow: 0 2px 8px oklch(54% 0.22 250 / 0.30);
+            box-shadow: 0 10px 24px oklch(61% 0.210 38 / 0.28);
         }
         .lc__btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
         .lc__btn:active:not(:disabled) { transform: translateY(0); }
@@ -163,7 +175,7 @@
             line-height: 1.65;
         }
         .lc__foot code {
-            background: oklch(28% 0.018 250);
+            background: oklch(25% 0.055 38);
             color: var(--color-sidebar-text);
             padding: 1px 5px;
             border-radius: var(--radius-sm);

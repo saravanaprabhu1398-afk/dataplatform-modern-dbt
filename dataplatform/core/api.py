@@ -19,7 +19,9 @@ import os
 import base64
 import hashlib
 import hmac
+import inspect
 import json
+import tempfile
 import time
 from dataplatform.core.config import load_config, PipelineConfig
 from dataplatform.core.dag import DAGBuilder
@@ -43,6 +45,7 @@ from dataplatform.core.database import (
     enqueue_run,
     set_run_status_in_queue,
     get_queue_runs,
+    get_queue_run,
     recover_orphaned_runs,
     get_run_timeseries,
 )
@@ -138,6 +141,30 @@ AUTH_PASSWORD = os.getenv("DATAPLATFORM_PASSWORD", "admin")
 SESSION_SECRET = os.getenv("DATAPLATFORM_SESSION_SECRET", "dpflow-dev-secret-change-me")
 PUBLIC_PATH_PREFIXES = ("/login", "/static", "/health")
 PUBLIC_PATHS = {"/login", "/health", "/metrics"}
+
+ENVIRONMENT_PROFILES: Dict[str, Dict[str, Any]] = {
+    "local": {
+        "id": "local",
+        "name": "Local",
+        "description": "Run on the local worker with local files and default plugins.",
+        "compute": "local-worker",
+        "badge": "Default",
+    },
+    "dev": {
+        "id": "dev",
+        "name": "Development",
+        "description": "Development profile for isolated test inputs and dev credentials.",
+        "compute": "dev-worker",
+        "badge": "Dev",
+    },
+    "prod": {
+        "id": "prod",
+        "name": "Production",
+        "description": "Production profile metadata for governed operational runs.",
+        "compute": "prod-worker",
+        "badge": "Prod",
+    },
+}
 
 if AUTH_USERNAME == "admin" and AUTH_PASSWORD == "admin":
     logger.warning(
@@ -281,6 +308,209 @@ def update_pipeline_status(
     return save_run_status(pipeline_name, run_id, status, message, details)
 
 
+def _pending_task_runs(config: PipelineConfig, execution_order: List[str]) -> List[Dict[str, Any]]:
+    task_by_name = {task.name: task for task in config.tasks}
+    task_runs: List[Dict[str, Any]] = []
+    for task_name in execution_order:
+        task = task_by_name.get(task_name)
+        if not task:
+            continue
+        task_runs.append({
+            "task_name": task.name,
+            "status": "pending",
+            "plugin": task.plugin,
+            "type": task.type,
+            "operation": task.operation,
+            "depends_on": task.depends_on or [],
+            "timeout_seconds": task.timeout,
+            "started_at": None,
+            "completed_at": None,
+            "duration_seconds": None,
+            "attempts": 0,
+            "max_attempts": task.retries + 1,
+            "retry_count": 0,
+            "attempt_history": [],
+            "error": None,
+        })
+    return task_runs
+
+
+def _fallback_task_runs(
+    tasks: Dict[str, Any],
+    execution_waves: List[List[str]],
+    results: Dict[str, bool],
+    errors: Dict[str, str],
+) -> List[Dict[str, Any]]:
+    task_runs: List[Dict[str, Any]] = []
+    for task_name in [name for wave in execution_waves for name in wave]:
+        task = tasks.get(task_name)
+        reported = task_name in results
+        success = results.get(task_name)
+        status = "success" if success is True else "failed" if success is False else "skipped"
+        task_runs.append({
+            "task_name": task_name,
+            "status": status if reported else "skipped",
+            "plugin": getattr(task, "plugin", None),
+            "type": getattr(task, "type", None),
+            "operation": getattr(task, "operation", None),
+            "depends_on": getattr(task, "depends_on", None) or [],
+            "timeout_seconds": getattr(task, "timeout", None),
+            "started_at": None,
+            "completed_at": None,
+            "duration_seconds": None,
+            "attempts": 1 if reported else 0,
+            "max_attempts": getattr(task, "retries", 0) + 1 if task else None,
+            "retry_count": 0,
+            "attempt_history": [],
+            "error": errors.get(task_name),
+        })
+    return task_runs
+
+
+def _execute_parallel_with_task_runs(
+    executor: Any,
+    *,
+    tasks: Dict[str, Any],
+    execution_waves: List[List[str]],
+    config: Dict[str, Any],
+    pipeline_name: str,
+    run_id: str,
+) -> tuple[bool, Dict[str, bool], Dict[str, str], List[Dict[str, Any]]]:
+    kwargs = {
+        "tasks": tasks,
+        "execution_waves": execution_waves,
+        "config": config,
+        "pipeline_name": pipeline_name,
+        "run_id": run_id,
+    }
+    try:
+        supports_task_runs = "return_task_runs" in inspect.signature(
+            executor.execute_pipeline_parallel
+        ).parameters
+    except (TypeError, ValueError):
+        supports_task_runs = False
+
+    if supports_task_runs:
+        success, results, errors, task_runs = executor.execute_pipeline_parallel(
+            **kwargs,
+            return_task_runs=True,
+        )
+    else:
+        success, results, errors = executor.execute_pipeline_parallel(**kwargs)
+        task_runs = _fallback_task_runs(tasks, execution_waves, results, errors)
+
+    return success, results, errors, task_runs
+
+
+def _normalize_environment_profile(profile_id: Optional[str]) -> Dict[str, Any]:
+    key = (profile_id or "local").strip().lower()
+    return ENVIRONMENT_PROFILES.get(key, ENVIRONMENT_PROFILES["local"])
+
+
+def _runtime_context(
+    *,
+    config: PipelineConfig,
+    parameters: Optional[Dict[str, Any]] = None,
+    environment_profile: Optional[str] = "local",
+) -> Dict[str, Any]:
+    profile = _normalize_environment_profile(environment_profile)
+    return {
+        "file_path": config.file_path,
+        "runtime_parameters": parameters or {},
+        "parameters": parameters or {},
+        "environment_profile": profile["id"],
+        "environment": profile,
+    }
+
+
+def _run_detail_context(
+    *,
+    execution_order: List[str],
+    task_runs: List[Dict[str, Any]],
+    parameters: Optional[Dict[str, Any]] = None,
+    environment_profile: Optional[str] = "local",
+    repair: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    profile = _normalize_environment_profile(environment_profile)
+    details: Dict[str, Any] = {
+        "execution_order": execution_order,
+        "task_runs": task_runs,
+        "runtime_parameters": parameters or {},
+        "environment_profile": profile["id"],
+        "environment": profile,
+    }
+    if repair:
+        details["repair"] = repair
+    return details
+
+
+def _resolve_config_path_for_run(run_record: Dict[str, Any]) -> str:
+    queue_record = get_queue_run(run_record["run_id"])
+    if queue_record and queue_record.get("config_path"):
+        config_path = Path(queue_record["config_path"])
+        if config_path.exists():
+            return str(config_path)
+
+    pipelines, _, _, _ = _discover_pipeline_files()
+    matches = [
+        pipeline for pipeline in pipelines
+        if pipeline.get("display_name") == run_record.get("pipeline_name")
+    ]
+    if not matches:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not locate config for pipeline '{run_record.get('pipeline_name')}'",
+        )
+    return matches[0]["file_path"]
+
+
+def _first_failed_task(run_record: Dict[str, Any]) -> Optional[str]:
+    details = run_record.get("details") or {}
+    for task_run in details.get("task_runs") or []:
+        if task_run.get("status") == "failed" and task_run.get("task_name"):
+            return task_run["task_name"]
+    errors = details.get("errors") or {}
+    if isinstance(errors, dict) and errors:
+        return next(iter(errors.keys()))
+    results = details.get("results") or {}
+    if isinstance(results, dict):
+        for task_name, ok in results.items():
+            if ok is False:
+                return task_name
+    return None
+
+
+def _repair_execution_waves(
+    config: PipelineConfig,
+    from_task: str,
+) -> List[List[str]]:
+    task_names = {task.name for task in config.tasks}
+    if from_task not in task_names:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task '{from_task}' was not found in pipeline '{config.pipeline_name}'",
+        )
+
+    selected = {from_task}
+    changed = True
+    while changed:
+        changed = False
+        for task in config.tasks:
+            dependencies = set(task.depends_on or [])
+            if task.name not in selected and dependencies.intersection(selected):
+                selected.add(task.name)
+                changed = True
+
+    dag_builder = DAGBuilder(config.tasks)
+    dag_builder.build()
+    full_waves = dag_builder.get_execution_waves()
+    repair_waves = [
+        [task_name for task_name in wave if task_name in selected]
+        for wave in full_waves
+    ]
+    return [wave for wave in repair_waves if wave]
+
+
 # ---------------------------------------------------------------------------
 # Pydantic request / response models
 # ---------------------------------------------------------------------------
@@ -288,6 +518,16 @@ def update_pipeline_status(
 class PipelineRunRequest(BaseModel):
     config_path: str
     dry_run: bool = False
+    parameters: Optional[Dict[str, Any]] = None
+    environment_profile: str = "local"
+
+
+class RepairRunRequest(BaseModel):
+    from_task: Optional[str] = None
+
+
+class VersionRestoreRequest(BaseModel):
+    config_path: Optional[str] = None
 
 
 class PipelineScheduleRequest(BaseModel):
@@ -326,6 +566,7 @@ class PipelineResponse(BaseModel):
     pipeline_name: str
     status: str
     message: str
+    run_id: Optional[str] = None
     execution_order: Optional[List[str]] = None
     results: Optional[Dict[str, bool]] = None
 
@@ -540,6 +781,12 @@ async def get_info():
     }
 
 
+@app.get("/environment-profiles")
+async def list_environment_profiles(request: Request):
+    _require_permission(request, "read")
+    return {"profiles": list(ENVIRONMENT_PROFILES.values())}
+
+
 # ---------------------------------------------------------------------------
 # Pipeline config / discovery
 # ---------------------------------------------------------------------------
@@ -740,13 +987,20 @@ async def run_pipeline(request_body: PipelineRunRequest, request: Request):
 
         run_id = str(_uuid.uuid4())
         actor = _get_request_username(request)
+        environment = _normalize_environment_profile(request_body.environment_profile)
+        parameters = request_body.parameters or {}
 
         # Write to both run history (legacy) and persistent queue
         update_pipeline_status(
             config.pipeline_name,
             "queued",
             "Pipeline queued for execution",
-            {"execution_order": execution_order},
+            _run_detail_context(
+                execution_order=execution_order,
+                task_runs=_pending_task_runs(config, execution_order),
+                parameters=parameters,
+                environment_profile=environment["id"],
+            ),
             run_id=run_id,
         )
         enqueue_run(run_id, config.pipeline_name, request_body.config_path, actor=actor)
@@ -756,17 +1010,29 @@ async def run_pipeline(request_body: PipelineRunRequest, request: Request):
                 "pipeline", "run_queued",
                 actor=actor,
                 resource=config.pipeline_name,
-                details={"run_id": run_id},
+                details={
+                    "run_id": run_id,
+                    "environment_profile": environment["id"],
+                    "runtime_parameters": parameters,
+                },
             )
         except Exception as _ae:
             logger.warning("Audit log failed (run_queued): %s", _ae)
 
-        get_worker_pool().submit(run_id, execute_pipeline_background, config, run_id)
+        get_worker_pool().submit(
+            run_id,
+            execute_pipeline_background,
+            config,
+            run_id,
+            runtime_parameters=parameters,
+            environment_profile=environment["id"],
+        )
 
         return PipelineResponse(
             pipeline_name=config.pipeline_name,
             status="queued",
             message="Pipeline queued for execution",
+            run_id=run_id,
             execution_order=execution_order,
         )
     except Exception as e:
@@ -798,12 +1064,20 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
         execution_order = [t for wave in execution_waves for t in wave]
 
         run_id = str(_uuid.uuid4())
+        environment = _normalize_environment_profile(request_body.environment_profile)
+        parameters = request_body.parameters or {}
         t0 = time.time()
         executor = PipelineExecutor()
-        success, task_results, errors = executor.execute_pipeline_parallel(
-            tasks={task.name: task for task in config.tasks},
+        tasks_by_name = {task.name: task for task in config.tasks}
+        success, task_results, errors, task_runs = _execute_parallel_with_task_runs(
+            executor,
+            tasks=tasks_by_name,
             execution_waves=execution_waves,
-            config={"file_path": config.file_path},
+            config=_runtime_context(
+                config=config,
+                parameters=parameters,
+                environment_profile=environment["id"],
+            ),
             pipeline_name=config.pipeline_name,
             run_id=run_id,
         )
@@ -827,7 +1101,18 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
             config.pipeline_name,
             status_value,
             message,
-            {"execution_order": execution_order, "success": success, "duration_seconds": round(duration, 2), "sla_violated": sla_violated},
+            {
+                "execution_order": execution_order,
+                "success": success,
+                "results": task_results,
+                "errors": errors,
+                "task_runs": task_runs,
+                "runtime_parameters": parameters,
+                "environment_profile": environment["id"],
+                "environment": environment,
+                "duration_seconds": round(duration, 2),
+                "sla_violated": sla_violated,
+            },
             run_id=run_id,
         )
 
@@ -839,6 +1124,7 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
             pipeline_name=config.pipeline_name,
             status=status_value,
             message=message,
+            run_id=run_id,
             execution_order=execution_order,
             results=results,
         )
@@ -866,6 +1152,77 @@ async def cancel_run(run_id: str, request: Request):
     save_run_status(existing["pipeline_name"], run_id, "cancelled", "Cancelled by user")
     set_run_status_in_queue(run_id, "cancelled")
     return {"run_id": run_id, "status": "cancelled"}
+
+
+@app.post("/run/{run_id}/repair", response_model=PipelineResponse)
+async def repair_run(run_id: str, request_body: RepairRunRequest, request: Request):
+    """Queue a repair run from the failed task or a selected task."""
+    _require_permission(request, "run")
+    existing = get_run_by_id(run_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"No run found with id '{run_id}'")
+
+    config_path = _resolve_config_path_for_run(existing)
+    config = load_config(config_path)
+    from_task = request_body.from_task or _first_failed_task(existing)
+    if not from_task:
+        raise HTTPException(
+            status_code=400,
+            detail="No failed task was found for this run. Select a task to repair from.",
+        )
+
+    execution_waves = _repair_execution_waves(config, from_task)
+    execution_order = [task_name for wave in execution_waves for task_name in wave]
+    repair_run_id = str(_uuid.uuid4())
+    actor = _get_request_username(request)
+
+    update_pipeline_status(
+        config.pipeline_name,
+        "queued",
+        f"Repair queued from task {from_task}",
+        {
+            "execution_order": execution_order,
+            "task_runs": _pending_task_runs(config, execution_order),
+            "repair": {
+                "parent_run_id": run_id,
+                "from_task": from_task,
+            },
+        },
+        run_id=repair_run_id,
+    )
+    enqueue_run(repair_run_id, config.pipeline_name, config_path, actor=actor)
+
+    try:
+        append_audit_event(
+            "pipeline",
+            "run_repair_queued",
+            actor=actor,
+            resource=config.pipeline_name,
+            details={
+                "run_id": repair_run_id,
+                "parent_run_id": run_id,
+                "from_task": from_task,
+            },
+        )
+    except Exception as _ae:
+        logger.warning("Audit log failed (run_repair_queued): %s", _ae)
+
+    get_worker_pool().submit(
+        repair_run_id,
+        execute_pipeline_background,
+        config,
+        repair_run_id,
+        from_task,
+        run_id,
+    )
+
+    return PipelineResponse(
+        pipeline_name=config.pipeline_name,
+        status="queued",
+        message=f"Repair queued from task {from_task}",
+        run_id=repair_run_id,
+        execution_order=execution_order,
+    )
 
 
 @app.get("/run/{run_id}/status")
@@ -975,9 +1332,10 @@ async def get_pipeline_status(config_path: Optional[str] = None, pipeline_name: 
 
 
 @app.get("/history/{pipeline_name}")
-async def get_pipeline_history(pipeline_name: str):
+async def get_pipeline_history(pipeline_name: str, limit: int = 12):
     try:
-        runs = get_run_history(pipeline_name, limit=5)
+        safe_limit = min(max(limit, 1), 50)
+        runs = get_run_history(pipeline_name, limit=safe_limit)
         return {
             "pipeline_name": pipeline_name,
             "runs": runs,
@@ -1031,6 +1389,7 @@ async def dashboard_summary():
 
             for run in history:
                 recent_runs.append({
+                    "run_id": run.get("run_id"),
                     "pipeline_name": pipeline_name,
                     "status": run.get("status"),
                     "message": run.get("message"),
@@ -1046,6 +1405,7 @@ async def dashboard_summary():
                 "last_status": latest_status.get("status") if latest_status else "never_run",
                 "last_message": latest_status.get("message") if latest_status else "No runs yet",
                 "last_updated_at": latest_status.get("updated_at") if latest_status else None,
+                "last_run_id": latest_status.get("run_id") if latest_status else None,
                 "run_count": len(history),
                 "is_scheduled": schedule_info is not None,
                 "next_run": schedule_info.get("next_run") if schedule_info else None,
@@ -1246,7 +1606,14 @@ def _dispatch_error_handlers(
 # Background execution helper
 # ---------------------------------------------------------------------------
 
-def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
+def execute_pipeline_background(
+    config: PipelineConfig,
+    run_id: str,
+    repair_from_task: Optional[str] = None,
+    parent_run_id: Optional[str] = None,
+    runtime_parameters: Optional[Dict[str, Any]] = None,
+    environment_profile: str = "local",
+) -> None:
     """Run a pipeline synchronously inside a worker thread."""
     # ------------------------------------------------------------------
     # Per-run log file setup
@@ -1271,25 +1638,48 @@ def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
 
     dag_builder = DAGBuilder(config.tasks)
     dag_builder.build()
-    execution_waves = dag_builder.get_execution_waves()
+    execution_waves = (
+        _repair_execution_waves(config, repair_from_task)
+        if repair_from_task else dag_builder.get_execution_waves()
+    )
     execution_order = [t for wave in execution_waves for t in wave]
+    task_runs: List[Dict[str, Any]] = _pending_task_runs(config, execution_order)
+    repair_context = None
+    if repair_from_task:
+        repair_context = {
+            "parent_run_id": parent_run_id,
+            "from_task": repair_from_task,
+        }
+    run_context = _run_detail_context(
+        execution_order=execution_order,
+        task_runs=task_runs,
+        parameters=runtime_parameters,
+        environment_profile=environment_profile,
+        repair=repair_context,
+    )
 
     try:
         set_run_status_in_queue(run_id, "running")
         update_pipeline_status(
             config.pipeline_name,
             "running",
-            "Pipeline is running",
-            {"execution_order": execution_order},
+            "Repair run is running" if repair_from_task else "Pipeline is running",
+            run_context,
             run_id=run_id,
         )
 
         t0 = time.time()
         executor = PipelineExecutor()
-        success, results, errors = executor.execute_pipeline_parallel(
-            tasks={task.name: task for task in config.tasks},
+        tasks_by_name = {task.name: task for task in config.tasks}
+        success, results, errors, task_runs = _execute_parallel_with_task_runs(
+            executor,
+            tasks=tasks_by_name,
             execution_waves=execution_waves,
-            config={"file_path": config.file_path},
+            config=_runtime_context(
+                config=config,
+                parameters=runtime_parameters,
+                environment_profile=environment_profile,
+            ),
             pipeline_name=config.pipeline_name,
             run_id=run_id,
         )
@@ -1313,9 +1703,14 @@ def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
         update_pipeline_status(
             config.pipeline_name,
             status,
-            f"Pipeline {status}",
+            f"Repair run {status}" if repair_from_task else f"Pipeline {status}",
             {"execution_order": execution_order, "success": success, "results": results,
-             "errors": errors, "duration_seconds": round(duration, 2), "sla_violated": sla_violated},
+             "errors": errors, "task_runs": task_runs,
+             "runtime_parameters": runtime_parameters or {},
+             "environment_profile": _normalize_environment_profile(environment_profile)["id"],
+             "environment": _normalize_environment_profile(environment_profile),
+             "duration_seconds": round(duration, 2), "sla_violated": sla_violated,
+             **({"repair": {"parent_run_id": parent_run_id, "from_task": repair_from_task}} if repair_from_task else {})},
             run_id=run_id,
         )
         if not success:
@@ -1330,8 +1725,12 @@ def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
         update_pipeline_status(
             config.pipeline_name,
             "failed",
-            f"Pipeline failed: {e}",
-            {"execution_order": execution_order},
+            f"Repair run failed: {e}" if repair_from_task else f"Pipeline failed: {e}",
+            {"execution_order": execution_order, "task_runs": task_runs,
+             "runtime_parameters": runtime_parameters or {},
+             "environment_profile": _normalize_environment_profile(environment_profile)["id"],
+             "environment": _normalize_environment_profile(environment_profile),
+             **({"repair": {"parent_run_id": parent_run_id, "from_task": repair_from_task}} if repair_from_task else {})},
             run_id=run_id,
         )
         _dispatch_error_handlers(config, run_id, str(e))
@@ -1770,6 +2169,97 @@ async def diff_pipeline_versions_endpoint(pipeline_name: str, version_id_a: str,
         "version_id_a": version_id_a,
         "version_id_b": version_id_b,
         "diff": result,
+    }
+
+
+@app.post("/versions/{pipeline_name}/{version_id}/restore")
+async def restore_pipeline_version_endpoint(
+    pipeline_name: str,
+    version_id: str,
+    request_body: VersionRestoreRequest,
+    request: Request,
+):
+    """Restore a saved YAML version onto the active pipeline file."""
+    user = _require_permission(request, "save")
+    content = get_version_content(pipeline_name, version_id)
+    if content is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version '{version_id}' not found for pipeline '{pipeline_name}'",
+        )
+
+    tmp_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+        restored_config = load_config(str(tmp_path))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Saved version is invalid: {exc}")
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+
+    if restored_config.pipeline_name != pipeline_name:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Saved version belongs to "
+                f"'{restored_config.pipeline_name}', not '{pipeline_name}'"
+            ),
+        )
+
+    target_path: Optional[Path] = None
+    if request_body.config_path:
+        candidate = Path(request_body.config_path)
+        if not candidate.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Config file not found: {request_body.config_path}",
+            )
+        target_path = candidate
+    else:
+        pipelines, _, _, _ = _discover_pipeline_files()
+        for pipeline in pipelines:
+            if pipeline.get("display_name") == pipeline_name:
+                target_path = Path(pipeline["file_path"])
+                break
+
+    if target_path is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not locate active config for pipeline '{pipeline_name}'",
+        )
+    if target_path.suffix.lower() not in {".yaml", ".yml"}:
+        raise HTTPException(status_code=400, detail="Target config must be a YAML file")
+
+    target_path.write_text(content, encoding="utf-8")
+    validated_config = load_config(str(target_path))
+    if validated_config.pipeline_name != pipeline_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Restored file did not validate as the requested pipeline",
+        )
+
+    try:
+        save_version(pipeline_name, content, saved_by=user.get("username"))
+        append_audit_event(
+            "pipeline",
+            "version_restore",
+            actor=user.get("username"),
+            resource=pipeline_name,
+            details={"version_id": version_id, "config_path": str(target_path)},
+        )
+    except Exception as exc:
+        logger.warning("Version restore audit/snapshot failed for '%s': %s", pipeline_name, exc)
+
+    return {
+        "pipeline_name": pipeline_name,
+        "version_id": version_id,
+        "config_path": str(target_path),
+        "message": "Pipeline version restored successfully",
     }
 
 

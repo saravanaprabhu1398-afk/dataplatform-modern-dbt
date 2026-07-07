@@ -15,7 +15,7 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @keyframes pulse-glow { 0%,100%{box-shadow:0 0 4px rgba(99,102,241,.5);}50%{box-shadow:0 0 18px rgba(99,102,241,.9),0 0 28px rgba(99,102,241,.4);} }
+        @keyframes pulse-glow { 0%,100%{box-shadow:0 0 4px oklch(61% 0.210 38 / .45);}50%{box-shadow:0 0 18px oklch(61% 0.210 38 / .74),0 0 28px oklch(76% 0.160 72 / .28);} }
         @keyframes pulse-dot  { 0%,100%{opacity:1;}50%{opacity:.35;} }
         @keyframes fadeUp     { from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;} }
 
@@ -30,7 +30,7 @@
         .tog-wrap input { display:none; }
         .tog-track { position:absolute; inset:0; background:#CBD5E1; border-radius:9px; transition:background .2s; cursor:pointer; }
         .tog-track::after { content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; background:white; border-radius:50%; transition:transform .2s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
-        .tog-wrap input:checked + .tog-track { background:#4F46E5; }
+        .tog-wrap input:checked + .tog-track { background:oklch(61% 0.210 38); }
         .tog-wrap input:checked + .tog-track::after { transform:translateX(15px); }
 
         /* Mini run squares */
@@ -53,11 +53,11 @@
         .dag-tbl th { padding:9px 14px; text-align:left; white-space:nowrap; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#64748B; background:#F8FAFC; border-bottom:2px solid #E2E8F0; }
         .dag-tbl td { padding:11px 14px; border-bottom:1px solid #F1F5F9; vertical-align:middle; }
         .dag-tbl tbody tr { transition:background .1s; cursor:pointer; }
-        .dag-tbl tbody tr:hover { background:#FAFBFF; }
-        .dag-tbl tbody tr.row-selected { background:#EEF2FF; }
+        .dag-tbl tbody tr:hover { background:#FFF8F1; }
+        .dag-tbl tbody tr.row-selected { background:oklch(96% 0.040 58); }
 
         /* Tag chip */
-        .tag-chip { display:inline-flex; align-items:center; padding:1px 7px; background:#EEF2FF; color:#4338CA; border-radius:3px; font-size:10px; font-weight:600; }
+        .tag-chip { display:inline-flex; align-items:center; padding:1px 7px; background:oklch(96% 0.040 58); color:oklch(40% 0.120 38); border-radius:3px; font-size:10px; font-weight:600; }
 
         /* Cron badge */
         .cron-badge { font-family:ui-monospace,monospace; font-size:11px; background:#F1F5F9; color:#475569; padding:2px 7px; border-radius:4px; white-space:nowrap; }
@@ -72,14 +72,372 @@
         .wave-sep { stroke:#E2E8F0; stroke-width:1; stroke-dasharray:5,4; }
         .wave-lbl { font-size:10px; font-weight:700; fill:#94A3B8; letter-spacing:.08em; text-transform:uppercase; }
         .dag-edge { fill:none; stroke:#94A3B8; stroke-width:1.8; marker-end:url(#arr); }
-        .dag-edge-hi { fill:none; stroke:#6366F1; stroke-width:2.2; marker-end:url(#arr-hi); }
+        .dag-edge-hi { fill:none; stroke:oklch(61% 0.210 38); stroke-width:2.2; marker-end:url(#arr-hi); }
 
         #dagVisualization { overflow:auto; position:relative; background:#F8FAFC; border-radius:0 0 12px 12px; }
+
+        .dp-flow-primary {
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
+            color: white;
+            box-shadow: 0 8px 16px oklch(61% 0.210 38 / 0.18);
+        }
+        .dp-flow-primary:hover { filter: brightness(0.96); }
+        .dp-flow-secondary {
+            background: white;
+            border: 1px solid #E2E8F0;
+            color: #334155;
+        }
+        .dp-flow-secondary:hover { background:#F8FAFC; }
+        .dp-focus-accent:focus {
+            border-color: oklch(61% 0.210 38) !important;
+            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / 0.24) !important;
+        }
+        .dp-text-accent { color: oklch(48% 0.160 38) !important; }
+        .dp-icon-accent { color: oklch(61% 0.210 38) !important; }
+        .dp-running-dot { background: oklch(72% 0.170 65); }
+        .dp-row-btn-accent {
+            background: oklch(61% 0.210 38);
+            color: white;
+        }
+        .dp-row-btn-accent:hover { background: oklch(54% 0.210 38); }
+        .dp-row-btn-soft {
+            background: oklch(96% 0.040 58);
+            color: oklch(40% 0.120 38);
+            border: 1px solid oklch(88% 0.060 58);
+        }
+        .dp-row-btn-soft:hover { background: oklch(92% 0.060 58); }
+        .dp-schedule-card {
+            background: oklch(97% 0.030 58);
+            border: 1px solid oklch(88% 0.060 58);
+        }
+        .run-detail-hero {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px;
+            border: 1px solid oklch(89% 0.035 58);
+            border-radius: 14px;
+            background: linear-gradient(135deg, oklch(98% 0.020 58), #fff);
+        }
+        .run-detail-icon {
+            width: 42px;
+            height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            color: white;
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
+            box-shadow: 0 10px 18px oklch(61% 0.210 38 / .18);
+        }
+        .run-detail-kpis {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .run-detail-kpi,
+        .run-detail-panel {
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            border-radius: 12px;
+        }
+        .run-detail-kpi { padding: 14px; }
+        .run-detail-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(260px, .85fr);
+            gap: 16px;
+        }
+        .run-detail-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 28px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .run-detail-status.completed { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
+        .run-detail-status.failed { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+        .run-detail-status.running,
+        .run-detail-status.started,
+        .run-detail-status.queued { background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; }
+        .run-detail-status.cancelled { background: #F8FAFC; color: #475569; border: 1px solid #CBD5E1; }
+        .run-detail-attempt {
+            width: 100%;
+            text-align: left;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            border-radius: 10px;
+            padding: 10px;
+            transition: background .15s, border-color .15s, transform .15s;
+        }
+        .run-detail-attempt:hover { background: #FFF8F1; border-color: oklch(86% 0.070 58); }
+        .run-detail-attempt.is-selected {
+            background: oklch(97% 0.030 58);
+            border-color: oklch(70% 0.130 58);
+            box-shadow: inset 3px 0 0 oklch(61% 0.210 38);
+        }
+        .run-detail-task {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 10px;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            background: #F8FAFC;
+        }
+        .run-task-timeline {
+            position: relative;
+            display: grid;
+            gap: 10px;
+        }
+        .run-task-item {
+            display: grid;
+            grid-template-columns: 22px minmax(0, 1fr);
+            gap: 10px;
+        }
+        .run-task-rail {
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+        .run-task-rail::after {
+            content: '';
+            position: absolute;
+            top: 24px;
+            bottom: -16px;
+            width: 2px;
+            background: #E2E8F0;
+        }
+        .run-task-item:last-child .run-task-rail::after { display: none; }
+        .run-task-dot {
+            position: relative;
+            z-index: 1;
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #F8FAFC;
+            border: 2px solid #CBD5E1;
+            color: #64748B;
+            font-size: 9px;
+        }
+        .run-task-dot.success { background: #ECFDF5; border-color: #10B981; color: #047857; }
+        .run-task-dot.failed { background: #FEF2F2; border-color: #EF4444; color: #B91C1C; }
+        .run-task-dot.running { background: #FFFBEB; border-color: #F59E0B; color: #B45309; }
+        .run-task-dot.pending,
+        .run-task-dot.skipped { background: #F8FAFC; border-color: #CBD5E1; color: #64748B; }
+        .run-task-card {
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            background: #F8FAFC;
+            padding: 11px;
+        }
+        .task-attempt-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            min-height: 24px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: #475569;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .task-attempt-chip.success { border-color: #A7F3D0; background: #ECFDF5; color: #047857; }
+        .task-attempt-chip.failed { border-color: #FECACA; background: #FEF2F2; color: #B91C1C; }
+        .task-log-filter {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: #475569;
+        }
+        .task-log-filter:hover {
+            background: #FFF8F1;
+            border-color: oklch(86% 0.070 58);
+            color: oklch(48% 0.160 38);
+        }
+        .task-repair-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 28px;
+            padding: 5px 9px;
+            border-radius: 8px;
+            border: 1px solid #FED7AA;
+            background: #FFF7ED;
+            color: #C2410C;
+            font-size: 10px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .task-repair-btn:hover { background: #FFEDD5; }
+        .run-config-profile-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .run-config-profile {
+            position: relative;
+            display: block;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: border-color .15s, background .15s, box-shadow .15s;
+        }
+        .run-config-profile:hover {
+            border-color: oklch(82% 0.080 58);
+            background: #FFF8F1;
+        }
+        .run-config-profile input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .run-config-profile:has(input:checked) {
+            border-color: oklch(61% 0.210 38);
+            background: oklch(97% 0.030 58);
+            box-shadow: inset 3px 0 0 oklch(61% 0.210 38);
+        }
+        .run-param-row {
+            display: grid;
+            grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) 34px;
+            gap: 8px;
+            align-items: center;
+        }
+        .run-log-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 10px 16px 0;
+        }
+        .run-log-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 28px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .run-log-tab:hover,
+        .run-log-tab.is-active {
+            background: #FFF8F1;
+            border-color: oklch(76% 0.110 58);
+            color: oklch(48% 0.160 38);
+        }
+        .run-detail-context {
+            display: grid;
+            grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+            gap: 12px;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            background: #fff;
+            padding: 14px;
+        }
+        .run-param-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            min-height: 24px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid #E2E8F0;
+            background: #F8FAFC;
+            color: #475569;
+            font-size: 10px;
+            font-weight: 700;
+            max-width: 100%;
+        }
+        .version-diff-pre {
+            min-height: 220px;
+            max-height: 360px;
+            overflow: auto;
+            border-radius: 12px;
+            background: #0F172A;
+            color: #CBD5E1;
+            padding: 14px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.65;
+            white-space: pre-wrap;
+        }
+        .run-detail-log {
+            min-height: 220px;
+            max-height: 340px;
+            overflow: auto;
+            border-radius: 12px;
+            background: #0F172A;
+            color: #CBD5E1;
+            padding: 14px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+        .run-detail-run-id {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            overflow-wrap: anywhere;
+        }
 
         @media (max-width: 767px) {
             .dp-sidebar-toggle { display: flex !important; }
             #graph-container { height: 300px !important; }
             #index-main { padding-left: 0 !important; }
+            .dp-flow-topbar {
+                align-items: flex-start;
+                gap: 10px;
+                min-height: 72px;
+            }
+            .dp-flow-topbar nav {
+                padding-top: 3px;
+                min-width: 0;
+            }
+            .dp-flow-actions {
+                margin-left: auto;
+                justify-content: flex-end;
+                gap: 6px;
+            }
+            .dp-flow-action-text,
+            .dp-flow-connection-text {
+                display: none;
+            }
+            .dp-flow-actions > * {
+                min-height: 36px;
+            }
+            .run-config-profile-grid,
+            .run-detail-context { grid-template-columns: 1fr; }
+            .run-param-row { grid-template-columns: 1fr; }
+            #toastContainer {
+                left: 16px;
+                right: 16px;
+                top: 76px;
+                width: auto;
+            }
+            .run-detail-hero { flex-direction: column; }
+            .run-detail-kpis,
+            .run-detail-layout { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -163,22 +521,22 @@
 <div class="pl-56 min-h-screen bg-slate-50 flex flex-col" id="index-main">
 
     <!-- Topbar -->
-    <header class="bg-white border-b border-slate-200 px-4 md:px-6 py-3.5 pl-14 md:pl-6 flex items-center justify-between sticky top-0 z-30">
+    <header class="dp-flow-topbar bg-white border-b border-slate-200 px-4 md:px-6 py-3.5 pl-14 md:pl-6 flex items-center justify-between sticky top-0 z-30">
         <nav class="flex items-center gap-2 text-sm">
             <a href="/" class="text-slate-500 hover:text-slate-800 transition-colors">Home</a>
             <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
             <span class="text-slate-900 font-semibold">DP Flow</span>
         </nav>
-        <div class="flex items-center gap-3 flex-wrap">
-            <div id="connectionStatus" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-sm">
+        <div class="dp-flow-actions flex items-center gap-3 flex-wrap">
+            <div id="connectionStatus" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-sm" title="API connection status">
                 <i class="fas fa-circle text-slate-400 text-xs animate-pulse"></i>
-                <span class="text-slate-500">Connecting&hellip;</span>
+                <span class="dp-flow-connection-text text-slate-500">Connecting&hellip;</span>
             </div>
-            <button id="refreshBtn" class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                <i class="fas fa-arrows-rotate text-sm"></i>Refresh
+            <button id="refreshBtn" class="dp-flow-secondary inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors" aria-label="Refresh dashboard" title="Refresh dashboard">
+                <i class="fas fa-arrows-rotate text-sm"></i><span class="dp-flow-action-text">Refresh</span>
             </button>
-            <a href="/generator" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-                <i class="fas fa-wand-magic-sparkles text-sm"></i>Generator
+            <a href="/generator" class="dp-flow-primary inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors" aria-label="Open generator" title="Open generator">
+                <i class="fas fa-wand-magic-sparkles text-sm"></i><span class="dp-flow-action-text">Generator</span>
             </a>
         </div>
     </header>
@@ -200,7 +558,7 @@
             <div class="xl:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm">
                 <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
                     <h2 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse inline-block"></span>Active Runs
+                        <span class="w-2 h-2 rounded-full dp-running-dot animate-pulse inline-block"></span>Active Runs
                     </h2>
                     <span class="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Live</span>
                 </div>
@@ -209,7 +567,7 @@
             <div class="xl:col-span-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                 <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
                     <h2 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                        <i class="fas fa-clock-rotate-left text-indigo-400 text-xs"></i>Recent Activity
+                        <i class="fas fa-clock-rotate-left dp-icon-accent text-xs"></i>Recent Activity
                     </h2>
                     <span class="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Latest 12</span>
                 </div>
@@ -223,7 +581,7 @@
             <div class="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div class="flex-1">
                     <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                        <i class="fas fa-diagram-project text-indigo-500 text-sm"></i>DAGs
+                        <i class="fas fa-diagram-project dp-icon-accent text-sm"></i>DAGs
                         <span id="dagCountBadge" class="text-xs font-normal bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">—</span>
                     </h2>
                     <p class="text-xs text-slate-400 mt-0.5">Click any row to view the Graph. Toggle to mark active/paused.</p>
@@ -232,9 +590,9 @@
                     <div class="relative">
                         <i class="fas fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
                         <input id="dagSearch" type="text" placeholder="Search DAGs…"
-                               class="pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg w-44 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400">
+                               class="dp-focus-accent pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg w-44 focus:outline-none">
                     </div>
-                    <select id="dagStatusFilter" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <select id="dagStatusFilter" class="dp-focus-accent text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none">
                         <option value="all">All status</option>
                         <option value="completed">Healthy</option>
                         <option value="failed">Failed</option>
@@ -278,7 +636,7 @@
         <div id="pipelineStatusSection" class="bg-white rounded-xl border border-slate-200 shadow-sm hidden">
             <div class="px-5 py-3.5 border-b border-slate-100">
                 <h2 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                    <i class="fas fa-chart-line text-purple-500 text-xs"></i>Pipeline Status
+                    <i class="fas fa-chart-line dp-icon-accent text-xs"></i>Pipeline Status
                 </h2>
             </div>
             <div id="pipelineStatus" class="p-5 space-y-4"></div>
@@ -296,7 +654,7 @@
                 </div>
                 <div class="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
                     <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-slate-500"></div>Pending</div>
-                    <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-blue-500 animate-pulse"></div>Running</div>
+                    <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded dp-running-dot animate-pulse"></div>Running</div>
                     <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-emerald-500"></div>Success</div>
                     <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-red-500"></div>Failed</div>
                     <div class="flex items-center gap-1.5"><div class="w-5 h-px border-t-2 border-dashed border-slate-300"></div>Wave boundary</div>
@@ -315,7 +673,7 @@
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div class="px-5 py-3.5 border-b border-slate-100">
                 <h2 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                    <i class="fas fa-clock text-indigo-500 text-xs"></i>Active Schedules
+                    <i class="fas fa-clock dp-icon-accent text-xs"></i>Active Schedules
                 </h2>
             </div>
             <div id="scheduledPipelines" class="p-4 space-y-2"></div>
@@ -348,24 +706,24 @@
         <div class="p-6 space-y-4">
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1"><i class="fas fa-hourglass-start mr-2 text-slate-400"></i>Minute (0-59)</label>
-                <input type="text" id="scheduleMinute" value="0" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="scheduleMinute" value="0" class="dp-focus-accent w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none">
                 <p class="text-xs text-slate-400 mt-1">Use * for every minute, or 0-59</p>
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1"><i class="fas fa-clock mr-2 text-slate-400"></i>Hour (0-23)</label>
-                <input type="text" id="scheduleHour" value="*" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="scheduleHour" value="*" class="dp-focus-accent w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1"><i class="fas fa-calendar mr-2 text-slate-400"></i>Day of Month (1-31)</label>
-                <input type="text" id="scheduleDay" value="*" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="scheduleDay" value="*" class="dp-focus-accent w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1"><i class="fas fa-calendar-alt mr-2 text-slate-400"></i>Month (1-12)</label>
-                <input type="text" id="scheduleMonth" value="*" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="scheduleMonth" value="*" class="dp-focus-accent w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1"><i class="fas fa-calendar-week mr-2 text-slate-400"></i>Day of Week (0=Mon … 6=Sun)</label>
-                <input type="text" id="scheduleDayOfWeek" value="*" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="scheduleDayOfWeek" value="*" class="dp-focus-accent w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none">
             </div>
             <div class="pt-2">
                 <p class="text-sm font-medium text-slate-700 mb-2">Quick Presets</p>
@@ -379,7 +737,47 @@
         </div>
         <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
             <button id="cancelScheduleBtn" class="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50">Cancel</button>
-            <button id="confirmScheduleBtn" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold">Schedule Pipeline</button>
+            <button id="confirmScheduleBtn" class="dp-flow-primary px-4 py-2 text-sm rounded-lg font-semibold">Schedule Pipeline</button>
+        </div>
+    </div>
+</div>
+
+<div id="runConfigModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+            <div class="min-w-0">
+                <h3 class="font-semibold text-slate-900">Run Pipeline</h3>
+                <p id="runConfigPipelineName" class="text-xs text-slate-400 mt-0.5 truncate"></p>
+            </div>
+            <button id="closeRunConfigModal" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+                <i class="fas fa-xmark text-lg"></i>
+            </button>
+        </div>
+        <div class="p-6 space-y-5">
+            <section>
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h4 class="text-sm font-semibold text-slate-800">Environment</h4>
+                    <span class="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Profile</span>
+                </div>
+                <div id="runEnvironmentProfiles" class="run-config-profile-grid"></div>
+            </section>
+            <section>
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h4 class="text-sm font-semibold text-slate-800">Parameters</h4>
+                    <button id="addRunParamBtn" class="dp-flow-secondary inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                        <i class="fas fa-plus text-[10px]"></i>Add
+                    </button>
+                </div>
+                <div id="runParamsRows" class="space-y-2"></div>
+                <textarea id="runParamsJson" rows="5" spellcheck="false" placeholder='{"batch_date":"2026-07-03"}'
+                          class="dp-focus-accent mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-700 focus:outline-none"></textarea>
+            </section>
+        </div>
+        <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+            <button id="cancelRunConfigBtn" class="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-white">Cancel</button>
+            <button id="confirmRunConfigBtn" class="dp-flow-primary inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg font-semibold">
+                <i class="fas fa-play text-xs"></i>Run
+            </button>
         </div>
     </div>
 </div>
@@ -392,11 +790,18 @@
 // ═══════════════════════════════════════════
 let currentPipeline = null;
 let currentScheduleConfigPath = null;
+let pendingRunConfigPath = null;
 let statusInterval = null;
+let runLogStream = null;
 let retryCount = 0;
 const maxRetries = 3;
 let dashboardSummary = { stats:{}, active_runs:[], recent_runs:[], pipeline_summaries:[], failed_pipelines:[] };
 let allPipelines = [];
+let environmentProfiles = [
+    { id:'local', name:'Local', description:'Local worker', compute:'local-worker', badge:'Default' },
+    { id:'dev', name:'Development', description:'Development profile', compute:'dev-worker', badge:'Dev' },
+    { id:'prod', name:'Production', description:'Production profile', compute:'prod-worker', badge:'Prod' }
+];
 
 // ═══════════════════════════════════════════
 //  Boot
@@ -412,6 +817,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkConnection();
     loadDashboardSummary();
     loadPipelines();
+    loadEnvironmentProfiles();
     loadScheduledPipelines();
     startStatusUpdates();
     connectLiveStream();
@@ -455,7 +861,12 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
     document.getElementById('closeScheduleModal').addEventListener('click', closeScheduleModal);
     document.getElementById('cancelScheduleBtn').addEventListener('click', closeScheduleModal);
     document.getElementById('confirmScheduleBtn').addEventListener('click', submitSchedule);
+    document.getElementById('closeRunConfigModal').addEventListener('click', closeRunConfigModal);
+    document.getElementById('cancelRunConfigBtn').addEventListener('click', closeRunConfigModal);
+    document.getElementById('addRunParamBtn').addEventListener('click', () => addRunParamRow());
+    document.getElementById('confirmRunConfigBtn').addEventListener('click', submitRunConfig);
     document.getElementById('pipelineModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+    document.getElementById('runConfigModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeRunConfigModal(); });
 
     document.getElementById('dagSearch').addEventListener('input', applyDAGFilters);
     document.getElementById('dagStatusFilter').addEventListener('change', applyDAGFilters);
@@ -484,6 +895,41 @@ function formatRelativeTime(value) {
     return rtf.format(Math.round(hrs / 24), 'day');
 }
 
+function formatAbsoluteTime(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString();
+}
+
+function formatDuration(seconds) {
+    const n = Number(seconds);
+    if (!Number.isFinite(n) || n < 0) return '—';
+    if (n < 60) return `${n.toFixed(n < 10 ? 2 : 1)}s`;
+    const mins = Math.floor(n / 60);
+    const rem = Math.round(n % 60);
+    if (mins < 60) return `${mins}m ${rem}s`;
+    const hrs = Math.floor(mins / 60);
+    return `${hrs}h ${mins % 60}m`;
+}
+
+function shortRunId(runId) {
+    return runId ? String(runId).slice(0, 8) : '—';
+}
+
+function getRunTimeValue(run) {
+    return new Date(run && (run.updated_at || run.started_at) || 0).getTime() || 0;
+}
+
+function getRunStatusIcon(status) {
+    if (status === 'completed') return 'fas fa-check-circle';
+    if (status === 'failed') return 'fas fa-times-circle';
+    if (status === 'running' || status === 'started') return 'fas fa-spinner fa-spin';
+    if (status === 'queued') return 'fas fa-clock';
+    if (status === 'cancelled') return 'fas fa-ban';
+    return 'fas fa-circle-notch';
+}
+
 function formatSchedule(schedule) {
     if (!schedule) return 'Manual';
     const m = schedule.minute || '*', h = schedule.hour || '*';
@@ -501,10 +947,12 @@ function getPipelineSummary(name) {
 
 function getStatusMeta(status) {
     const map = {
-        started:   { color:'blue',  icon:'fas fa-spinner fa-spin', label:'Running', pill:'bg-blue-100 text-blue-800'     },
-        running:   { color:'blue',  icon:'fas fa-spinner fa-spin', label:'Running', pill:'bg-blue-100 text-blue-800'     },
+        started:   { color:'amber', icon:'fas fa-spinner fa-spin', label:'Running', pill:'bg-amber-100 text-amber-800'   },
+        running:   { color:'amber', icon:'fas fa-spinner fa-spin', label:'Running', pill:'bg-amber-100 text-amber-800'   },
+        queued:    { color:'amber', icon:'fas fa-clock',           label:'Queued',  pill:'bg-amber-100 text-amber-800'   },
         completed: { color:'green', icon:'fas fa-check-circle',    label:'Healthy', pill:'bg-emerald-100 text-emerald-800'},
         failed:    { color:'red',   icon:'fas fa-times-circle',    label:'Failed',  pill:'bg-red-100 text-red-800'       },
+        cancelled: { color:'slate', icon:'fas fa-ban',             label:'Cancelled',pill:'bg-slate-100 text-slate-600'  },
         never_run: { color:'slate', icon:'fas fa-circle-notch',    label:'Never run',pill:'bg-slate-100 text-slate-600' },
     };
     return map[status] || { color:'amber', icon:'fas fa-pause-circle', label:'Idle', pill:'bg-amber-100 text-amber-800' };
@@ -528,10 +976,10 @@ function updateConnectionStatus(ok, msg) {
     const el = document.getElementById('connectionStatus');
     if (ok) {
         el.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 text-sm';
-        el.innerHTML = `<i class="fas fa-circle text-emerald-500 text-xs"></i><span class="text-emerald-700 font-medium">${msg}</span>`;
+        el.innerHTML = `<i class="fas fa-circle text-emerald-500 text-xs"></i><span class="dp-flow-connection-text text-emerald-700 font-medium">${msg}</span>`;
     } else {
         el.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 text-sm';
-        el.innerHTML = `<i class="fas fa-circle text-red-500 text-xs animate-pulse"></i><span class="text-red-600 font-medium">${msg}</span>`;
+        el.innerHTML = `<i class="fas fa-circle text-red-500 text-xs animate-pulse"></i><span class="dp-flow-connection-text text-red-600 font-medium">${msg}</span>`;
     }
 }
 
@@ -541,9 +989,9 @@ function updateConnectionStatus(ok, msg) {
 function renderOverviewStats() {
     const s = dashboardSummary.stats || {};
     const cards = [
-        { label:'Total DAGs',     value:s.total_pipelines||0,     icon:'fa-diagram-project',       color:'indigo'  },
+        { label:'Total DAGs',     value:s.total_pipelines||0,     icon:'fa-diagram-project',       color:'orange'  },
         { label:'Active Runs',    value:s.active_runs||0,          icon:'fa-bolt',                  color:'amber'   },
-        { label:'Scheduled',      value:s.scheduled_pipelines||0,  icon:'fa-clock',                 color:'blue'    },
+        { label:'Scheduled',      value:s.scheduled_pipelines||0,  icon:'fa-clock',                 color:'cyan'    },
         { label:'Healthy',        value:s.successful_pipelines||0, icon:'fa-circle-check',          color:'emerald' },
         { label:'Failures',       value:s.failed_pipelines||0,     icon:'fa-triangle-exclamation',  color:'red'     },
         { label:'Broken Configs', value:s.failed_configs||0,       icon:'fa-file-circle-xmark',     color:'slate'   },
@@ -573,19 +1021,19 @@ function renderActiveRuns() {
         return;
     }
     el.innerHTML = runs.map(r => `
-        <div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3">
             <div class="flex items-start justify-between gap-2">
                 <div>
                     <p class="font-semibold text-slate-800 text-xs">${escapeHtml(r.display_name)}</p>
                     <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(r.last_message || 'In progress…')}</p>
                 </div>
-                <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
                     <i class="fas fa-spinner fa-spin mr-1 text-[9px]"></i>Running
                 </span>
             </div>
             <div class="mt-2 flex gap-1.5 text-xs text-slate-500">
-                <span class="px-2 py-0.5 rounded-full bg-white border border-blue-100">${r.task_count} tasks</span>
-                <span class="px-2 py-0.5 rounded-full bg-white border border-blue-100">${formatRelativeTime(r.last_updated_at)}</span>
+                <span class="px-2 py-0.5 rounded-full bg-white border border-amber-100">${r.task_count} tasks</span>
+                <span class="px-2 py-0.5 rounded-full bg-white border border-amber-100">${formatRelativeTime(r.last_updated_at)}</span>
             </div>
         </div>`).join('');
 }
@@ -684,8 +1132,10 @@ function buildDAGTableRows(pipelines) {
     // Wire buttons — stop propagation so row click (= open graph) isn't triggered
     pipelines.forEach((p, i) => {
         const row = document.getElementById(`dag-row-${i}`);
-        row.querySelector('.btn-run').addEventListener('click', e => { e.stopPropagation(); runPipeline(p.file_path); });
+        row.querySelector('.btn-run').addEventListener('click', e => { e.stopPropagation(); openRunConfigModal(p.file_path, p.display_name); });
+        row.querySelector('.btn-runs').addEventListener('click', e => { e.stopPropagation(); openRunDetails(p); });
         row.querySelector('.btn-dag').addEventListener('click', e => { e.stopPropagation(); openDAGView(p); });
+        row.querySelector('.btn-versions').addEventListener('click', e => { e.stopPropagation(); openPipelineVersions(p); });
         row.querySelector('.btn-sch').addEventListener('click', e => { e.stopPropagation(); schedulePipeline(p.file_path); });
         row.querySelector('.btn-cfg').addEventListener('click', e => { e.stopPropagation(); previewPipelineConfig(p.file_path); });
         row.addEventListener('click', () => openDAGView(p));
@@ -720,7 +1170,7 @@ function createDAGRow(pipeline, idx) {
             <div class="flex items-start gap-2">
                 <div class="sdot ${dotClass} mt-1.5 shrink-0"></div>
                 <div>
-                    <p class="text-sm font-semibold text-indigo-600">${escapeHtml(pipeline.display_name)}</p>
+                    <p class="text-sm font-semibold dp-text-accent">${escapeHtml(pipeline.display_name)}</p>
                     <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(pipeline.name)}</p>
                     ${tags ? `<div class="flex flex-wrap gap-0.5 mt-1">${tags}</div>` : ''}
                 </div>
@@ -741,10 +1191,16 @@ function createDAGRow(pipeline, idx) {
                 <button class="btn-run inline-flex items-center gap-1 text-[10px] px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-semibold transition-colors" title="Run now">
                     <i class="fas fa-play text-[9px]"></i>Run
                 </button>
-                <button class="btn-dag inline-flex items-center gap-1 text-[10px] px-2.5 py-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md font-semibold transition-colors" title="Graph view">
+                <button class="btn-runs dp-row-btn-soft inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-md font-semibold transition-colors" title="Run details">
+                    <i class="fas fa-rectangle-list text-[9px]"></i>Runs
+                </button>
+                <button class="btn-dag dp-row-btn-accent inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-md font-semibold transition-colors" title="Graph view">
                     <i class="fas fa-project-diagram text-[9px]"></i>Graph
                 </button>
-                <button class="btn-sch inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md font-semibold transition-colors" title="Schedule">
+                <button class="btn-versions dp-row-btn-soft inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-semibold transition-colors" title="Versions">
+                    <i class="fas fa-code-compare text-[9px]"></i>
+                </button>
+                <button class="btn-sch dp-row-btn-soft inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-semibold transition-colors" title="Schedule">
                     <i class="fas fa-clock text-[9px]"></i>
                 </button>
                 <button class="btn-cfg inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-500 hover:bg-slate-600 text-white rounded-md font-semibold transition-colors" title="View YAML">
@@ -758,11 +1214,11 @@ function createDAGRow(pipeline, idx) {
 // Async: fill run squares per pipeline
 async function loadRunSquares(pipelineName) {
     try {
-        const r = await fetch(`/history/${encodeURIComponent(pipelineName)}`);
+        const r = await fetch(`/history/${encodeURIComponent(pipelineName)}?limit=8`);
         if (!r.ok) return;
         const data = await r.json();
-        const filtered = (data.runs || []).filter(r => ['completed','failed','running','started'].includes(r.status));
-        const last8 = filtered.slice(-8);
+        const filtered = (data.runs || []).filter(r => ['completed','failed','running','started','queued'].includes(r.status));
+        const last8 = filtered.slice(0, 8).reverse();
 
         // Find rows by data attribute
         document.querySelectorAll(`[data-pipeline]`).forEach(row => {
@@ -771,12 +1227,13 @@ async function loadRunSquares(pipelineName) {
             const c = document.getElementById(`rsq-${idx}`);
             if (!c) return;
             const squares = Array(8).fill(null);
-            last8.forEach((run, i) => { squares[i] = run.status; });
-            c.innerHTML = squares.map(s => {
-                if (!s) return '<div class="rsq rsq-sk" title="No run"></div>';
-                if (s === 'completed') return '<div class="rsq rsq-ok" title="Success"></div>';
-                if (s === 'failed')    return '<div class="rsq rsq-er" title="Failed"></div>';
-                return '<div class="rsq rsq-rn" title="Running"></div>';
+            last8.forEach((run, i) => { squares[i] = run; });
+            c.innerHTML = squares.map(run => {
+                if (!run) return '<div class="rsq rsq-sk" title="No run"></div>';
+                const title = `${getStatusMeta(run.status).label} · ${formatAbsoluteTime(run.updated_at)}`;
+                if (run.status === 'completed') return `<div class="rsq rsq-ok" title="${escapeHtml(title)}"></div>`;
+                if (run.status === 'failed')    return `<div class="rsq rsq-er" title="${escapeHtml(title)}"></div>`;
+                return `<div class="rsq rsq-rn" title="${escapeHtml(title)}"></div>`;
             }).join('');
         });
     } catch(_) {}
@@ -1061,15 +1518,121 @@ function showTaskPanel(taskName, status, ctx) {
 // ═══════════════════════════════════════════
 //  Pipeline Actions
 // ═══════════════════════════════════════════
-async function runPipeline(configPath) {
+async function loadEnvironmentProfiles() {
     try {
+        const r = await fetch('/environment-profiles');
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Failed to load profiles');
+        if (Array.isArray(data.profiles) && data.profiles.length) {
+            environmentProfiles = data.profiles;
+        }
+    } catch(e) {
+        console.warn('Environment profiles unavailable:', e);
+    }
+}
+
+function renderEnvironmentProfiles(selectedId = 'local') {
+    const container = document.getElementById('runEnvironmentProfiles');
+    if (!container) return;
+    container.innerHTML = environmentProfiles.map(profile => {
+        const checked = profile.id === selectedId ? 'checked' : '';
+        return `<label class="run-config-profile">
+            <input type="radio" name="runEnvironmentProfile" value="${escapeHtml(profile.id)}" ${checked}>
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(profile.name || profile.id)}</p>
+                    <p class="text-[11px] text-slate-400 mt-1 line-clamp-2">${escapeHtml(profile.description || profile.compute || '')}</p>
+                </div>
+                <span class="shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-full bg-slate-100 text-slate-500 px-2 py-0.5">${escapeHtml(profile.badge || profile.id)}</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-2 font-mono truncate">${escapeHtml(profile.compute || '')}</p>
+        </label>`;
+    }).join('');
+}
+
+function openRunConfigModal(configPath, pipelineName) {
+    pendingRunConfigPath = configPath;
+    document.getElementById('runConfigPipelineName').textContent = pipelineName || configPath || '';
+    document.getElementById('runParamsRows').innerHTML = '';
+    document.getElementById('runParamsJson').value = '';
+    renderEnvironmentProfiles('local');
+    addRunParamRow();
+    document.getElementById('runConfigModal').classList.remove('hidden');
+}
+
+function closeRunConfigModal() {
+    document.getElementById('runConfigModal').classList.add('hidden');
+    pendingRunConfigPath = null;
+}
+
+function addRunParamRow(key = '', value = '') {
+    const container = document.getElementById('runParamsRows');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'run-param-row';
+    row.innerHTML = `
+        <input type="text" value="${escapeHtml(key)}" placeholder="Key"
+               class="run-param-key dp-focus-accent w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none">
+        <input type="text" value="${escapeHtml(value)}" placeholder="Value"
+               class="run-param-value dp-focus-accent w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none">
+        <button type="button" class="run-param-remove inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200" title="Remove parameter">
+            <i class="fas fa-xmark text-xs"></i>
+        </button>`;
+    row.querySelector('.run-param-remove').addEventListener('click', () => row.remove());
+    container.appendChild(row);
+}
+
+function collectRunParameters() {
+    const params = {};
+    document.querySelectorAll('#runParamsRows .run-param-row').forEach(row => {
+        const key = row.querySelector('.run-param-key')?.value.trim();
+        const value = row.querySelector('.run-param-value')?.value ?? '';
+        if (key) params[key] = value;
+    });
+    const rawJson = document.getElementById('runParamsJson')?.value.trim();
+    if (rawJson) {
+        const parsed = JSON.parse(rawJson);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('Parameters JSON must be an object');
+        }
+        Object.assign(params, parsed);
+    }
+    return params;
+}
+
+async function submitRunConfig() {
+    if (!pendingRunConfigPath) {
+        showError('No pipeline selected');
+        return;
+    }
+    let parameters = {};
+    try {
+        parameters = collectRunParameters();
+    } catch(e) {
+        showError(e.message || 'Invalid parameters');
+        return;
+    }
+    const selectedProfile = document.querySelector('input[name="runEnvironmentProfile"]:checked')?.value || 'local';
+    await runPipeline(pendingRunConfigPath, {
+        parameters,
+        environment_profile: selectedProfile
+    });
+}
+
+async function runPipeline(configPath, options = {}) {
+    try {
+        const payload = { config_path: configPath, ...options };
+        if (!payload.parameters || !Object.keys(payload.parameters).length) {
+            delete payload.parameters;
+        }
         const r = await fetch('/run', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ config_path: configPath })
+            body: JSON.stringify(payload)
         });
         const result = await r.json();
         if (r.ok) {
             showSuccess(`Pipeline ${result.pipeline_name} started`);
+            closeRunConfigModal();
             currentPipeline = result.pipeline_name;
             document.getElementById('pipelineStatusSection').classList.remove('hidden');
             loadDashboardSummary();
@@ -1160,6 +1723,711 @@ async function previewPipelineConfig(configPath) {
     } catch(e) { showError(e.message || 'Failed to load config'); }
 }
 
+function formatVersionLabel(version) {
+    const id = version.version_id ? version.version_id.slice(0, 8) : 'unknown';
+    const who = version.saved_by || 'system';
+    return `${id} - ${formatAbsoluteTime(version.saved_at)} - ${who}`;
+}
+
+async function openPipelineVersions(pipeline) {
+    showModal(`Versions: ${pipeline.display_name}`, `
+        <div class="py-16 text-center text-slate-400">
+            <i class="fas fa-spinner fa-spin text-2xl mb-3 block"></i>
+            <p class="text-sm font-medium">Loading versions...</p>
+        </div>`);
+    try {
+        const r = await fetch(`/versions/${encodeURIComponent(pipeline.display_name)}?limit=30`);
+        const versions = await r.json();
+        if (!r.ok) throw new Error(versions.detail || 'Failed to load versions');
+        document.getElementById('modalContent').innerHTML = renderVersionManager(pipeline, Array.isArray(versions) ? versions : []);
+        wireVersionManager(pipeline, Array.isArray(versions) ? versions : []);
+    } catch(e) {
+        document.getElementById('modalContent').innerHTML = `
+            <div class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700 text-sm">
+                <i class="fas fa-circle-xmark mr-2"></i>${escapeHtml(e.message || 'Failed to load versions')}
+            </div>`;
+    }
+}
+
+function renderVersionOptions(versions, selectedIndex) {
+    return versions.map((version, index) => `
+        <option value="${escapeHtml(version.version_id)}" ${index === selectedIndex ? 'selected' : ''}>
+            ${escapeHtml(formatVersionLabel(version))}
+        </option>`).join('');
+}
+
+function renderVersionManager(pipeline, versions) {
+    if (!versions.length) {
+        return `<div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+            <i class="fas fa-code-branch text-3xl text-slate-300 block mb-3"></i>
+            <p class="text-sm font-semibold text-slate-700">No saved versions</p>
+            <p class="text-xs text-slate-400 mt-1">${escapeHtml(pipeline.file_path || '')}</p>
+        </div>`;
+    }
+    const baseIndex = versions.length > 1 ? 1 : 0;
+    const compareIndex = 0;
+    return `<div class="space-y-5">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Snapshots</p>
+                <p class="text-2xl font-bold text-slate-900 mt-1">${versions.length}</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 lg:col-span-2">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Active File</p>
+                <p class="text-xs font-mono text-slate-700 mt-2 break-all">${escapeHtml(pipeline.file_path || '')}</p>
+            </div>
+        </div>
+
+        <section class="rounded-xl border border-slate-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
+                <h4 class="text-sm font-semibold text-slate-800">Version History</h4>
+                <span class="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Newest first</span>
+            </div>
+            <div class="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                ${versions.map(version => `
+                    <div class="px-4 py-3 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold text-slate-800">${escapeHtml(version.version_id.slice(0, 8))}</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(formatAbsoluteTime(version.saved_at))} by ${escapeHtml(version.saved_by || 'system')}</p>
+                        </div>
+                        <p class="text-[10px] font-mono text-slate-400 truncate max-w-[220px]">${escapeHtml(version.version_hash || '')}</p>
+                    </div>`).join('')}
+            </div>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100">
+                <h4 class="text-sm font-semibold text-slate-800">Compare Versions</h4>
+            </div>
+            <div class="p-4 space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="block">
+                        <span class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Base</span>
+                        <select id="versionBaseSelect" class="dp-focus-accent mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none">
+                            ${renderVersionOptions(versions, baseIndex)}
+                        </select>
+                    </label>
+                    <label class="block">
+                        <span class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Compare</span>
+                        <select id="versionCompareSelect" class="dp-focus-accent mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:outline-none">
+                            ${renderVersionOptions(versions, compareIndex)}
+                        </select>
+                    </label>
+                </div>
+                <pre id="versionDiffOutput" class="version-diff-pre">${versions.length > 1 ? 'Loading diff...' : 'Need two saved versions to compare.'}</pre>
+            </div>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div class="flex flex-col md:flex-row md:items-end gap-3">
+                <label class="block flex-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Restore</span>
+                    <select id="versionRestoreSelect" class="dp-focus-accent mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none">
+                        ${renderVersionOptions(versions, 0)}
+                    </select>
+                </label>
+                <button id="versionRestoreBtn" class="dp-flow-primary inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold">
+                    <i class="fas fa-rotate-left text-xs"></i>Restore
+                </button>
+            </div>
+        </section>
+    </div>`;
+}
+
+function wireVersionManager(pipeline, versions) {
+    const base = document.getElementById('versionBaseSelect');
+    const compare = document.getElementById('versionCompareSelect');
+    const restore = document.getElementById('versionRestoreBtn');
+    if (base && compare) {
+        const update = () => refreshVersionDiff(pipeline.display_name);
+        base.addEventListener('change', update);
+        compare.addEventListener('change', update);
+        if (versions.length > 1) update();
+    }
+    if (restore) {
+        restore.addEventListener('click', () => restorePipelineVersion(pipeline));
+    }
+}
+
+async function refreshVersionDiff(pipelineName) {
+    const out = document.getElementById('versionDiffOutput');
+    const base = document.getElementById('versionBaseSelect')?.value;
+    const compare = document.getElementById('versionCompareSelect')?.value;
+    if (!out || !base || !compare) return;
+    if (base === compare) {
+        out.textContent = 'Select two different versions.';
+        return;
+    }
+    out.textContent = 'Loading diff...';
+    try {
+        const r = await fetch(`/versions/${encodeURIComponent(pipelineName)}/${encodeURIComponent(base)}/diff/${encodeURIComponent(compare)}`);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Failed to load diff');
+        out.textContent = data.diff || 'No changes between selected versions.';
+    } catch(e) {
+        out.textContent = e.message || 'Failed to load diff';
+    }
+}
+
+async function restorePipelineVersion(pipeline) {
+    const versionId = document.getElementById('versionRestoreSelect')?.value;
+    if (!versionId) return;
+    if (!window.confirm(`Restore ${versionId.slice(0, 8)} to ${pipeline.display_name}?`)) return;
+    try {
+        const r = await fetch(`/versions/${encodeURIComponent(pipeline.display_name)}/${encodeURIComponent(versionId)}/restore`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ config_path: pipeline.file_path })
+        });
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.detail || 'Failed to restore version');
+        showSuccess(result.message || 'Version restored');
+        loadDashboardSummary();
+        loadPipelines();
+        openPipelineVersions(pipeline);
+    } catch(e) {
+        showError(e.message || 'Failed to restore version');
+    }
+}
+
+function normalizeRunDetails(run) {
+    return run && run.details && typeof run.details === 'object' ? run.details : {};
+}
+
+function getRunTasks(parsed, details) {
+    const fromRun = Array.isArray(details.execution_order) ? details.execution_order : [];
+    if (fromRun.length) return fromRun;
+    return Array.isArray(parsed.tasks) ? parsed.tasks.map(t => t.name).filter(Boolean) : [];
+}
+
+function getTaskOutcome(taskName, runStatus, details) {
+    const errors = details.errors && typeof details.errors === 'object' ? details.errors : {};
+    const results = details.results && typeof details.results === 'object' ? details.results : {};
+    if (errors[taskName]) return { label:'Failed', icon:'fas fa-circle-xmark', cls:'text-red-600' };
+    if (Object.prototype.hasOwnProperty.call(results, taskName)) {
+        return results[taskName]
+            ? { label:'Succeeded', icon:'fas fa-circle-check', cls:'text-emerald-600' }
+            : { label:'Failed', icon:'fas fa-circle-xmark', cls:'text-red-600' };
+    }
+    if (details.success === true && runStatus === 'completed') {
+        return { label:'Succeeded', icon:'fas fa-circle-check', cls:'text-emerald-600' };
+    }
+    if (runStatus === 'running' || runStatus === 'started') {
+        return { label:'Pending', icon:'fas fa-circle-notch', cls:'text-slate-400' };
+    }
+    return { label:'Not reported', icon:'fas fa-minus-circle', cls:'text-slate-400' };
+}
+
+function getTaskRunVisual(status) {
+    const s = String(status || '').toLowerCase();
+    const map = {
+        success: { label:'Succeeded', icon:'fas fa-check', cls:'success', text:'text-emerald-700' },
+        failed: { label:'Failed', icon:'fas fa-xmark', cls:'failed', text:'text-red-700' },
+        running: { label:'Running', icon:'fas fa-spinner fa-spin', cls:'running', text:'text-amber-700' },
+        pending: { label:'Pending', icon:'fas fa-circle', cls:'pending', text:'text-slate-500' },
+        skipped: { label:'Skipped', icon:'fas fa-minus', cls:'skipped', text:'text-slate-500' }
+    };
+    return map[s] || map.pending;
+}
+
+function getRepairTaskName(details) {
+    const taskRuns = Array.isArray(details.task_runs) ? details.task_runs : [];
+    const failedRun = taskRuns.find(t => t.status === 'failed' && t.task_name);
+    if (failedRun) return failedRun.task_name;
+    const errors = details.errors && typeof details.errors === 'object' ? details.errors : {};
+    const errorTask = Object.keys(errors)[0];
+    if (errorTask) return errorTask;
+    const results = details.results && typeof details.results === 'object' ? details.results : {};
+    return Object.keys(results).find(taskName => results[taskName] === false) || null;
+}
+
+function renderAttemptHistory(taskRun) {
+    const attempts = Array.isArray(taskRun.attempt_history) ? taskRun.attempt_history : [];
+    if (!attempts.length) {
+        const maxAttempts = taskRun.max_attempts ? `${taskRun.max_attempts} max` : 'No attempts';
+        return `<span class="task-attempt-chip">${escapeHtml(maxAttempts)}</span>`;
+    }
+    return attempts.map(a => {
+        const visual = getTaskRunVisual(a.status);
+        return `<span class="task-attempt-chip ${visual.cls}" title="${escapeHtml(a.error || '')}">
+            <i class="${visual.icon} text-[9px]"></i>
+            Attempt ${escapeHtml(a.attempt || '—')} · ${escapeHtml(formatDuration(a.duration_seconds))}
+        </span>`;
+    }).join('');
+}
+
+function renderTaskTimeline(parsed, run, details) {
+    const taskRuns = Array.isArray(details.task_runs) ? details.task_runs : [];
+    if (!taskRuns.length) return '';
+    const taskConfigs = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    return `<div class="run-task-timeline">
+        ${taskRuns.map((taskRun, idx) => {
+            const taskName = taskRun.task_name || taskRun.name || `task-${idx + 1}`;
+            const task = taskConfigs.find(t => t.name === taskName) || {};
+            const visual = getTaskRunVisual(taskRun.status);
+            const depends = Array.isArray(taskRun.depends_on) && taskRun.depends_on.length
+                ? taskRun.depends_on.join(', ')
+                : (Array.isArray(task.depends_on) && task.depends_on.length ? task.depends_on.join(', ') : 'None');
+            const retryText = Number(taskRun.retry_count || 0) > 0 ? `${taskRun.retry_count} retried` : 'No retries';
+            return `<div class="run-task-item">
+                <div class="run-task-rail">
+                    <span class="run-task-dot ${visual.cls}"><i class="${visual.icon}"></i></span>
+                </div>
+                <div class="run-task-card">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold text-slate-800 truncate">${idx + 1}. ${escapeHtml(taskName)}</p>
+                            <p class="text-[10px] text-slate-400 truncate">${escapeHtml(taskRun.plugin || task.plugin || 'task')} ${taskRun.operation || task.operation ? `· ${escapeHtml(taskRun.operation || task.operation)}` : ''}</p>
+                            <p class="text-[10px] text-slate-400 truncate">Depends on: ${escapeHtml(depends)}</p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${run && run.run_id && taskRun.status === 'failed' ? `<button class="task-repair-btn" data-run-id="${escapeHtml(run.run_id)}" data-task-name="${escapeHtml(taskName)}" title="Repair from this task">
+                                <i class="fas fa-rotate-right text-[10px]"></i>Repair
+                            </button>` : ''}
+                            ${run && run.run_id ? `<button class="task-log-filter" data-run-id="${escapeHtml(run.run_id)}" data-task-name="${escapeHtml(taskName)}" title="Filter logs for task">
+                                <i class="fas fa-terminal text-[10px]"></i>
+                            </button>` : ''}
+                            <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold ${visual.text}">
+                                ${visual.label}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                        <div>
+                            <p class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Started</p>
+                            <p class="text-[11px] font-semibold text-slate-700">${escapeHtml(formatAbsoluteTime(taskRun.started_at))}</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Ended</p>
+                            <p class="text-[11px] font-semibold text-slate-700">${escapeHtml(formatAbsoluteTime(taskRun.completed_at))}</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Duration</p>
+                            <p class="text-[11px] font-semibold text-slate-700">${escapeHtml(formatDuration(taskRun.duration_seconds))}</p>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Retries</p>
+                            <p class="text-[11px] font-semibold text-slate-700">${escapeHtml(retryText)}</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 mt-3">${renderAttemptHistory(taskRun)}</div>
+                    ${taskRun.error ? `<div class="mt-3 rounded-lg border border-red-200 bg-red-50 p-2 text-[11px] text-red-700 font-mono break-words">${escapeHtml(taskRun.error)}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('')}
+    </div>`;
+}
+
+function renderRunTaskList(parsed, run, details) {
+    const timeline = renderTaskTimeline(parsed, run, details);
+    if (timeline) return timeline;
+
+    const tasks = getRunTasks(parsed, details);
+    if (!tasks.length) {
+        return `<div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-400">No task metadata found</div>`;
+    }
+    const taskConfigs = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    return `<div class="space-y-2">
+        ${tasks.map((taskName, idx) => {
+            const task = taskConfigs.find(t => t.name === taskName) || {};
+            const outcome = getTaskOutcome(taskName, run ? run.status : 'never_run', details);
+            const depends = Array.isArray(task.depends_on) && task.depends_on.length ? task.depends_on.join(', ') : 'None';
+            return `<div class="run-detail-task">
+                <div class="min-w-0">
+                    <p class="text-xs font-semibold text-slate-800 truncate">${idx + 1}. ${escapeHtml(taskName)}</p>
+                    <p class="text-[10px] text-slate-400 truncate">${escapeHtml(task.plugin || 'task')} ${task.operation ? `· ${escapeHtml(task.operation)}` : ''}</p>
+                    <p class="text-[10px] text-slate-400 truncate">Depends on: ${escapeHtml(depends)}</p>
+                </div>
+                <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold ${outcome.cls} shrink-0">
+                    <i class="${outcome.icon} text-[10px]"></i>${outcome.label}
+                </span>
+            </div>`;
+        }).join('')}
+    </div>`;
+}
+
+function renderRunErrors(details) {
+    const errors = details.errors && typeof details.errors === 'object' ? details.errors : {};
+    const entries = Object.entries(errors);
+    if (!entries.length) return '';
+    return `<div class="mt-4">
+        <p class="text-xs font-bold text-red-600 uppercase tracking-wide mb-2">Errors</p>
+        <div class="space-y-2">
+            ${entries.map(([task, error]) => `
+                <div class="rounded-lg border border-red-200 bg-red-50 p-3">
+                    <p class="text-xs font-semibold text-red-800">${escapeHtml(task)}</p>
+                    <p class="text-[11px] text-red-700 mt-1 font-mono break-words">${escapeHtml(error)}</p>
+                </div>`).join('')}
+        </div>
+    </div>`;
+}
+
+function renderRunDetailsContent(pipeline, parsed, runs, selectedRunId) {
+    const sortedRuns = runs.slice().sort((a, b) => getRunTimeValue(b) - getRunTimeValue(a));
+    const selectedRun = sortedRuns.find(r => r.run_id === selectedRunId) || sortedRuns[0] || null;
+    const details = normalizeRunDetails(selectedRun);
+    const status = selectedRun ? selectedRun.status : 'never_run';
+    const meta = getStatusMeta(status);
+    const statusClass = String(status || 'never_run').replace(/[^a-z_-]/g, '');
+    const tasks = getRunTasks(parsed, details);
+    const plannedTaskCount = Math.max(
+        tasks.length,
+        Array.isArray(details.task_runs) ? details.task_runs.length : 0,
+        Array.isArray(parsed.tasks) ? parsed.tasks.length : 0
+    );
+    const errors = details.errors && typeof details.errors === 'object' ? details.errors : {};
+    const results = details.results && typeof details.results === 'object' ? details.results : {};
+    const taskRuns = Array.isArray(details.task_runs) ? details.task_runs : [];
+    const environment = details.environment && typeof details.environment === 'object' ? details.environment : {};
+    const environmentLabel = environment.name || details.environment_profile || 'Local';
+    const environmentCompute = environment.compute || details.environment_profile || 'local-worker';
+    const runtimeParameters = details.runtime_parameters && typeof details.runtime_parameters === 'object'
+        ? details.runtime_parameters
+        : (details.parameters && typeof details.parameters === 'object' ? details.parameters : {});
+    const parameterEntries = Object.entries(runtimeParameters);
+    const logTaskNames = taskRuns.length
+        ? [...new Set(taskRuns.map(t => t.task_name || t.name).filter(Boolean))]
+        : tasks;
+    const succeeded = taskRuns.length
+        ? taskRuns.filter(t => t.status === 'success').length
+        : Object.values(results).filter(Boolean).length || (details.success === true && status === 'completed' ? tasks.length : 0);
+    const failed = taskRuns.length
+        ? taskRuns.filter(t => t.status === 'failed').length
+        : Object.values(results).filter(v => v === false).length + Object.keys(errors).length;
+    const canCancel = selectedRun && ['queued','running','started'].includes(selectedRun.status);
+    const repairTaskName = getRepairTaskName(details);
+    const canRepair = selectedRun && selectedRun.run_id && repairTaskName;
+
+    return `<div class="space-y-5">
+        <div class="run-detail-hero">
+            <div class="flex items-start gap-3 min-w-0">
+                <div class="run-detail-icon shrink-0"><i class="fas fa-timeline"></i></div>
+                <div class="min-w-0">
+                    <p class="text-lg font-bold text-slate-900 truncate">${escapeHtml(pipeline.display_name)}</p>
+                    <p class="text-sm text-slate-500 mt-0.5">${escapeHtml(parsed.description || pipeline.name || 'Pipeline run detail')}</p>
+                    <p class="text-[11px] text-slate-400 mt-1 run-detail-run-id">${escapeHtml(pipeline.file_path || '')}</p>
+                </div>
+            </div>
+            <span class="run-detail-status ${statusClass}">
+                <i class="${getRunStatusIcon(status)} text-xs"></i>${meta.label}
+            </span>
+        </div>
+
+        <div class="run-detail-kpis">
+            <div class="run-detail-kpi">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Run ID</p>
+                <p class="mt-2 text-sm font-semibold text-slate-800 run-detail-run-id">${escapeHtml(shortRunId(selectedRun && selectedRun.run_id))}</p>
+            </div>
+            <div class="run-detail-kpi">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Updated</p>
+                <p class="mt-2 text-sm font-semibold text-slate-800">${escapeHtml(formatRelativeTime(selectedRun && selectedRun.updated_at))}</p>
+            </div>
+            <div class="run-detail-kpi">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Duration</p>
+                <p class="mt-2 text-sm font-semibold text-slate-800">${escapeHtml(formatDuration(details.duration_seconds))}</p>
+            </div>
+            <div class="run-detail-kpi">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Tasks</p>
+                <p class="mt-2 text-sm font-semibold text-slate-800">${plannedTaskCount}</p>
+            </div>
+        </div>
+
+        <div class="run-detail-context">
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Environment</p>
+                <p class="mt-2 text-sm font-semibold text-slate-800">${escapeHtml(environmentLabel)}</p>
+                <p class="text-[11px] text-slate-400 mt-0.5 font-mono">${escapeHtml(environmentCompute)}</p>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Parameters</p>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                    ${parameterEntries.length ? parameterEntries.map(([key, value]) => `
+                        <span class="run-param-chip">
+                            <span class="font-mono truncate">${escapeHtml(key)}</span>
+                            <span class="text-slate-300">=</span>
+                            <span class="font-mono truncate">${escapeHtml(typeof value === 'string' ? value : JSON.stringify(value))}</span>
+                        </span>`).join('') : '<span class="text-xs text-slate-400">None</span>'}
+                </div>
+            </div>
+        </div>
+
+        <div class="run-detail-layout">
+            <section class="run-detail-panel overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-slate-800">Selected Run</h4>
+                        <p class="text-[11px] text-slate-400">${escapeHtml(formatAbsoluteTime(selectedRun && selectedRun.updated_at))}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        ${canRepair ? `<button id="runRepairBtn" data-run-id="${escapeHtml(selectedRun.run_id)}" data-task-name="${escapeHtml(repairTaskName)}" class="task-repair-btn">
+                            <i class="fas fa-rotate-right text-[10px]"></i>Repair run
+                        </button>` : ''}
+                        ${canCancel ? `<button id="runCancelBtn" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100">
+                            <i class="fas fa-ban text-[10px]"></i>Cancel
+                        </button>` : ''}
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                        <p class="text-xs text-slate-500">${escapeHtml(selectedRun && selectedRun.message || 'No run has been recorded yet')}</p>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                        <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-2">
+                            <p class="text-[10px] text-emerald-600 font-bold uppercase">Succeeded</p>
+                            <p class="text-lg font-bold text-emerald-700">${succeeded}</p>
+                        </div>
+                        <div class="rounded-lg bg-red-50 border border-red-100 p-2">
+                            <p class="text-[10px] text-red-600 font-bold uppercase">Failed</p>
+                            <p class="text-lg font-bold text-red-700">${failed}</p>
+                        </div>
+                        <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">SLA</p>
+                            <p class="text-lg font-bold ${details.sla_violated ? 'text-red-700' : 'text-slate-700'}">${details.sla_violated ? 'Hit' : 'OK'}</p>
+                        </div>
+                        <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Attempts</p>
+                            <p class="text-lg font-bold text-slate-700">${sortedRuns.length}</p>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">${taskRuns.length ? 'Task Timeline' : 'Task Order'}</p>
+                        ${renderRunTaskList(parsed, selectedRun, details)}
+                    </div>
+                    ${renderRunErrors(details)}
+                </div>
+            </section>
+
+            <section class="run-detail-panel overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-100">
+                    <h4 class="text-sm font-semibold text-slate-800">Recent Attempts</h4>
+                    <p class="text-[11px] text-slate-400">${sortedRuns.length ? `${sortedRuns.length} recorded` : 'No runs yet'}</p>
+                </div>
+                <div class="p-3 space-y-2 max-h-[430px] overflow-y-auto">
+                    ${sortedRuns.length ? sortedRuns.map(run => {
+                        const runMeta = getStatusMeta(run.status);
+                        const selected = selectedRun && run.run_id === selectedRun.run_id;
+                        return `<button class="run-detail-attempt ${selected ? 'is-selected' : ''}" data-run-id="${escapeHtml(run.run_id)}">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="text-xs font-semibold text-slate-800 run-detail-run-id">${escapeHtml(shortRunId(run.run_id))}</p>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(formatRelativeTime(run.updated_at))}</p>
+                                </div>
+                                <span class="run-detail-status ${String(run.status || '').replace(/[^a-z_-]/g, '')}">
+                                    <i class="${getRunStatusIcon(run.status)} text-[10px]"></i>${runMeta.label}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mt-2 line-clamp-2">${escapeHtml(run.message || '')}</p>
+                        </button>`;
+                    }).join('') : `<div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-400">No run history yet</div>`}
+                </div>
+            </section>
+        </div>
+
+        <section class="run-detail-panel overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                    <h4 class="text-sm font-semibold text-slate-800">Run Logs</h4>
+                    <p class="text-[11px] text-slate-400 run-detail-run-id">${escapeHtml(selectedRun && selectedRun.run_id || '')}</p>
+                </div>
+                <button id="runLogStreamBtn" ${selectedRun ? '' : 'disabled'} class="dp-flow-secondary inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-terminal text-[10px]"></i>Stream logs
+                </button>
+            </div>
+            ${selectedRun ? `<div id="runLogTabs" class="run-log-tabs">
+                <button class="run-log-tab is-active" data-task-name="">
+                    <i class="fas fa-layer-group text-[10px]"></i>All
+                </button>
+                ${logTaskNames.map(taskName => `
+                    <button class="run-log-tab" data-task-name="${escapeHtml(taskName)}">
+                        <i class="fas fa-terminal text-[10px]"></i>${escapeHtml(taskName)}
+                    </button>`).join('')}
+            </div>` : ''}
+            <pre id="runLogOutput" class="run-detail-log" data-placeholder="1">Log stream is ready.</pre>
+        </section>
+    </div>`;
+}
+
+async function openRunDetails(pipeline, selectedRunId = null) {
+    showModal(`Runs: ${pipeline.display_name}`, `
+        <div class="py-16 text-center text-slate-400">
+            <i class="fas fa-spinner fa-spin text-2xl mb-3 block"></i>
+            <p class="text-sm font-medium">Loading run detail…</p>
+        </div>`);
+    try {
+        const [historyRes, configRes] = await Promise.all([
+            fetch(`/history/${encodeURIComponent(pipeline.display_name)}?limit=12`),
+            fetch(`/pipeline-config?config_path=${encodeURIComponent(pipeline.file_path)}`)
+        ]);
+        const history = await historyRes.json();
+        if (!historyRes.ok) throw new Error(history.detail || 'Failed to load run history');
+        let parsed = {};
+        if (configRes.ok) {
+            const config = await configRes.json();
+            parsed = config.parsed_config || {};
+        }
+        let runs = Array.isArray(history.runs) ? history.runs : [];
+        if (selectedRunId && !runs.some(r => r.run_id === selectedRunId)) {
+            try {
+                const runRes = await fetch(`/run/${encodeURIComponent(selectedRunId)}/status`);
+                if (runRes.ok) runs = [await runRes.json(), ...runs];
+            } catch(_) {}
+        }
+        document.getElementById('modalContent').innerHTML = renderRunDetailsContent(pipeline, parsed, runs, selectedRunId);
+        wireRunDetails(pipeline, parsed, runs, selectedRunId);
+    } catch(e) {
+        document.getElementById('modalContent').innerHTML = `
+            <div class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700 text-sm">
+                <i class="fas fa-circle-xmark mr-2"></i>${escapeHtml(e.message || 'Failed to load run detail')}
+            </div>`;
+    }
+}
+
+function wireRunDetails(pipeline, parsed, runs, selectedRunId) {
+    document.querySelectorAll('.run-detail-attempt').forEach(btn => {
+        btn.addEventListener('click', () => {
+            stopRunLogStream();
+            const runId = btn.dataset.runId;
+            document.getElementById('modalContent').innerHTML = renderRunDetailsContent(pipeline, parsed, runs, runId);
+            wireRunDetails(pipeline, parsed, runs, runId);
+        });
+    });
+    const selected = runs.slice().sort((a, b) => getRunTimeValue(b) - getRunTimeValue(a))
+        .find(r => r.run_id === selectedRunId) || runs.slice().sort((a, b) => getRunTimeValue(b) - getRunTimeValue(a))[0];
+    const logBtn = document.getElementById('runLogStreamBtn');
+    if (logBtn && selected && selected.run_id) {
+        logBtn.addEventListener('click', () => {
+            activateRunLogTab('');
+            startRunLogStream(selected.run_id);
+        });
+    }
+    document.querySelectorAll('.run-log-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            activateRunLogTab(tab.dataset.taskName || '');
+            startRunLogStream(selected.run_id, tab.dataset.taskName || null);
+        });
+    });
+    document.querySelectorAll('.task-log-filter').forEach(btn => {
+        btn.addEventListener('click', event => {
+            event.stopPropagation();
+            activateRunLogTab(btn.dataset.taskName || '');
+            startRunLogStream(btn.dataset.runId, btn.dataset.taskName);
+            document.getElementById('runLogOutput')?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+        });
+    });
+    document.querySelectorAll('.task-repair-btn').forEach(btn => {
+        if (btn.id === 'runRepairBtn') return;
+        btn.addEventListener('click', event => {
+            event.stopPropagation();
+            repairRunFromDetails(pipeline, btn.dataset.runId, btn.dataset.taskName);
+        });
+    });
+    const repairBtn = document.getElementById('runRepairBtn');
+    if (repairBtn) {
+        repairBtn.addEventListener('click', () => {
+            repairRunFromDetails(pipeline, repairBtn.dataset.runId, repairBtn.dataset.taskName);
+        });
+    }
+    const cancelBtn = document.getElementById('runCancelBtn');
+    if (cancelBtn && selected && selected.run_id) {
+        cancelBtn.addEventListener('click', () => cancelRunFromDetails(pipeline, selected.run_id));
+    }
+}
+
+function activateRunLogTab(taskName) {
+    document.querySelectorAll('.run-log-tab').forEach(tab => {
+        const isActive = (tab.dataset.taskName || '') === (taskName || '');
+        tab.classList.toggle('is-active', isActive);
+    });
+}
+
+function stopRunLogStream() {
+    if (runLogStream) {
+        runLogStream.close();
+        runLogStream = null;
+    }
+}
+
+function startRunLogStream(runId, taskName = null) {
+    stopRunLogStream();
+    const out = document.getElementById('runLogOutput');
+    const btn = document.getElementById('runLogStreamBtn');
+    if (!out || !runId) return;
+    const filter = taskName ? String(taskName).toLowerCase() : '';
+    out.dataset.placeholder = '1';
+    out.textContent = filter ? `Opening log stream for ${taskName}...` : 'Opening log stream...';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = filter
+            ? '<i class="fas fa-spinner fa-spin text-[10px]"></i>Filtering'
+            : '<i class="fas fa-spinner fa-spin text-[10px]"></i>Streaming';
+    }
+    let sawLine = false;
+    const es = new EventSource(`/run/${encodeURIComponent(runId)}/logs/stream`);
+    runLogStream = es;
+    es.onmessage = event => {
+        if (event.data === '[STREAM_END]') {
+            if (!sawLine) out.textContent = filter ? `No log lines matched ${taskName}.` : 'No log lines were captured for this run.';
+            else out.textContent += '\n[stream ended]';
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-terminal text-[10px]"></i>Stream logs';
+            }
+            stopRunLogStream();
+            return;
+        }
+        if (filter && !String(event.data).toLowerCase().includes(filter)) return;
+        if (out.dataset.placeholder === '1') {
+            out.textContent = '';
+            out.dataset.placeholder = '0';
+        }
+        sawLine = true;
+        out.textContent += `${event.data}\n`;
+        out.scrollTop = out.scrollHeight;
+    };
+    es.onerror = () => {
+        if (!sawLine) out.textContent = filter ? `No task log lines are available yet for ${taskName}.` : 'No run log file is available yet for this run.';
+        else out.textContent += '\n[stream closed]';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-terminal text-[10px]"></i>Stream logs';
+        }
+        stopRunLogStream();
+    };
+}
+
+async function cancelRunFromDetails(pipeline, runId) {
+    try {
+        const r = await fetch(`/run/${encodeURIComponent(runId)}/cancel`, { method:'POST' });
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.detail || 'Failed to cancel run');
+        showSuccess(`Run ${shortRunId(runId)} cancelled`);
+        loadDashboardSummary();
+        loadPipelines();
+        openRunDetails(pipeline, runId);
+    } catch(e) {
+        showError(e.message || 'Failed to cancel run');
+    }
+}
+
+async function repairRunFromDetails(pipeline, runId, fromTask) {
+    if (!runId) return;
+    try {
+        const r = await fetch(`/run/${encodeURIComponent(runId)}/repair`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ from_task: fromTask || null })
+        });
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.detail || 'Failed to queue repair run');
+        showSuccess(`Repair queued from ${fromTask || 'failed task'}`);
+        loadDashboardSummary();
+        loadPipelines();
+        openRunDetails(pipeline, result.run_id);
+    } catch(e) {
+        showError(e.message || 'Failed to queue repair run');
+    }
+}
+
 // ═══════════════════════════════════════════
 //  Scheduled Pipelines
 // ═══════════════════════════════════════════
@@ -1176,11 +2444,11 @@ async function loadScheduledPipelines() {
         container.innerHTML = '';
         list.forEach(([name, info]) => {
             const d = document.createElement('div');
-            d.className = 'flex items-center justify-between px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-lg';
+            d.className = 'dp-schedule-card flex items-center justify-between px-4 py-3 rounded-lg';
             d.innerHTML = `
                 <div class="min-w-0 flex-1">
                     <p class="font-semibold text-slate-800 text-sm truncate">${escapeHtml(name)}</p>
-                    <p class="text-xs text-indigo-600 mt-0.5 font-mono">${escapeHtml(JSON.stringify(info.schedule))}</p>
+                    <p class="text-xs dp-text-accent mt-0.5 font-mono">${escapeHtml(JSON.stringify(info.schedule))}</p>
                     ${info.next_run ? `<p class="text-xs text-slate-400 mt-0.5">Next: ${new Date(info.next_run).toLocaleString()}</p>` : ''}
                 </div>
                 <button class="unsch-btn text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg ml-4 shrink-0 transition-colors">
@@ -1229,7 +2497,7 @@ async function loadPipelineStatus() {
 function updateStatusDisplay(status) {
     const c = document.getElementById('pipelineStatus');
     let col = 'slate', icon = 'fas fa-question-circle';
-    if (status.status === 'running' || status.status === 'started') { col='blue'; icon='fas fa-spinner fa-spin'; }
+    if (status.status === 'running' || status.status === 'started') { col='amber'; icon='fas fa-spinner fa-spin'; }
     else if (status.status === 'completed') { col='green'; icon='fas fa-check-circle'; }
     else if (status.status === 'failed')    { col='red';   icon='fas fa-times-circle'; }
     c.innerHTML = `
@@ -1272,11 +2540,15 @@ function refreshAll() {
 //  Modal
 // ═══════════════════════════════════════════
 function showModal(title, content) {
+    stopRunLogStream();
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalContent').innerHTML = content;
     document.getElementById('pipelineModal').classList.remove('hidden');
 }
-function closeModal() { document.getElementById('pipelineModal').classList.add('hidden'); }
+function closeModal() {
+    stopRunLogStream();
+    document.getElementById('pipelineModal').classList.add('hidden');
+}
 
 // ═══════════════════════════════════════════
 //  Toast
@@ -1286,7 +2558,7 @@ function showToast(msg, type='info') {
         success:['bg-emerald-600','fa-circle-check'],
         error:  ['bg-red-600',    'fa-circle-xmark'],
         warning:['bg-amber-500',  'fa-triangle-exclamation'],
-        info:   ['bg-indigo-600', 'fa-circle-info']
+        info:   ['bg-orange-600', 'fa-circle-info']
     }[type] || ['bg-slate-700','fa-circle-info'];
     const t = document.createElement('div');
     t.className = `${cfg[0]} text-white px-4 py-3 rounded-xl shadow-xl border border-white/20 flex items-start gap-3 pointer-events-auto`;

@@ -23,6 +23,121 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .panel-in { animation: fadeSlide .18s ease; }
         @keyframes fadeSlide { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:none; } }
+        .git-shell {
+            background:
+                radial-gradient(circle at 18% 0%, oklch(33% 0.070 38 / 0.34), transparent 32%),
+                linear-gradient(180deg, oklch(15% 0.026 250), oklch(11% 0.026 250));
+            color: oklch(94% 0.008 250);
+        }
+        .git-topbar {
+            background: oklch(14% 0.030 250 / 0.92);
+            border-bottom: 1px solid oklch(30% 0.030 250);
+            backdrop-filter: blur(14px);
+        }
+        .git-primary {
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
+            box-shadow: 0 10px 18px oklch(61% 0.210 38 / 0.20);
+        }
+        .git-accent-icon,
+        .git-link-accent {
+            color: oklch(76% 0.160 72) !important;
+        }
+        .git-link-accent:hover {
+            color: oklch(86% 0.120 74) !important;
+        }
+        .git-action-outline:hover {
+            border-color: oklch(61% 0.210 38) !important;
+        }
+        .git-focus-accent:focus {
+            border-color: oklch(61% 0.210 38) !important;
+            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / 0.22);
+        }
+        .git-selected-remote {
+            background: oklch(23% 0.032 250);
+            border-left: 2px solid oklch(61% 0.210 38);
+        }
+        .git-workspace {
+            background: linear-gradient(90deg, oklch(14% 0.026 250), oklch(12% 0.024 250));
+        }
+        .git-remotes-pane {
+            background: oklch(16% 0.026 250 / 0.96);
+            border-right-color: oklch(30% 0.030 250);
+        }
+        .git-remotes-pane > div:first-child {
+            border-bottom-color: oklch(30% 0.030 250);
+        }
+        .git-remotes-pane #remotesEmpty {
+            color: oklch(70% 0.018 250);
+        }
+        .git-detail-pane {
+            background:
+                radial-gradient(circle at 82% 0%, oklch(28% 0.050 190 / 0.20), transparent 28%),
+                oklch(12% 0.024 250);
+        }
+        .git-empty-state {
+            color: oklch(74% 0.018 250);
+        }
+        .git-detail-panel {
+            color: oklch(92% 0.010 250);
+        }
+        .git-remote-url {
+            overflow-wrap: anywhere;
+        }
+        .git-card {
+            background: oklch(18% 0.028 250 / 0.86) !important;
+            border-color: oklch(31% 0.030 250) !important;
+            box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.04);
+        }
+        .git-card code {
+            background: oklch(24% 0.030 250);
+            color: oklch(82% 0.016 250);
+        }
+        @media (max-width: 767px) {
+            body { height: auto; min-height: 100vh; overflow: auto; }
+            .git-shell { overflow: visible; min-height: 100vh; }
+            .git-topbar {
+                height: auto;
+                min-height: 64px;
+                flex-wrap: wrap;
+                row-gap: 8px;
+                padding-top: 12px;
+                padding-bottom: 12px;
+            }
+            .git-topbar > span:nth-of-type(2) {
+                width: 100%;
+                margin-left: 0;
+                padding-left: 0;
+            }
+            .git-workspace {
+                flex-direction: column;
+                overflow: visible;
+            }
+            .git-remotes-pane {
+                width: 100%;
+                max-height: 280px;
+                border-right: 0;
+                border-bottom: 1px solid oklch(30% 0.030 250);
+            }
+            .git-detail-pane {
+                min-height: 520px;
+                overflow: visible;
+            }
+            .git-detail-panel {
+                max-width: none;
+                padding: 16px;
+            }
+            .git-action-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .git-remote-header {
+                flex-direction: column;
+                gap: 14px;
+            }
+            .git-remote-actions {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden" style="background: var(--color-paper); color: var(--color-ink); overflow-x: clip;">
@@ -102,28 +217,28 @@
 </script>
 
 <!-- ── Main ────────────────────────────────────────────────────────────── -->
-<div class="pl-56 flex-1 flex flex-col overflow-hidden">
+<div class="git-shell pl-56 flex-1 flex flex-col overflow-hidden">
 
     <!-- Top bar -->
-    <header class="h-14 shrink-0 bg-slate-900 border-b border-slate-700/50 flex items-center px-6 gap-4">
+    <header class="git-topbar h-14 shrink-0 flex items-center px-6 gap-4">
         <div class="flex items-center gap-2">
-            <i class="fas fa-code-branch text-indigo-400"></i>
+            <i class="fas fa-code-branch git-accent-icon"></i>
             <h1 class="text-white font-semibold text-sm">Git Integration</h1>
         </div>
         <span class="text-slate-600">|</span>
         <span class="text-slate-400 text-xs">Push pipeline YAMLs to Git, pull from remote, or trigger CI/CD deploys</span>
         <div class="ml-auto">
-            <button onclick="openAddModal()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+            <button onclick="openAddModal()" class="git-primary flex items-center gap-2 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
                 <i class="fas fa-plus"></i> Add Remote
             </button>
         </div>
     </header>
 
     <!-- Body -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="git-workspace flex-1 flex overflow-hidden">
 
         <!-- Left: remotes list -->
-        <div class="w-72 shrink-0 border-r border-slate-700/50 flex flex-col">
+        <div class="git-remotes-pane w-72 shrink-0 border-r border-slate-700/50 flex flex-col">
             <div class="px-4 py-3 border-b border-slate-700/50">
                 <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Remotes</p>
             </div>
@@ -131,35 +246,35 @@
                 <div class="px-4 py-8 text-center text-slate-600 text-sm" id="remotesEmpty">
                     <i class="fas fa-code-branch text-2xl mb-2 block opacity-30"></i>
                     No remotes configured yet.<br>
-                    <button onclick="openAddModal()" class="mt-2 text-indigo-400 hover:text-indigo-300 text-xs underline">Add your first remote</button>
+                    <button onclick="openAddModal()" class="git-link-accent mt-2 text-xs underline">Add your first remote</button>
                 </div>
                 <div id="remotesList"></div>
             </div>
         </div>
 
         <!-- Right: detail panel -->
-        <div class="flex-1 overflow-y-auto">
-            <div id="detailEmpty" class="flex items-center justify-center h-full text-slate-600 text-sm">
+        <div class="git-detail-pane flex-1 overflow-y-auto">
+            <div id="detailEmpty" class="git-empty-state flex items-center justify-center h-full text-sm">
                 <div class="text-center">
                     <i class="fas fa-arrow-left text-2xl mb-3 block opacity-20"></i>
                     Select a remote to see actions
                 </div>
             </div>
-            <div id="detailPanel" class="hidden panel-in p-6 space-y-6 max-w-3xl">
+            <div id="detailPanel" class="git-detail-panel hidden panel-in p-6 space-y-6 max-w-3xl">
 
                 <!-- Remote header -->
-                <div class="flex items-start justify-between">
+                <div class="git-remote-header flex items-start justify-between">
                     <div>
                         <h2 class="text-white font-semibold text-lg flex items-center gap-2" id="detailName"></h2>
-                        <p class="text-slate-400 text-sm mt-0.5" id="detailUrl"></p>
+                        <p class="git-remote-url text-slate-400 text-sm mt-0.5" id="detailUrl"></p>
                         <div class="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
                             <span><i class="fas fa-code-branch mr-1"></i><span id="detailBranch"></span></span>
                             <span><i class="fas fa-folder mr-1"></i><span id="detailPath"></span></span>
                             <span><i class="fas fa-user mr-1"></i><span id="detailCreatedBy"></span></span>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="testRemote()" id="btnTest" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-600 hover:border-indigo-500 text-slate-300 hover:text-white transition-colors">
+                    <div class="git-remote-actions flex items-center gap-2">
+                        <button onclick="testRemote()" id="btnTest" class="git-action-outline flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:text-white transition-colors">
                             <i class="fas fa-plug"></i> Test
                         </button>
                         <button onclick="confirmDeleteRemote()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-red-800/50 hover:border-red-500 text-red-400 hover:text-red-300 transition-colors">
@@ -172,25 +287,25 @@
                 <div id="testResult" class="hidden rounded-lg px-4 py-3 text-sm"></div>
 
                 <!-- Actions grid -->
-                <div class="grid grid-cols-2 gap-4">
+                <div class="git-action-grid grid grid-cols-2 gap-4">
 
                     <!-- Push card -->
-                    <div class="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                    <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
                         <h3 class="text-white font-medium text-sm mb-3 flex items-center gap-2">
-                            <i class="fas fa-arrow-up text-indigo-400"></i> Push Pipeline
+                            <i class="fas fa-arrow-up git-accent-icon"></i> Push Pipeline
                         </h3>
-                        <select id="pushPipelineSelect" class="w-full bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-3 py-2 mb-2 focus:outline-none focus:border-indigo-500">
+                        <select id="pushPipelineSelect" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-3 py-2 mb-2 focus:outline-none">
                             <option value="">Loading pipelines...</option>
                         </select>
-                        <input id="pushCommitMsg" type="text" placeholder="Commit message (optional)" class="w-full bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-3 py-2 mb-3 focus:outline-none focus:border-indigo-500 placeholder-slate-500">
-                        <button onclick="pushPipeline()" id="btnPush" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <input id="pushCommitMsg" type="text" placeholder="Commit message (optional)" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-3 py-2 mb-3 focus:outline-none placeholder-slate-500">
+                        <button onclick="pushPipeline()" id="btnPush" class="git-primary w-full text-white text-xs font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
                             <i class="fas fa-arrow-up"></i> Push to Git
                         </button>
                         <div id="pushResult" class="hidden mt-2 text-xs rounded-lg px-3 py-2"></div>
                     </div>
 
                     <!-- Pull card -->
-                    <div class="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                    <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
                         <h3 class="text-white font-medium text-sm mb-3 flex items-center gap-2">
                             <i class="fas fa-arrow-down text-emerald-400"></i> Pull Pipelines
                         </h3>
@@ -204,7 +319,7 @@
                 </div>
 
                 <!-- Status section -->
-                <div class="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="text-white font-medium text-sm flex items-center gap-2">
                             <i class="fas fa-arrows-rotate text-amber-400"></i> Sync Status
@@ -219,7 +334,7 @@
                 </div>
 
                 <!-- Recent commits -->
-                <div id="commitsSection" class="hidden bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <div id="commitsSection" class="git-card hidden bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
                     <h3 class="text-white font-medium text-sm mb-3 flex items-center gap-2">
                         <i class="fas fa-clock-rotate-left text-slate-400"></i> Recent Remote Commits
                     </h3>
@@ -227,7 +342,7 @@
                 </div>
 
                 <!-- Push history -->
-                <div class="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
+                <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="text-white font-medium text-sm flex items-center gap-2">
                             <i class="fas fa-history text-slate-400"></i> Push History
@@ -263,7 +378,7 @@
     <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg">
         <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
             <h3 class="text-white font-semibold text-sm flex items-center gap-2">
-                <i class="fas fa-plus-circle text-indigo-400"></i> Add Git Remote
+                <i class="fas fa-plus-circle git-accent-icon"></i> Add Git Remote
             </h3>
             <button onclick="closeAddModal()" class="text-slate-500 hover:text-white transition-colors">
                 <i class="fas fa-xmark text-lg"></i>
@@ -272,25 +387,25 @@
         <div class="px-6 py-4 space-y-4">
             <div>
                 <label class="block text-xs font-medium text-slate-400 mb-1.5">Remote Name <span class="text-red-400">*</span></label>
-                <input id="mName" type="text" placeholder="e.g. gitlab-pipelines" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500 placeholder-slate-500">
+                <input id="mName" type="text" placeholder="e.g. gitlab-pipelines" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none placeholder-slate-500">
             </div>
             <div>
                 <label class="block text-xs font-medium text-slate-400 mb-1.5">Remote URL <span class="text-red-400">*</span></label>
-                <input id="mUrl" type="text" placeholder="https://gitlab.com/org/repo.git" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500 placeholder-slate-500">
+                <input id="mUrl" type="text" placeholder="https://gitlab.com/org/repo.git" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none placeholder-slate-500">
             </div>
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="block text-xs font-medium text-slate-400 mb-1.5">Default Branch</label>
-                    <input id="mBranch" type="text" value="main" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500">
+                    <input id="mBranch" type="text" value="main" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-400 mb-1.5">Pipelines Path</label>
-                    <input id="mPath" type="text" value="pipelines" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500">
+                    <input id="mPath" type="text" value="pipelines" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none">
                 </div>
             </div>
             <div>
                 <label class="block text-xs font-medium text-slate-400 mb-1.5">Auth Type</label>
-                <select id="mAuthType" onchange="toggleTokenField()" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500">
+                <select id="mAuthType" onchange="toggleTokenField()" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none">
                     <option value="token">HTTPS + Token (GitLab PAT / GitHub PAT)</option>
                     <option value="ssh">SSH (key must be in ~/.ssh)</option>
                     <option value="none">No Auth (public repo)</option>
@@ -298,17 +413,17 @@
             </div>
             <div id="tokenField">
                 <label class="block text-xs font-medium text-slate-400 mb-1.5">Personal Access Token</label>
-                <input id="mToken" type="password" placeholder="glpat-xxxxxxxxxxxx" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500 placeholder-slate-500">
+                <input id="mToken" type="password" placeholder="glpat-xxxxxxxxxxxx" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none placeholder-slate-500">
                 <p class="text-slate-500 text-xs mt-1">Stored server-side and masked in all responses. For GitLab PATs use <code>oauth2</code> scope; for GitHub use a fine-grained token with repo write permission.</p>
             </div>
             <div id="sshNote" class="hidden bg-slate-700/50 rounded-lg px-3 py-2.5 text-xs text-slate-400">
-                <i class="fas fa-info-circle text-indigo-400 mr-1"></i>
+                <i class="fas fa-info-circle git-accent-icon mr-1"></i>
                 SSH auth uses your server's default key (<code>~/.ssh/id_rsa</code> or <code>id_ed25519</code>). Ensure the public key is added to your Git host before testing.
             </div>
         </div>
         <div class="px-6 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
             <button onclick="closeAddModal()" class="text-slate-400 hover:text-white text-sm transition-colors">Cancel</button>
-            <button onclick="submitAddRemote()" id="btnSubmitAdd" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors flex items-center gap-2">
+            <button onclick="submitAddRemote()" id="btnSubmitAdd" class="git-primary text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors flex items-center gap-2">
                 <i class="fas fa-plus"></i> Add Remote
             </button>
         </div>
@@ -368,12 +483,12 @@ function renderRemotesList() {
     list.innerHTML = remotes.map(r => {
         const isSelected = selectedRemoteId === r.id;
         const activeClass = isSelected
-            ? 'bg-slate-800 border-l-2 border-indigo-500'
+            ? 'git-selected-remote'
             : 'border-l-2 border-transparent hover:bg-slate-800';
         return `<button onclick="selectRemote('${r.id}')" data-id="${r.id}"
             class="w-full text-left px-4 py-3 border-b border-slate-800/50 transition-colors ${activeClass}">
             <div class="flex items-center gap-2">
-                <i class="fas fa-code-branch text-indigo-400 text-xs shrink-0"></i>
+                <i class="fas fa-code-branch git-accent-icon text-xs shrink-0"></i>
                 <span class="text-white text-sm font-medium truncate">${esc(r.name)}</span>
             </div>
             <p class="text-slate-500 text-xs truncate mt-0.5 pl-5">${esc(r.remote_url)}</p>
@@ -397,7 +512,7 @@ async function selectRemote(id) {
     panel.classList.remove('hidden');
     panel.classList.add('panel-in');
 
-    document.getElementById('detailName').innerHTML = `<i class="fas fa-code-branch text-indigo-400 text-base"></i>${esc(remote.name)}`;
+    document.getElementById('detailName').innerHTML = `<i class="fas fa-code-branch git-accent-icon text-base"></i>${esc(remote.name)}`;
     document.getElementById('detailUrl').textContent = remote.remote_url;
     document.getElementById('detailBranch').textContent = remote.branch;
     document.getElementById('detailPath').textContent = remote.pipelines_path;
@@ -549,8 +664,8 @@ async function loadStatus() {
         const rows = [
             { label: 'In sync', items: data.in_sync || [], color: 'text-emerald-400', icon: 'fa-check-circle' },
             { label: 'Modified locally (not pushed)', items: data.modified_locally || [], color: 'text-amber-400', icon: 'fa-pen' },
-            { label: 'Only in local pipelines/', items: data.only_local || [], color: 'text-blue-400', icon: 'fa-upload' },
-            { label: 'Only in remote', items: data.only_remote || [], color: 'text-purple-400', icon: 'fa-download' },
+            { label: 'Only in local pipelines/', items: data.only_local || [], color: 'text-cyan-400', icon: 'fa-upload' },
+            { label: 'Only in remote', items: data.only_remote || [], color: 'text-orange-400', icon: 'fa-download' },
         ];
 
         let html = '<div class="space-y-2">';

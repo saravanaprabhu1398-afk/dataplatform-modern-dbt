@@ -1,7 +1,20 @@
-/* Hallmark · component: sidebar · genre: modern-minimal · theme: Cobalt
+/* Hallmark · component: sidebar · genre: modern-minimal · theme: Ember Graphite
  * states: default · hover · focus · active · disabled
  * All values via var(--*) — zero raw hex or Tailwind colour utilities
  */
+
+:root {
+  --color-sidebar-bg:          oklch(18% 0.040 35);
+  --color-sidebar-bg-2:        oklch(23% 0.055 38);
+  --color-sidebar-border:      oklch(32% 0.055 42);
+  --color-sidebar-text:        oklch(73% 0.025 64);
+  --color-sidebar-text-active: oklch(99% 0.006 70);
+  --color-sidebar-item-hover:  oklch(25% 0.055 38);
+  --color-sidebar-item-active: oklch(61% 0.210 38);
+  --color-sidebar-group-label: oklch(58% 0.075 54);
+  --color-sidebar-avatar-bg:   oklch(61% 0.210 38 / 0.18);
+  --color-sidebar-avatar-ring: oklch(74% 0.150 58 / 0.34);
+}
 
 /* ── Sidebar shell ─────────────────────────────────────────────────── */
 .dp-sidebar {
@@ -9,7 +22,10 @@
   inset-block: 0;
   inset-inline-start: 0;
   width: var(--sidebar-width);
-  background: var(--color-sidebar-bg);
+  background:
+    radial-gradient(circle at 12% 2%, oklch(52% 0.180 34 / 0.24), transparent 30%),
+    linear-gradient(180deg, oklch(19% 0.045 34) 0%, oklch(16% 0.034 250) 58%, oklch(13% 0.026 250) 100%);
+  border-right: 1px solid var(--color-sidebar-border);
   display: flex;
   flex-direction: column;
   z-index: 40;
@@ -19,6 +35,15 @@
   overflow: hidden;
 }
 
+.dp-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, oklch(65% 0.230 32), oklch(76% 0.160 72), oklch(60% 0.140 185));
+  pointer-events: none;
+}
+
 /* ── Brand header ───────────────────────────────────────────────────── */
 .dp-sidebar__brand {
   display: flex;
@@ -26,6 +51,8 @@
   gap: var(--space-3);
   padding: var(--space-4);
   border-bottom: 1px solid var(--color-sidebar-border);
+  background: linear-gradient(180deg, oklch(24% 0.060 38 / 0.82), transparent);
+  border-bottom-color: oklch(34% 0.060 42);
   flex-shrink: 0;
 }
 
@@ -33,7 +60,8 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
-  background: var(--color-sidebar-item-active);
+  background: linear-gradient(135deg, oklch(65% 0.230 32), oklch(72% 0.160 68));
+  box-shadow: 0 8px 18px oklch(61% 0.210 38 / 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -114,9 +142,12 @@
   font-weight: 500;
   color: var(--color-sidebar-text);
   text-decoration: none;
+  border: 1px solid transparent;
   transition:
     background var(--dur-fast) var(--ease-out),
-    color      var(--dur-fast) var(--ease-out);
+    border-color var(--dur-fast) var(--ease-out),
+    color      var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
   position: relative;
   min-height: 36px;
   overflow-wrap: anywhere;
@@ -125,6 +156,7 @@
 
 .dp-sidebar__item:hover {
   background: var(--color-sidebar-item-hover);
+  border-color: oklch(39% 0.070 42);
   color: var(--color-sidebar-text-active);
 }
 
@@ -140,9 +172,10 @@
 
 .dp-sidebar__item.is-active,
 .dp-sidebar__item[aria-current="page"] {
-  background: var(--color-sidebar-item-active);
+  background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
   color: var(--color-sidebar-text-active);
   font-weight: 600;
+  box-shadow: 0 8px 18px oklch(61% 0.210 38 / 0.22);
 }
 
 /* ── Nav item icon ──────────────────────────────────────────────────── */
@@ -186,7 +219,7 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-full);
-  background: var(--color-sidebar-avatar-bg);
+  background: linear-gradient(135deg, oklch(24% 0.070 38), oklch(20% 0.040 250));
   border: 1px solid var(--color-sidebar-avatar-ring);
   display: flex;
   align-items: center;
@@ -304,6 +337,7 @@
   background: oklch(0% 0 0 / 0.5);
   z-index: 39;
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--dur-base) var(--ease-out);
 }
 
@@ -327,6 +361,7 @@
 
   .dp-sidebar-overlay.is-open {
     opacity: 1;
+    pointer-events: auto;
   }
 
   /* Push the content back to zero on mobile since sidebar is off-screen */
@@ -336,5 +371,13 @@
   [class~="ml-56"] {
     padding-left: 0 !important;
     margin-left: 0 !important;
+  }
+
+  .pl-56 > header:first-of-type,
+  [class~="pl-56"] > header:first-of-type,
+  .ml-56 > header:first-of-type,
+  [class~="ml-56"] > header:first-of-type {
+    padding-left: 72px !important;
+    min-height: 64px;
   }
 }

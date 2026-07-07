@@ -410,7 +410,7 @@ function showToast(msg, type = 'info') {
         success: ['bg-emerald-600', 'fa-circle-check'],
         error:   ['bg-red-600',     'fa-circle-xmark'],
         warning: ['bg-amber-500',   'fa-triangle-exclamation'],
-        info:    ['bg-indigo-600',  'fa-circle-info']
+        info:    ['bg-orange-600',  'fa-circle-info']
     }[type] || ['bg-slate-700', 'fa-circle-info'];
     const t = document.createElement('div');
     t.className = `${cfg[0]} text-white px-4 py-3 rounded-xl shadow-xl border border-white/20 flex items-start gap-3 pointer-events-auto`;
