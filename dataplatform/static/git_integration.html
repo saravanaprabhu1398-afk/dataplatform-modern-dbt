@@ -6,143 +6,101 @@
 (function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
 </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Git Integration — DP Flow</title>
+    <title>Git Workspace - Data Platform</title>
     <link rel="stylesheet" href="/static/tokens.css">
     <link rel="stylesheet" href="/static/sidebar.css">
-
     <link rel="stylesheet" href="/static/tailwind-static.css">
     <style>html, body { overflow-x: clip; }</style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        .status-pill { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
-        .pill-success { background:#DCFCE7; color:#15803D; }
-        .pill-error   { background:#FEE2E2; color:#B91C1C; }
-        .pill-noop    { background:#F1F5F9; color:#64748B; }
-        .log-row:hover { background:#FAFBFF; }
-        .spin { animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .panel-in { animation: fadeSlide .18s ease; }
-        @keyframes fadeSlide { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:none; } }
+        .spin { animation: spin 1s linear infinite; }
         .git-shell {
-            background:
-                radial-gradient(circle at 18% 0%, oklch(33% 0.070 38 / 0.34), transparent 32%),
-                linear-gradient(180deg, oklch(15% 0.026 250), oklch(11% 0.026 250));
+            background: linear-gradient(180deg, oklch(15% 0.026 250), oklch(11% 0.026 250));
             color: oklch(94% 0.008 250);
         }
-        .git-topbar {
-            background: oklch(14% 0.030 250 / 0.92);
-            border-bottom: 1px solid oklch(30% 0.030 250);
-            backdrop-filter: blur(14px);
+        .git-panel {
+            background: oklch(17% 0.028 250);
+            border-color: oklch(30% 0.030 250);
         }
+        .git-muted { color: oklch(72% 0.018 250); }
+        .git-subtle { color: oklch(58% 0.020 250); }
         .git-primary {
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
-            box-shadow: 0 10px 18px oklch(61% 0.210 38 / 0.20);
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
+            color: white;
+            box-shadow: 0 10px 18px oklch(61% 0.210 38 / .18);
         }
-        .git-accent-icon,
-        .git-link-accent {
-            color: oklch(76% 0.160 72) !important;
+        .git-primary:hover { filter: brightness(.97); }
+        .git-button {
+            border: 1px solid oklch(33% 0.030 250);
+            background: oklch(21% 0.030 250);
+            color: oklch(88% 0.012 250);
         }
-        .git-link-accent:hover {
-            color: oklch(86% 0.120 74) !important;
+        .git-button:hover { border-color: oklch(61% 0.210 38); background: oklch(24% 0.032 250); }
+        .git-input {
+            background: oklch(14% 0.024 250);
+            border: 1px solid oklch(32% 0.030 250);
+            color: oklch(94% 0.008 250);
+            border-radius: 8px;
+            outline: none;
         }
-        .git-action-outline:hover {
-            border-color: oklch(61% 0.210 38) !important;
+        .git-input:focus {
+            border-color: oklch(61% 0.210 38);
+            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / .20);
         }
-        .git-focus-accent:focus {
-            border-color: oklch(61% 0.210 38) !important;
-            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / 0.22);
+        .remote-row,
+        .file-row,
+        .change-row {
+            transition: background .14s, border-color .14s;
         }
-        .git-selected-remote {
-            background: oklch(23% 0.032 250);
-            border-left: 2px solid oklch(61% 0.210 38);
+        .remote-row:hover,
+        .file-row:hover,
+        .change-row:hover { background: oklch(22% 0.030 250); }
+        .is-selected {
+            background: oklch(24% 0.034 250);
+            box-shadow: inset 3px 0 0 oklch(61% 0.210 38);
         }
-        .git-workspace {
-            background: linear-gradient(90deg, oklch(14% 0.026 250), oklch(12% 0.024 250));
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 24px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
         }
-        .git-remotes-pane {
-            background: oklch(16% 0.026 250 / 0.96);
-            border-right-color: oklch(30% 0.030 250);
+        .status-clean { background: oklch(28% 0.060 155); color: oklch(88% 0.070 155); border: 1px solid oklch(46% 0.090 155); }
+        .status-dirty { background: oklch(27% 0.060 65); color: oklch(88% 0.085 75); border: 1px solid oklch(50% 0.085 65); }
+        .status-error { background: oklch(26% 0.070 25); color: oklch(88% 0.075 25); border: 1px solid oklch(47% 0.100 25); }
+        #editor {
+            resize: none;
+            tab-size: 2;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            line-height: 1.52;
         }
-        .git-remotes-pane > div:first-child {
-            border-bottom-color: oklch(30% 0.030 250);
+        .diff-box {
+            white-space: pre-wrap;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.5;
         }
-        .git-remotes-pane #remotesEmpty {
-            color: oklch(70% 0.018 250);
+        @media (max-width: 1100px) {
+            .git-grid { grid-template-columns: 240px minmax(0, 1fr) !important; }
+            .git-right { display: none; }
         }
-        .git-detail-pane {
-            background:
-                radial-gradient(circle at 82% 0%, oklch(28% 0.050 190 / 0.20), transparent 28%),
-                oklch(12% 0.024 250);
-        }
-        .git-empty-state {
-            color: oklch(74% 0.018 250);
-        }
-        .git-detail-panel {
-            color: oklch(92% 0.010 250);
-        }
-        .git-remote-url {
-            overflow-wrap: anywhere;
-        }
-        .git-card {
-            background: oklch(18% 0.028 250 / 0.86) !important;
-            border-color: oklch(31% 0.030 250) !important;
-            box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.04);
-        }
-        .git-card code {
-            background: oklch(24% 0.030 250);
-            color: oklch(82% 0.016 250);
-        }
-        @media (max-width: 767px) {
-            body { height: auto; min-height: 100vh; overflow: auto; }
-            .git-shell { overflow: visible; min-height: 100vh; }
-            .git-topbar {
-                height: auto;
-                min-height: 64px;
-                flex-wrap: wrap;
-                row-gap: 8px;
-                padding-top: 12px;
-                padding-bottom: 12px;
-            }
-            .git-topbar > span:nth-of-type(2) {
-                width: 100%;
-                margin-left: 0;
-                padding-left: 0;
-            }
-            .git-workspace {
-                flex-direction: column;
-                overflow: visible;
-            }
-            .git-remotes-pane {
-                width: 100%;
-                max-height: 280px;
-                border-right: 0;
-                border-bottom: 1px solid oklch(30% 0.030 250);
-            }
-            .git-detail-pane {
-                min-height: 520px;
-                overflow: visible;
-            }
-            .git-detail-panel {
-                max-width: none;
-                padding: 16px;
-            }
-            .git-action-grid {
-                grid-template-columns: 1fr !important;
-            }
-            .git-remote-header {
-                flex-direction: column;
-                gap: 14px;
-            }
-            .git-remote-actions {
-                width: 100%;
-                flex-wrap: wrap;
-            }
+        @media (max-width: 800px) {
+            body { height: auto; overflow: auto; }
+            .git-shell { min-height: 100vh; overflow: visible; }
+            .git-grid { grid-template-columns: minmax(0, 1fr) !important; height: auto !important; }
+            .git-left { max-height: 360px; }
+            .git-editor { min-height: 640px; }
         }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden" style="background: var(--color-paper); color: var(--color-ink); overflow-x: clip;">
+<body class="h-screen overflow-hidden" style="background: var(--color-paper); font-family: var(--font-body);">
 
-<!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
 <button class="dp-sidebar-toggle" id="dpSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="dpSidebar">
   <i class="fas fa-bars" aria-hidden="true"></i>
 </button>
@@ -165,6 +123,9 @@
     </a>
     <a href="/job-builder" class="dp-sidebar__item">
       <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
+    </a>
+    <a href="/deployments" class="dp-sidebar__item">
+      <i class="fas fa-rocket dp-sidebar__icon" aria-hidden="true"></i><span>Deployments</span>
     </a>
     <a href="/templates-ui" class="dp-sidebar__item">
       <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
@@ -216,634 +177,461 @@
 (function(){var t=document.getElementById('dpSidebarToggle'),s=document.getElementById('dpSidebar'),o=document.getElementById('dpSidebarOverlay');if(!t||!s||!o)return;function open(){s.classList.add('is-open');o.classList.add('is-open');o.removeAttribute('aria-hidden');t.setAttribute('aria-expanded','true');t.querySelector('i').className='fas fa-xmark';}function close(){s.classList.remove('is-open');o.classList.remove('is-open');o.setAttribute('aria-hidden','true');t.setAttribute('aria-expanded','false');t.querySelector('i').className='fas fa-bars';}t.addEventListener('click',function(){s.classList.contains('is-open')?close():open();});o.addEventListener('click',close);document.addEventListener('keydown',function(e){if(e.key==='Escape'&&s.classList.contains('is-open'))close();});}());
 </script>
 
-<!-- ── Main ────────────────────────────────────────────────────────────── -->
-<div class="git-shell pl-56 flex-1 flex flex-col overflow-hidden">
-
-    <!-- Top bar -->
-    <header class="git-topbar h-14 shrink-0 flex items-center px-6 gap-4">
-        <div class="flex items-center gap-2">
-            <i class="fas fa-code-branch git-accent-icon"></i>
-            <h1 class="text-white font-semibold text-sm">Git Integration</h1>
-        </div>
-        <span class="text-slate-600">|</span>
-        <span class="text-slate-400 text-xs">Push pipeline YAMLs to Git, pull from remote, or trigger CI/CD deploys</span>
-        <div class="ml-auto">
-            <button onclick="openAddModal()" class="git-primary flex items-center gap-2 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
-                <i class="fas fa-plus"></i> Add Remote
+<div class="git-shell pl-56 h-screen flex flex-col overflow-hidden">
+    <header class="h-14 shrink-0 px-5 flex items-center gap-3" style="border-bottom: 1px solid oklch(30% 0.030 250); background: oklch(14% 0.030 250);">
+        <i class="fas fa-code-branch" style="color: oklch(76% 0.160 72);"></i>
+        <h1 class="text-sm font-black text-white">Git Workspace</h1>
+        <span id="workspaceBadge" class="status-pill status-clean ml-2">No repo</span>
+        <div class="ml-auto flex items-center gap-2">
+            <button onclick="pullWorkspace()" class="git-button rounded-lg px-3 py-2 text-xs font-bold" title="Pull">
+                <i class="fas fa-arrow-down"></i>
+            </button>
+            <button onclick="pushWorkspace()" class="git-button rounded-lg px-3 py-2 text-xs font-bold" title="Push">
+                <i class="fas fa-arrow-up"></i>
+            </button>
+            <button onclick="openAddModal()" class="git-primary rounded-lg px-3 py-2 text-xs font-bold">
+                <i class="fas fa-plus mr-1"></i>Remote
             </button>
         </div>
     </header>
 
-    <!-- Body -->
-    <div class="git-workspace flex-1 flex overflow-hidden">
-
-        <!-- Left: remotes list -->
-        <div class="git-remotes-pane w-72 shrink-0 border-r border-slate-700/50 flex flex-col">
-            <div class="px-4 py-3 border-b border-slate-700/50">
-                <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Remotes</p>
+    <main class="git-grid flex-1 grid overflow-hidden" style="grid-template-columns: 300px minmax(0, 1fr) 330px;">
+        <aside class="git-left git-panel border-r flex flex-col overflow-hidden">
+            <div class="p-3" style="border-bottom: 1px solid oklch(30% 0.030 250);">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <span class="text-xs font-black uppercase tracking-wide git-subtle">Remotes</span>
+                    <button onclick="loadRemotes()" class="git-button w-8 h-8 rounded-lg" title="Refresh remotes">
+                        <i class="fas fa-rotate-right text-xs"></i>
+                    </button>
+                </div>
+                <div id="remotesList" class="space-y-1"></div>
             </div>
-            <div class="flex-1 overflow-y-auto py-2 flex flex-col">
-                <div class="px-4 py-8 text-center text-slate-600 text-sm" id="remotesEmpty">
-                    <i class="fas fa-code-branch text-2xl mb-2 block opacity-30"></i>
-                    No remotes configured yet.<br>
-                    <button onclick="openAddModal()" class="git-link-accent mt-2 text-xs underline">Add your first remote</button>
-                </div>
-                <div id="remotesList"></div>
+            <div class="p-3 flex items-center gap-2" style="border-bottom: 1px solid oklch(30% 0.030 250);">
+                <input id="newFilePath" class="git-input flex-1 text-xs px-2 py-2" placeholder="path/to/file.py">
+                <button onclick="openNewFile()" class="git-button w-8 h-8 rounded-lg" title="New file">
+                    <i class="fas fa-file-circle-plus text-xs"></i>
+                </button>
             </div>
-        </div>
-
-        <!-- Right: detail panel -->
-        <div class="git-detail-pane flex-1 overflow-y-auto">
-            <div id="detailEmpty" class="git-empty-state flex items-center justify-center h-full text-sm">
-                <div class="text-center">
-                    <i class="fas fa-arrow-left text-2xl mb-3 block opacity-20"></i>
-                    Select a remote to see actions
-                </div>
+            <div class="flex-1 overflow-y-auto">
+                <div id="fileTree" class="py-2"></div>
             </div>
-            <div id="detailPanel" class="git-detail-panel hidden panel-in p-6 space-y-6 max-w-3xl">
+        </aside>
 
-                <!-- Remote header -->
-                <div class="git-remote-header flex items-start justify-between">
-                    <div>
-                        <h2 class="text-white font-semibold text-lg flex items-center gap-2" id="detailName"></h2>
-                        <p class="git-remote-url text-slate-400 text-sm mt-0.5" id="detailUrl"></p>
-                        <div class="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                            <span><i class="fas fa-code-branch mr-1"></i><span id="detailBranch"></span></span>
-                            <span><i class="fas fa-folder mr-1"></i><span id="detailPath"></span></span>
-                            <span><i class="fas fa-user mr-1"></i><span id="detailCreatedBy"></span></span>
-                        </div>
-                    </div>
-                    <div class="git-remote-actions flex items-center gap-2">
-                        <button onclick="testRemote()" id="btnTest" class="git-action-outline flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:text-white transition-colors">
-                            <i class="fas fa-plug"></i> Test
-                        </button>
-                        <button onclick="confirmDeleteRemote()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-red-800/50 hover:border-red-500 text-red-400 hover:text-red-300 transition-colors">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Test result -->
-                <div id="testResult" class="hidden rounded-lg px-4 py-3 text-sm"></div>
-
-                <!-- Actions grid -->
-                <div class="git-action-grid grid grid-cols-2 gap-4">
-
-                    <!-- Push card -->
-                    <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-                        <h3 class="text-white font-medium text-sm mb-3 flex items-center gap-2">
-                            <i class="fas fa-arrow-up git-accent-icon"></i> Push Pipeline
-                        </h3>
-                        <select id="pushPipelineSelect" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-3 py-2 mb-2 focus:outline-none">
-                            <option value="">Loading pipelines...</option>
-                        </select>
-                        <input id="pushCommitMsg" type="text" placeholder="Commit message (optional)" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-3 py-2 mb-3 focus:outline-none placeholder-slate-500">
-                        <button onclick="pushPipeline()" id="btnPush" class="git-primary w-full text-white text-xs font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
-                            <i class="fas fa-arrow-up"></i> Push to Git
-                        </button>
-                        <div id="pushResult" class="hidden mt-2 text-xs rounded-lg px-3 py-2"></div>
-                    </div>
-
-                    <!-- Pull card -->
-                    <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-                        <h3 class="text-white font-medium text-sm mb-3 flex items-center gap-2">
-                            <i class="fas fa-arrow-down text-emerald-400"></i> Pull Pipelines
-                        </h3>
-                        <p class="text-slate-400 text-xs mb-4 leading-relaxed">Pull all <code class="bg-slate-700 px-1 py-0.5 rounded text-slate-300">.yaml</code> files from the remote's pipelines directory into your local <code class="bg-slate-700 px-1 py-0.5 rounded text-slate-300">pipelines/</code> folder.</p>
-                        <button onclick="pullPipelines()" id="btnPull" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
-                            <i class="fas fa-arrow-down"></i> Pull from Git
-                        </button>
-                        <div id="pullResult" class="hidden mt-2 text-xs rounded-lg px-3 py-2"></div>
-                    </div>
-
-                </div>
-
-                <!-- Status section -->
-                <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-white font-medium text-sm flex items-center gap-2">
-                            <i class="fas fa-arrows-rotate text-amber-400"></i> Sync Status
-                        </h3>
-                        <button onclick="loadStatus()" class="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                            <i class="fas fa-rotate-right text-xs" id="statusRefreshIcon"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="statusContent" class="text-slate-500 text-xs">
-                        Click Refresh to compare local vs. remote.
-                    </div>
-                </div>
-
-                <!-- Recent commits -->
-                <div id="commitsSection" class="git-card hidden bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-                    <h3 class="text-white font-medium text-sm mb-3 flex items-center gap-2">
-                        <i class="fas fa-clock-rotate-left text-slate-400"></i> Recent Remote Commits
-                    </h3>
-                    <div id="commitsList" class="space-y-1"></div>
-                </div>
-
-                <!-- Push history -->
-                <div class="git-card bg-slate-800/60 border border-slate-700/50 rounded-xl p-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-white font-medium text-sm flex items-center gap-2">
-                            <i class="fas fa-history text-slate-400"></i> Push History
-                        </h3>
-                        <button onclick="loadPushLog()" class="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
-                            <i class="fas fa-rotate-right text-xs"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="pushLogContent">
-                        <table class="w-full text-xs">
-                            <thead>
-                                <tr class="text-slate-500 border-b border-slate-700/50">
-                                    <th class="text-left pb-2 font-medium">Pipeline</th>
-                                    <th class="text-left pb-2 font-medium">Status</th>
-                                    <th class="text-left pb-2 font-medium">Commit</th>
-                                    <th class="text-left pb-2 font-medium">By</th>
-                                    <th class="text-left pb-2 font-medium">When</th>
-                                </tr>
-                            </thead>
-                            <tbody id="pushLogBody" class="divide-y divide-slate-700/30"></tbody>
-                        </table>
-                        <p id="pushLogEmpty" class="text-slate-600 text-center py-4">No push history yet.</p>
-                    </div>
-                </div>
-
+        <section class="git-editor flex flex-col overflow-hidden">
+            <div class="h-11 shrink-0 px-4 flex items-center gap-3" style="border-bottom: 1px solid oklch(30% 0.030 250); background: oklch(13% 0.024 250);">
+                <i id="fileIcon" class="fas fa-file-code git-subtle"></i>
+                <span id="currentPath" class="text-xs font-mono git-muted truncate">No file selected</span>
+                <span id="saveState" class="text-[11px] git-subtle ml-auto"></span>
+                <button onclick="saveCurrentFile()" class="git-primary rounded-lg px-3 py-1.5 text-xs font-bold">
+                    <i class="fas fa-floppy-disk mr-1"></i>Save
+                </button>
             </div>
-        </div>
-    </div>
+            <textarea id="editor" spellcheck="false" class="flex-1 w-full p-4 git-input rounded-none border-0 text-sm" placeholder=""></textarea>
+            <div class="h-44 shrink-0 overflow-auto p-3" style="border-top: 1px solid oklch(30% 0.030 250); background: oklch(12% 0.024 250);">
+                <div class="flex items-center justify-between gap-3 mb-2">
+                    <span class="text-xs font-black uppercase tracking-wide git-subtle">Diff</span>
+                    <button onclick="loadDiff()" class="git-button rounded-lg px-2 py-1 text-xs">Refresh</button>
+                </div>
+                <pre id="diffPanel" class="diff-box git-muted">No diff loaded</pre>
+            </div>
+        </section>
+
+        <aside class="git-right git-panel border-l flex flex-col overflow-hidden">
+            <div class="p-4" style="border-bottom: 1px solid oklch(30% 0.030 250);">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <span class="text-xs font-black uppercase tracking-wide git-subtle">Status</span>
+                    <button onclick="loadWorkspaceStatus()" class="git-button w-8 h-8 rounded-lg" title="Refresh status">
+                        <i class="fas fa-rotate-right text-xs"></i>
+                    </button>
+                </div>
+                <div id="branchInfo" class="text-xs git-muted mb-3">No branch</div>
+                <div id="changesList" class="space-y-1 max-h-56 overflow-auto"></div>
+            </div>
+            <div class="p-4" style="border-bottom: 1px solid oklch(30% 0.030 250);">
+                <label class="block text-xs font-bold git-subtle mb-1">Commit Message</label>
+                <textarea id="commitMessage" class="git-input w-full h-24 text-xs p-2 resize-none" placeholder="chore: update workspace files"></textarea>
+                <label class="flex items-center gap-2 text-xs git-muted mt-3">
+                    <input id="commitPush" type="checkbox" class="accent-orange-500">
+                    <span>Push after commit</span>
+                </label>
+                <button onclick="commitWorkspace()" class="git-primary w-full rounded-lg px-3 py-2 mt-3 text-xs font-bold">
+                    <i class="fas fa-code-commit mr-1"></i>Commit
+                </button>
+                <div id="gitActionResult" class="text-xs mt-3 git-muted"></div>
+            </div>
+            <div class="p-4 flex-1 overflow-auto">
+                <span class="text-xs font-black uppercase tracking-wide git-subtle">Recent Commits</span>
+                <div id="recentCommits" class="space-y-1 mt-3"></div>
+            </div>
+        </aside>
+    </main>
 </div>
 
-<!-- ── Add Remote Modal ─────────────────────────────────────────────────── -->
-<div id="addModal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-            <h3 class="text-white font-semibold text-sm flex items-center gap-2">
-                <i class="fas fa-plus-circle git-accent-icon"></i> Add Git Remote
-            </h3>
-            <button onclick="closeAddModal()" class="text-slate-500 hover:text-white transition-colors">
-                <i class="fas fa-xmark text-lg"></i>
+<div id="addModal" class="hidden fixed inset-0 bg-black/60 items-center justify-center z-50 p-4">
+    <div class="git-panel border rounded-2xl shadow-2xl w-full max-w-lg">
+        <div class="flex items-center justify-between px-5 py-4" style="border-bottom: 1px solid oklch(30% 0.030 250);">
+            <h3 class="text-white font-black text-sm">Add Remote</h3>
+            <button onclick="closeAddModal()" class="git-button w-8 h-8 rounded-lg" aria-label="Close">
+                <i class="fas fa-xmark"></i>
             </button>
         </div>
-        <div class="px-6 py-4 space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-400 mb-1.5">Remote Name <span class="text-red-400">*</span></label>
-                <input id="mName" type="text" placeholder="e.g. gitlab-pipelines" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none placeholder-slate-500">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-400 mb-1.5">Remote URL <span class="text-red-400">*</span></label>
-                <input id="mUrl" type="text" placeholder="https://gitlab.com/org/repo.git" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none placeholder-slate-500">
-            </div>
+        <div class="p-5 space-y-4">
+            <label class="block">
+                <span class="block text-xs font-bold git-subtle mb-1">Name</span>
+                <input id="mName" class="git-input w-full px-3 py-2 text-sm" placeholder="platform-repo">
+            </label>
+            <label class="block">
+                <span class="block text-xs font-bold git-subtle mb-1">Remote URL</span>
+                <input id="mUrl" class="git-input w-full px-3 py-2 text-sm" placeholder="https://github.com/org/repo.git">
+            </label>
             <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs font-medium text-slate-400 mb-1.5">Default Branch</label>
-                    <input id="mBranch" type="text" value="main" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-400 mb-1.5">Pipelines Path</label>
-                    <input id="mPath" type="text" value="pipelines" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none">
-                </div>
+                <label class="block">
+                    <span class="block text-xs font-bold git-subtle mb-1">Branch</span>
+                    <input id="mBranch" class="git-input w-full px-3 py-2 text-sm" value="main">
+                </label>
+                <label class="block">
+                    <span class="block text-xs font-bold git-subtle mb-1">Pipelines Path</span>
+                    <input id="mPath" class="git-input w-full px-3 py-2 text-sm" value="pipelines">
+                </label>
             </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-400 mb-1.5">Auth Type</label>
-                <select id="mAuthType" onchange="toggleTokenField()" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none">
-                    <option value="token">HTTPS + Token (GitLab PAT / GitHub PAT)</option>
-                    <option value="ssh">SSH (key must be in ~/.ssh)</option>
-                    <option value="none">No Auth (public repo)</option>
+            <label class="block">
+                <span class="block text-xs font-bold git-subtle mb-1">Auth Type</span>
+                <select id="mAuthType" onchange="toggleTokenField()" class="git-input w-full px-3 py-2 text-sm">
+                    <option value="token">HTTPS Token</option>
+                    <option value="ssh">SSH</option>
+                    <option value="none">None</option>
                 </select>
-            </div>
-            <div id="tokenField">
-                <label class="block text-xs font-medium text-slate-400 mb-1.5">Personal Access Token</label>
-                <input id="mToken" type="password" placeholder="glpat-xxxxxxxxxxxx" class="git-focus-accent w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none placeholder-slate-500">
-                <p class="text-slate-500 text-xs mt-1">Stored server-side and masked in all responses. For GitLab PATs use <code>oauth2</code> scope; for GitHub use a fine-grained token with repo write permission.</p>
-            </div>
-            <div id="sshNote" class="hidden bg-slate-700/50 rounded-lg px-3 py-2.5 text-xs text-slate-400">
-                <i class="fas fa-info-circle git-accent-icon mr-1"></i>
-                SSH auth uses your server's default key (<code>~/.ssh/id_rsa</code> or <code>id_ed25519</code>). Ensure the public key is added to your Git host before testing.
-            </div>
+            </label>
+            <label id="tokenField" class="block">
+                <span class="block text-xs font-bold git-subtle mb-1">Token</span>
+                <input id="mToken" type="password" class="git-input w-full px-3 py-2 text-sm">
+            </label>
+            <div id="addError" class="hidden text-xs status-pill status-error"></div>
         </div>
-        <div class="px-6 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
-            <button onclick="closeAddModal()" class="text-slate-400 hover:text-white text-sm transition-colors">Cancel</button>
-            <button onclick="submitAddRemote()" id="btnSubmitAdd" class="git-primary text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors flex items-center gap-2">
-                <i class="fas fa-plus"></i> Add Remote
-            </button>
-        </div>
-        <div id="addError" class="hidden px-6 pb-4 text-xs text-red-400"></div>
-    </div>
-</div>
-
-<!-- ── Delete Confirm Modal ──────────────────────────────────────────────── -->
-<div id="deleteModal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-        <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-            <i class="fas fa-trash text-red-400 text-lg"></i>
-        </div>
-        <h3 class="text-white font-semibold mb-1">Delete Remote?</h3>
-        <p class="text-slate-400 text-sm mb-6">This removes the remote config and its local clone. Pipeline YAMLs already in <code>pipelines/</code> are untouched.</p>
-        <div class="flex gap-3 justify-center">
-            <button onclick="document.getElementById('deleteModal').classList.add('hidden')" class="px-4 py-2 text-sm text-slate-400 hover:text-white border border-slate-600 rounded-lg transition-colors">Cancel</button>
-            <button onclick="executeDeleteRemote()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors">Delete</button>
+        <div class="px-5 py-4 flex justify-end gap-2" style="border-top: 1px solid oklch(30% 0.030 250);">
+            <button onclick="closeAddModal()" class="git-button rounded-lg px-3 py-2 text-xs font-bold">Cancel</button>
+            <button onclick="submitAddRemote()" id="btnSubmitAdd" class="git-primary rounded-lg px-3 py-2 text-xs font-bold">Add</button>
         </div>
     </div>
 </div>
 
 <script>
-// ── State ───────────────────────────────────────────────────────────────────
 let remotes = [];
 let selectedRemoteId = null;
+let repoFiles = [];
+let repoStatus = null;
+let currentFile = null;
+let editorDirty = false;
 
-// ── Init ────────────────────────────────────────────────────────────────────
-(async () => {
+function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+async function apiJson(url, options = {}) {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || data.error || 'Request failed');
+    return data;
+}
+
+function setResult(message, kind = 'muted') {
+    const el = document.getElementById('gitActionResult');
+    const cls = kind === 'error' ? 'status-pill status-error' : kind === 'ok' ? 'status-pill status-clean' : 'git-muted';
+    el.className = `text-xs mt-3 ${cls}`;
+    el.textContent = message || '';
+}
+
+async function loadCurrentUser() {
     try {
-        const me = await fetch('/me').then(r => r.json());
+        const me = await apiJson('/me');
         document.getElementById('sidebarUsername').textContent = me.username || 'User';
-    } catch {}
-    await loadRemotes();
-})();
+    } catch (_) {}
+}
 
-// ── Remotes list ────────────────────────────────────────────────────────────
 async function loadRemotes() {
     try {
-        const data = await fetch('/git/remotes').then(r => r.json());
+        const data = await apiJson('/git/remotes');
         remotes = data.remotes || [];
-        renderRemotesList();
-    } catch (e) {
-        console.error('Failed to load remotes', e);
+        renderRemotes();
+        if (!selectedRemoteId && remotes.length) await selectRemote(remotes[0].id);
+    } catch (err) {
+        setResult(err.message, 'error');
     }
 }
 
-function renderRemotesList() {
+function renderRemotes() {
     const list = document.getElementById('remotesList');
-    const empty = document.getElementById('remotesEmpty');
-    if (!remotes.length) {
-        empty.classList.remove('hidden');
-        list.innerHTML = '';
-        return;
-    }
-    empty.classList.add('hidden');
-    list.innerHTML = remotes.map(r => {
-        const isSelected = selectedRemoteId === r.id;
-        const activeClass = isSelected
-            ? 'git-selected-remote'
-            : 'border-l-2 border-transparent hover:bg-slate-800';
-        return `<button onclick="selectRemote('${r.id}')" data-id="${r.id}"
-            class="w-full text-left px-4 py-3 border-b border-slate-800/50 transition-colors ${activeClass}">
-            <div class="flex items-center gap-2">
-                <i class="fas fa-code-branch git-accent-icon text-xs shrink-0"></i>
-                <span class="text-white text-sm font-medium truncate">${esc(r.name)}</span>
+    list.innerHTML = remotes.map(remote => `
+        <button data-remote-id="${esc(remote.id)}" class="remote-select remote-row w-full text-left p-3 rounded-lg ${remote.id === selectedRemoteId ? 'is-selected' : ''}">
+            <div class="flex items-center gap-2 min-w-0">
+                <i class="fas fa-code-branch" style="color: oklch(76% 0.160 72);"></i>
+                <span class="text-sm font-bold text-white truncate">${esc(remote.name)}</span>
             </div>
-            <p class="text-slate-500 text-xs truncate mt-0.5 pl-5">${esc(r.remote_url)}</p>
-            <div class="flex items-center gap-2 mt-1 pl-5">
-                <span class="text-slate-600 text-[10px]"><i class="fas fa-code-branch mr-0.5"></i>${esc(r.branch)}</span>
-                <span class="text-slate-600 text-[10px]"><i class="fas fa-folder mr-0.5"></i>${esc(r.pipelines_path)}</span>
-            </div>
+            <p class="text-xs git-subtle truncate mt-1">${esc(remote.remote_url)}</p>
+            <p class="text-[11px] git-subtle mt-1">${esc(remote.branch)} / ${esc(remote.pipelines_path)}</p>
+        </button>
+    `).join('') || '<div class="text-sm git-subtle p-3">No remotes</div>';
+}
+
+async function selectRemote(remoteId) {
+    selectedRemoteId = remoteId;
+    currentFile = null;
+    editorDirty = false;
+    document.getElementById('editor').value = '';
+    document.getElementById('currentPath').textContent = 'No file selected';
+    renderRemotes();
+    await Promise.all([loadTree(), loadWorkspaceStatus()]);
+    await loadDiff();
+}
+
+async function loadTree() {
+    if (!selectedRemoteId) return;
+    const data = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/tree`);
+    repoFiles = data.entries || [];
+    renderTree();
+}
+
+function iconFor(entry) {
+    if (entry.type === 'directory') return 'fa-folder';
+    if (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')) return 'fa-file-lines';
+    if (entry.name.endsWith('.py')) return 'fa-file-code';
+    if (entry.name.endsWith('.md')) return 'fa-file-lines';
+    return 'fa-file';
+}
+
+function renderTree() {
+    const tree = document.getElementById('fileTree');
+    tree.innerHTML = repoFiles.map(entry => {
+        const disabled = entry.type === 'directory';
+        return `<button ${disabled ? 'disabled' : `data-file-path="${esc(entry.path)}"`} class="file-select file-row w-full text-left px-3 py-1.5 ${entry.path === currentFile ? 'is-selected' : ''}" style="padding-left:${12 + (entry.depth || 0) * 14}px">
+            <i class="fas ${iconFor(entry)} text-xs mr-2 ${entry.type === 'directory' ? 'text-amber-400' : 'git-subtle'}"></i>
+            <span class="text-xs ${entry.type === 'directory' ? 'text-white font-bold' : 'git-muted'}">${esc(entry.name)}</span>
         </button>`;
-    }).join('');
+    }).join('') || '<div class="text-sm git-subtle p-3">No files</div>';
 }
 
-async function selectRemote(id) {
-    selectedRemoteId = id;
-    renderRemotesList();
-
-    const remote = remotes.find(r => r.id === id);
-    if (!remote) return;
-
-    document.getElementById('detailEmpty').classList.add('hidden');
-    const panel = document.getElementById('detailPanel');
-    panel.classList.remove('hidden');
-    panel.classList.add('panel-in');
-
-    document.getElementById('detailName').innerHTML = `<i class="fas fa-code-branch git-accent-icon text-base"></i>${esc(remote.name)}`;
-    document.getElementById('detailUrl').textContent = remote.remote_url;
-    document.getElementById('detailBranch').textContent = remote.branch;
-    document.getElementById('detailPath').textContent = remote.pipelines_path;
-    document.getElementById('detailCreatedBy').textContent = remote.created_by || 'unknown';
-
-    // Reset result areas
-    ['testResult','pushResult','pullResult'].forEach(id => {
-        document.getElementById(id).className = 'hidden text-xs rounded-lg px-3 py-2';
-    });
-    document.getElementById('statusContent').innerHTML = '<span class="text-slate-500">Click Refresh to compare local vs. remote.</span>';
-    document.getElementById('commitsSection').classList.add('hidden');
-
-    await loadPipelinesList();
-    await loadPushLog();
+async function openFile(path) {
+    if (editorDirty && !confirm('Discard unsaved editor changes?')) return;
+    const data = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/file?path=${encodeURIComponent(path)}`);
+    currentFile = data.path;
+    editorDirty = false;
+    document.getElementById('editor').value = data.content;
+    document.getElementById('currentPath').textContent = data.path;
+    document.getElementById('saveState').textContent = '';
+    document.getElementById('fileIcon').className = `fas ${iconFor({type:'file', name:data.path})} git-subtle`;
+    renderTree();
+    await loadDiff();
 }
 
-// ── Pipeline select ─────────────────────────────────────────────────────────
-async function loadPipelinesList() {
-    const sel = document.getElementById('pushPipelineSelect');
-    try {
-        const data = await fetch('/pipelines').then(r => r.json());
-        const pipelines = data.pipelines || data || [];
-        if (!pipelines.length) {
-            sel.innerHTML = '<option value="">No pipelines found</option>';
-            return;
-        }
-        sel.innerHTML = '<option value="">— select a pipeline —</option>' +
-            pipelines.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
-    } catch {
-        sel.innerHTML = '<option value="">Failed to load pipelines</option>';
-    }
-}
-
-// ── Test connection ─────────────────────────────────────────────────────────
-async function testRemote() {
+async function openNewFile() {
     if (!selectedRemoteId) return;
-    const btn = document.getElementById('btnTest');
-    const result = document.getElementById('testResult');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-circle-notch spin mr-1"></i> Testing…';
-    result.className = 'hidden text-xs rounded-lg px-3 py-2';
-
-    try {
-        const data = await fetch(`/git/remotes/${selectedRemoteId}/test`, { method: 'POST' }).then(r => r.json());
-        result.classList.remove('hidden');
-        if (data.ok !== false) {
-            const branches = (data.branches || []).join(', ') || '(none found)';
-            result.className = 'text-xs rounded-lg px-3 py-2 bg-emerald-900/30 border border-emerald-700/40 text-emerald-300';
-            result.innerHTML = `<i class="fas fa-check-circle mr-1"></i> Connected. Branches: <strong>${esc(branches)}</strong>`;
-        } else {
-            result.className = 'text-xs rounded-lg px-3 py-2 bg-red-900/30 border border-red-700/40 text-red-300';
-            result.innerHTML = `<i class="fas fa-xmark-circle mr-1"></i> ${esc(data.detail || data.error || 'Connection failed')}`;
-        }
-    } catch (e) {
-        result.classList.remove('hidden');
-        result.className = 'text-xs rounded-lg px-3 py-2 bg-red-900/30 border border-red-700/40 text-red-300';
-        result.textContent = 'Request failed: ' + e.message;
-    }
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-plug"></i> Test';
+    const path = document.getElementById('newFilePath').value.trim();
+    if (!path) return;
+    if (editorDirty && !confirm('Discard unsaved editor changes?')) return;
+    currentFile = path;
+    editorDirty = true;
+    document.getElementById('editor').value = '';
+    document.getElementById('currentPath').textContent = path;
+    document.getElementById('saveState').textContent = 'new file';
 }
 
-// ── Push ─────────────────────────────────────────────────────────────────────
-async function pushPipeline() {
-    if (!selectedRemoteId) return;
-    const pipeline = document.getElementById('pushPipelineSelect').value;
-    if (!pipeline) { alert('Please select a pipeline to push.'); return; }
-
-    const commitMsg = document.getElementById('pushCommitMsg').value.trim();
-    const btn = document.getElementById('btnPush');
-    const result = document.getElementById('pushResult');
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-circle-notch spin mr-1"></i> Pushing…';
-    result.className = 'hidden';
-
+async function saveCurrentFile() {
+    if (!selectedRemoteId || !currentFile) return;
+    const content = document.getElementById('editor').value;
     try {
-        const resp = await fetch(`/git/remotes/${selectedRemoteId}/push`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pipeline_name: pipeline, commit_message: commitMsg || null }),
+        const data = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/file?path=${encodeURIComponent(currentFile)}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content}),
         });
-        const data = await resp.json();
-        result.classList.remove('hidden');
-        if (resp.ok && data.ok !== false) {
-            result.className = 'text-xs rounded-lg px-3 py-2 bg-emerald-900/30 border border-emerald-700/40 text-emerald-300';
-            result.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${esc(data.message || 'Push succeeded')}`;
-            await loadPushLog();
-        } else {
-            result.className = 'text-xs rounded-lg px-3 py-2 bg-red-900/30 border border-red-700/40 text-red-300';
-            result.innerHTML = `<i class="fas fa-xmark-circle mr-1"></i> ${esc(data.detail || data.error || 'Push failed')}`;
-        }
-    } catch (e) {
-        result.classList.remove('hidden');
-        result.className = 'text-xs rounded-lg px-3 py-2 bg-red-900/30 border border-red-700/40 text-red-300';
-        result.textContent = 'Request failed: ' + e.message;
+        currentFile = data.path;
+        editorDirty = false;
+        document.getElementById('currentPath').textContent = data.path;
+        document.getElementById('saveState').textContent = 'saved';
+        await Promise.all([loadTree(), loadWorkspaceStatus(), loadDiff()]);
+    } catch (err) {
+        document.getElementById('saveState').textContent = err.message;
     }
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-arrow-up"></i> Push to Git';
 }
 
-// ── Pull ─────────────────────────────────────────────────────────────────────
-async function pullPipelines() {
-    if (!selectedRemoteId) return;
-    const btn = document.getElementById('btnPull');
-    const result = document.getElementById('pullResult');
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-circle-notch spin mr-1"></i> Pulling…';
-    result.className = 'hidden';
-
-    try {
-        const resp = await fetch(`/git/remotes/${selectedRemoteId}/pull`, { method: 'POST' });
-        const data = await resp.json();
-        result.classList.remove('hidden');
-        if (resp.ok && data.ok !== false) {
-            const imported = (data.imported || []).join(', ') || '(none)';
-            result.className = 'text-xs rounded-lg px-3 py-2 bg-emerald-900/30 border border-emerald-700/40 text-emerald-300';
-            result.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${esc(data.message)} — ${esc(imported)}`;
-            await loadPipelinesList();
-        } else {
-            result.className = 'text-xs rounded-lg px-3 py-2 bg-red-900/30 border border-red-700/40 text-red-300';
-            result.innerHTML = `<i class="fas fa-xmark-circle mr-1"></i> ${esc(data.detail || data.error || 'Pull failed')}`;
-        }
-    } catch (e) {
-        result.classList.remove('hidden');
-        result.className = 'text-xs rounded-lg px-3 py-2 bg-red-900/30 border border-red-700/40 text-red-300';
-        result.textContent = 'Request failed: ' + e.message;
-    }
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-arrow-down"></i> Pull from Git';
-}
-
-// ── Status ───────────────────────────────────────────────────────────────────
-async function loadStatus() {
-    if (!selectedRemoteId) return;
-    const icon = document.getElementById('statusRefreshIcon');
-    icon.classList.add('spin');
-    const content = document.getElementById('statusContent');
-    content.innerHTML = '<span class="text-slate-500">Fetching status…</span>';
-
-    try {
-        const data = await fetch(`/git/remotes/${selectedRemoteId}/status`).then(r => r.json());
-        if (data.ok === false) {
-            content.innerHTML = `<span class="text-red-400"><i class="fas fa-xmark-circle mr-1"></i>${esc(data.detail || data.error)}</span>`;
-            return;
-        }
-
-        const rows = [
-            { label: 'In sync', items: data.in_sync || [], color: 'text-emerald-400', icon: 'fa-check-circle' },
-            { label: 'Modified locally (not pushed)', items: data.modified_locally || [], color: 'text-amber-400', icon: 'fa-pen' },
-            { label: 'Only in local pipelines/', items: data.only_local || [], color: 'text-cyan-400', icon: 'fa-upload' },
-            { label: 'Only in remote', items: data.only_remote || [], color: 'text-orange-400', icon: 'fa-download' },
-        ];
-
-        let html = '<div class="space-y-2">';
-        for (const row of rows) {
-            if (!row.items.length) continue;
-            html += `<div>
-                <p class="${row.color} font-medium mb-1"><i class="fas ${row.icon} mr-1"></i>${row.label} (${row.items.length})</p>
-                <div class="flex flex-wrap gap-1">${row.items.map(n => `<span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px] font-mono">${esc(n)}</span>`).join('')}</div>
-            </div>`;
-        }
-        if (!rows.some(r => r.items.length)) {
-            html += '<p class="text-emerald-400"><i class="fas fa-check-circle mr-1"></i>Everything is in sync.</p>';
-        }
-        html += '</div>';
-        content.innerHTML = html;
-
-        // Commits section
-        if (data.recent_commits && data.recent_commits.length) {
-            document.getElementById('commitsSection').classList.remove('hidden');
-            document.getElementById('commitsList').innerHTML = data.recent_commits.map(c =>
-                `<p class="font-mono text-xs text-slate-400 truncate">${esc(c)}</p>`
-            ).join('');
-        }
-    } catch (e) {
-        content.innerHTML = `<span class="text-red-400">Request failed: ${esc(e.message)}</span>`;
-    }
-    icon.classList.remove('spin');
-}
-
-// ── Push log ─────────────────────────────────────────────────────────────────
-async function loadPushLog() {
+async function loadWorkspaceStatus() {
     if (!selectedRemoteId) return;
     try {
-        const data = await fetch(`/git/remotes/${selectedRemoteId}/log`).then(r => r.json());
-        const log = data.log || [];
-        const tbody = document.getElementById('pushLogBody');
-        const empty = document.getElementById('pushLogEmpty');
-        if (!log.length) {
-            tbody.innerHTML = '';
-            empty.classList.remove('hidden');
-            return;
-        }
-        empty.classList.add('hidden');
-        tbody.innerHTML = log.map(entry => {
-            const pill = entry.status === 'success' ? 'pill-success' :
-                         entry.status === 'noop'    ? 'pill-noop'    : 'pill-error';
-            const sha = entry.commit_sha ? entry.commit_sha.slice(0,8) : '—';
-            const when = entry.pushed_at ? new Date(entry.pushed_at).toLocaleString() : '—';
-            return `<tr class="log-row">
-                <td class="py-2 font-mono text-slate-300">${esc(entry.pipeline_name)}</td>
-                <td class="py-2"><span class="status-pill ${pill}">${esc(entry.status)}</span></td>
-                <td class="py-2 font-mono text-slate-500">${esc(sha)}</td>
-                <td class="py-2 text-slate-400">${esc(entry.pushed_by || '—')}</td>
-                <td class="py-2 text-slate-500">${esc(when)}</td>
-            </tr>`;
-        }).join('');
-    } catch (e) {
-        console.error('Failed to load push log', e);
+        repoStatus = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/status`);
+        renderStatus();
+    } catch (err) {
+        document.getElementById('workspaceBadge').className = 'status-pill status-error ml-2';
+        document.getElementById('workspaceBadge').textContent = 'Error';
+        setResult(err.message, 'error');
     }
 }
 
-// ── Add Remote Modal ─────────────────────────────────────────────────────────
+function renderStatus() {
+    const badge = document.getElementById('workspaceBadge');
+    badge.className = `status-pill ml-2 ${repoStatus.clean ? 'status-clean' : 'status-dirty'}`;
+    badge.textContent = repoStatus.clean ? 'Clean' : `${repoStatus.changes.length} changes`;
+    document.getElementById('branchInfo').innerHTML = `
+        <div class="font-mono">${esc(repoStatus.branch)} -> origin/${esc(repoStatus.remote_branch)}</div>
+        <div class="git-subtle mt-1">ahead ${repoStatus.ahead || 0} / behind ${repoStatus.behind || 0}</div>
+    `;
+    const changes = repoStatus.changes || [];
+    document.getElementById('changesList').innerHTML = changes.map(change => `
+        <label class="change-row flex items-center gap-2 p-2 rounded-lg">
+            <input type="checkbox" class="change-check accent-orange-500" value="${esc(change.path)}" checked>
+            <span class="status-pill status-dirty">${esc(change.status)}</span>
+            <span class="text-xs font-mono git-muted truncate">${esc(change.path)}</span>
+        </label>
+    `).join('') || '<div class="text-xs git-subtle">No workspace changes</div>';
+    document.getElementById('recentCommits').innerHTML = (repoStatus.recent_commits || []).map(c => `
+        <div class="font-mono text-xs git-muted truncate">${esc(c)}</div>
+    `).join('') || '<div class="text-xs git-subtle">No commits</div>';
+}
+
+async function loadDiff() {
+    if (!selectedRemoteId) return;
+    const path = currentFile ? `?path=${encodeURIComponent(currentFile)}` : '';
+    try {
+        const data = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/diff${path}`);
+        document.getElementById('diffPanel').textContent = data.diff || 'No diff';
+    } catch (err) {
+        document.getElementById('diffPanel').textContent = err.message;
+    }
+}
+
+function selectedChangePaths() {
+    return Array.from(document.querySelectorAll('.change-check:checked')).map(input => input.value);
+}
+
+async function commitWorkspace() {
+    if (!selectedRemoteId) return;
+    const message = document.getElementById('commitMessage').value.trim();
+    if (!message) { setResult('Commit message is required', 'error'); return; }
+    try {
+        const paths = selectedChangePaths();
+        const data = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/commit`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message,
+                paths: paths.length ? paths : null,
+                push: document.getElementById('commitPush').checked,
+            }),
+        });
+        setResult(data.message || 'Committed', data.ok ? 'ok' : 'error');
+        document.getElementById('commitMessage').value = '';
+        await Promise.all([loadWorkspaceStatus(), loadDiff()]);
+    } catch (err) {
+        setResult(err.message, 'error');
+    }
+}
+
+async function pullWorkspace() {
+    if (!selectedRemoteId) return;
+    try {
+        const data = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/pull`, {method: 'POST'});
+        setResult(data.message || 'Pulled', 'ok');
+        await Promise.all([loadTree(), loadWorkspaceStatus(), loadDiff()]);
+    } catch (err) {
+        setResult(err.message, 'error');
+    }
+}
+
+async function pushWorkspace() {
+    if (!selectedRemoteId) return;
+    try {
+        const data = await apiJson(`/git/remotes/${selectedRemoteId}/workspace/push`, {method: 'POST'});
+        setResult(data.message || 'Pushed', 'ok');
+        await loadWorkspaceStatus();
+    } catch (err) {
+        setResult(err.message, 'error');
+    }
+}
+
 function openAddModal() {
-    document.getElementById('addModal').classList.remove('hidden');
+    const modal = document.getElementById('addModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
     document.getElementById('mName').focus();
-    document.getElementById('addError').classList.add('hidden');
 }
+
 function closeAddModal() {
-    document.getElementById('addModal').classList.add('hidden');
+    const modal = document.getElementById('addModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
 }
+
 function toggleTokenField() {
-    const type = document.getElementById('mAuthType').value;
-    document.getElementById('tokenField').style.display = type === 'token' ? '' : 'none';
-    document.getElementById('sshNote').style.display  = type === 'ssh'   ? '' : 'none';
+    document.getElementById('tokenField').style.display =
+        document.getElementById('mAuthType').value === 'token' ? '' : 'none';
 }
 
 async function submitAddRemote() {
-    const name = document.getElementById('mName').value.trim();
-    const url  = document.getElementById('mUrl').value.trim();
-    if (!name || !url) { showAddError('Name and Remote URL are required.'); return; }
-
     const payload = {
-        name,
-        remote_url: url,
-        auth_type:  document.getElementById('mAuthType').value,
-        token:      document.getElementById('mToken').value.trim() || null,
-        branch:     document.getElementById('mBranch').value.trim() || 'main',
+        name: document.getElementById('mName').value.trim(),
+        remote_url: document.getElementById('mUrl').value.trim(),
+        auth_type: document.getElementById('mAuthType').value,
+        token: document.getElementById('mToken').value.trim() || null,
+        branch: document.getElementById('mBranch').value.trim() || 'main',
         pipelines_path: document.getElementById('mPath').value.trim() || 'pipelines',
     };
-
-    const btn = document.getElementById('btnSubmitAdd');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-circle-notch spin mr-1"></i> Adding…';
-
+    if (!payload.name || !payload.remote_url) {
+        document.getElementById('addError').textContent = 'Name and URL are required';
+        document.getElementById('addError').classList.remove('hidden');
+        return;
+    }
     try {
-        const resp = await fetch('/git/remotes', {
+        const data = await apiJson('/git/remotes', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
         });
-        const data = await resp.json();
-        if (!resp.ok) { showAddError(data.detail || 'Failed to add remote'); return; }
         closeAddModal();
-        // Clear form
-        ['mName','mUrl','mToken'].forEach(id => document.getElementById(id).value = '');
-        document.getElementById('mBranch').value = 'main';
-        document.getElementById('mPath').value = 'pipelines';
         await loadRemotes();
-        // Select newly created remote
-        if (data.remote_id) selectRemote(data.remote_id);
-    } catch (e) {
-        showAddError('Request failed: ' + e.message);
-    }
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-plus"></i> Add Remote';
-}
-
-function showAddError(msg) {
-    const el = document.getElementById('addError');
-    el.textContent = msg;
-    el.classList.remove('hidden');
-}
-
-// ── Delete ───────────────────────────────────────────────────────────────────
-function confirmDeleteRemote() {
-    document.getElementById('deleteModal').classList.remove('hidden');
-}
-
-async function executeDeleteRemote() {
-    if (!selectedRemoteId) return;
-    document.getElementById('deleteModal').classList.add('hidden');
-    try {
-        await fetch(`/git/remotes/${selectedRemoteId}`, { method: 'DELETE' });
-        selectedRemoteId = null;
-        document.getElementById('detailPanel').classList.add('hidden');
-        document.getElementById('detailEmpty').classList.remove('hidden');
-        await loadRemotes();
-    } catch (e) {
-        alert('Delete failed: ' + e.message);
+        await selectRemote(data.remote_id);
+    } catch (err) {
+        document.getElementById('addError').textContent = err.message;
+        document.getElementById('addError').classList.remove('hidden');
     }
 }
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
-function esc(str) {
-    if (str == null) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 function toggleDarkMode() {
-    const html = document.documentElement;
+    const root = document.documentElement;
+    const isDark = root.classList.toggle('dp-dark');
+    root.classList.toggle('dp-light', !isDark);
+    localStorage.setItem('dpDarkMode', isDark ? 'dark' : 'light');
     const icon = document.getElementById('darkModeIcon');
-    if (html.classList.contains('dp-dark')) {
-        // dark → system
-        html.classList.remove('dp-dark');
-        localStorage.setItem('dpDarkMode', 'system');
-        if (icon) { icon.className = 'fas fa-circle-half-stroke'; }
-    } else if (html.classList.contains('dp-light')) {
-        // light → dark
-        html.classList.remove('dp-light');
-        html.classList.add('dp-dark');
-        localStorage.setItem('dpDarkMode', 'dark');
-        if (icon) { icon.className = 'fas fa-sun'; }
-    } else {
-        // system → light
-        html.classList.add('dp-light');
-        localStorage.setItem('dpDarkMode', 'light');
-        if (icon) { icon.className = 'fas fa-moon'; }
-    }
+    if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
 }
-function syncDarkModeIcon() {
-    const html = document.documentElement;
-    const icon = document.getElementById('darkModeIcon');
-    if (!icon) return;
-    if (html.classList.contains('dp-dark'))  icon.className = 'fas fa-sun';
-    else if (html.classList.contains('dp-light')) icon.className = 'fas fa-moon';
-    else icon.className = 'fas fa-circle-half-stroke';
-}
-document.addEventListener('DOMContentLoaded', syncDarkModeIcon);
 
+document.getElementById('editor').addEventListener('input', () => {
+    if (!currentFile) return;
+    editorDirty = true;
+    document.getElementById('saveState').textContent = 'modified';
+});
+
+document.getElementById('remotesList').addEventListener('click', event => {
+    const row = event.target.closest('.remote-select');
+    if (!row) return;
+    selectRemote(row.dataset.remoteId);
+});
+
+document.getElementById('fileTree').addEventListener('click', event => {
+    const row = event.target.closest('.file-select');
+    if (!row || row.disabled || !row.dataset.filePath) return;
+    openFile(row.dataset.filePath);
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await fetch('/logout', {method: 'POST'});
+    window.location.href = '/login';
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadCurrentUser();
+    await loadRemotes();
+});
 </script>
 </body>
 </html>

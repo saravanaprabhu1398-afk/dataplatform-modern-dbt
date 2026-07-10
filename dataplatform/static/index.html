@@ -349,7 +349,7 @@
         }
         .run-detail-context {
             display: grid;
-            grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 12px;
             border: 1px solid #E2E8F0;
             border-radius: 12px;
@@ -466,6 +466,9 @@
     </a>
     <a href="/job-builder" class="dp-sidebar__item">
       <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
+    </a>
+    <a href="/deployments" class="dp-sidebar__item">
+      <i class="fas fa-rocket dp-sidebar__icon" aria-hidden="true"></i><span>Deployments</span>
     </a>
     <a href="/templates-ui" class="dp-sidebar__item">
       <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
@@ -798,9 +801,9 @@ const maxRetries = 3;
 let dashboardSummary = { stats:{}, active_runs:[], recent_runs:[], pipeline_summaries:[], failed_pipelines:[] };
 let allPipelines = [];
 let environmentProfiles = [
-    { id:'local', name:'Local', description:'Local worker', compute:'local-worker', badge:'Default' },
-    { id:'dev', name:'Development', description:'Development profile', compute:'dev-worker', badge:'Dev' },
-    { id:'prod', name:'Production', description:'Production profile', compute:'prod-worker', badge:'Prod' }
+    { id:'local', name:'Local', description:'Local worker', compute:'local-worker', badge:'Default', deployment_target:'local', layers:['ingest','quality','transform','serve','operate'] },
+    { id:'dev', name:'Development', description:'Containerized development runtime', compute:'dev-worker', badge:'Dev', deployment_target:'docker', layers:['ingest','quality','transform','serve','operate'] },
+    { id:'prod', name:'Production', description:'Governed production runtime', compute:'prod-worker', badge:'Prod', deployment_target:'kubernetes', layers:['ingest','quality','transform','serve','operate'] }
 ];
 
 // ═══════════════════════════════════════════
@@ -1536,6 +1539,8 @@ function renderEnvironmentProfiles(selectedId = 'local') {
     if (!container) return;
     container.innerHTML = environmentProfiles.map(profile => {
         const checked = profile.id === selectedId ? 'checked' : '';
+        const target = profile.deployment_target || profile.target || 'local';
+        const layerCount = Array.isArray(profile.layers) ? profile.layers.length : 0;
         return `<label class="run-config-profile">
             <input type="radio" name="runEnvironmentProfile" value="${escapeHtml(profile.id)}" ${checked}>
             <div class="flex items-start justify-between gap-3">
@@ -1545,7 +1550,10 @@ function renderEnvironmentProfiles(selectedId = 'local') {
                 </div>
                 <span class="shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-full bg-slate-100 text-slate-500 px-2 py-0.5">${escapeHtml(profile.badge || profile.id)}</span>
             </div>
-            <p class="text-[10px] text-slate-400 mt-2 font-mono truncate">${escapeHtml(profile.compute || '')}</p>
+            <div class="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                <span class="font-mono truncate">${escapeHtml(profile.compute || '')}</span>
+                <span class="font-semibold uppercase tracking-wide">${escapeHtml(target)}${layerCount ? ` · ${layerCount} layers` : ''}</span>
+            </div>
         </label>`;
     }).join('');
 }
@@ -2079,6 +2087,9 @@ function renderRunDetailsContent(pipeline, parsed, runs, selectedRunId) {
     const results = details.results && typeof details.results === 'object' ? details.results : {};
     const taskRuns = Array.isArray(details.task_runs) ? details.task_runs : [];
     const environment = details.environment && typeof details.environment === 'object' ? details.environment : {};
+    const fabric = details.execution_fabric && typeof details.execution_fabric === 'object' ? details.execution_fabric : {};
+    const target = fabric.deployment_target || details.deployment_target || {};
+    const activeLayers = Array.isArray(fabric.layers) ? fabric.layers.filter(layer => layer.task_count) : [];
     const environmentLabel = environment.name || details.environment_profile || 'Local';
     const environmentCompute = environment.compute || details.environment_profile || 'local-worker';
     const runtimeParameters = details.runtime_parameters && typeof details.runtime_parameters === 'object'
@@ -2137,6 +2148,22 @@ function renderRunDetailsContent(pipeline, parsed, runs, selectedRunId) {
                 <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Environment</p>
                 <p class="mt-2 text-sm font-semibold text-slate-800">${escapeHtml(environmentLabel)}</p>
                 <p class="text-[11px] text-slate-400 mt-0.5 font-mono">${escapeHtml(environmentCompute)}</p>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Target</p>
+                <p class="mt-2 text-sm font-semibold text-slate-800">${escapeHtml(target.name || environment.deployment_target || 'Local')}</p>
+                <p class="text-[11px] text-slate-400 mt-0.5 font-mono">${escapeHtml(target.runtime || target.id || environment.deployment_target || 'local')}</p>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Layers</p>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                    ${activeLayers.length ? activeLayers.map(layer => `
+                        <span class="run-param-chip">
+                            <span>${escapeHtml(layer.name || layer.id)}</span>
+                            <span class="text-slate-300">·</span>
+                            <span>${escapeHtml(layer.task_count)}</span>
+                        </span>`).join('') : '<span class="text-xs text-slate-400">Inferred at run time</span>'}
+                </div>
             </div>
             <div>
                 <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Parameters</p>

@@ -71,6 +71,9 @@
     <a href="/job-builder" class="dp-sidebar__item">
       <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
     </a>
+    <a href="/deployments" class="dp-sidebar__item">
+      <i class="fas fa-rocket dp-sidebar__icon" aria-hidden="true"></i><span>Deployments</span>
+    </a>
     <a href="/templates-ui" class="dp-sidebar__item">
       <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
     </a>
@@ -151,6 +154,10 @@
                         <i class="fas fa-rotate-right text-xs"></i>
                     </button>
                 </div>
+                <button onclick="collectMetrics()" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                        style="background: var(--color-accent-subtle); color: var(--color-accent); border: 1px solid var(--color-accent);">
+                    <i class="fas fa-gauge-high text-[10px]"></i>Collect
+                </button>
             </div>
         </div>
     </header>
@@ -179,6 +186,12 @@
             <div class="skeleton" style="height:72px; border-radius:var(--radius-lg);"></div>
             <div class="skeleton" style="height:72px; border-radius:var(--radius-lg);"></div>
             <div class="skeleton" style="height:72px; border-radius:var(--radius-lg);"></div>
+        </div>
+
+        <div id="observabilityStrip" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="skeleton" style="height:76px; border-radius:var(--radius-lg);"></div>
+            <div class="skeleton" style="height:76px; border-radius:var(--radius-lg);"></div>
+            <div class="skeleton" style="height:76px; border-radius:var(--radius-lg);"></div>
         </div>
 
         <!-- Panels grid — 3 cols on xl, 2 on md -->
@@ -230,11 +243,11 @@
             <div class="panel-card">
                 <div class="flex items-start justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-widest" style="color: var(--color-ink-3);">P95 Task Duration</p>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style="background: var(--color-danger-subtle); border: 1px solid var(--color-danger); color: var(--color-danger);">SLA BREACH</span>
+                    <span id="metP95State" class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                          style="background: var(--color-paper-3); border: 1px solid var(--color-border); color: var(--color-ink-3);">LIVE</span>
                 </div>
-                <p class="text-2xl font-bold mb-0.5" style="color: var(--color-ink);">91 s</p>
-                <p class="text-xs mb-3" style="color: var(--color-ink-3);">Slowest 5% per pipeline · SLA: 60 s</p>
+                <p id="metP95Duration" class="text-2xl font-bold mb-0.5" style="color: var(--color-ink);">—</p>
+                <p id="metP95Detail" class="text-xs mb-3" style="color: var(--color-ink-3);">Slowest 5% across completed runs</p>
                 <div class="rounded-xl p-2" style="height:120px; background: var(--color-paper-2);">
                     <canvas id="chartP95Duration"></canvas>
                 </div>
@@ -244,11 +257,11 @@
             <div class="panel-card">
                 <div class="flex items-start justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-widest" style="color: var(--color-ink-3);">SLA Compliance</p>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style="background: var(--color-warning-subtle); border: 1px solid var(--color-warning); color: var(--color-warning);">BELOW TARGET</span>
+                    <span id="metSlaState" class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                          style="background: var(--color-paper-3); border: 1px solid var(--color-border); color: var(--color-ink-3);">LIVE</span>
                 </div>
-                <p class="text-2xl font-bold mb-0.5" style="color: var(--color-accent);">91.7%</p>
-                <p class="text-xs mb-3" style="color: var(--color-ink-3);">11 of 12 pipelines within SLA</p>
+                <p id="metSlaCompliance" class="text-2xl font-bold mb-0.5" style="color: var(--color-accent);">—</p>
+                <p id="metSlaDetail" class="text-xs mb-3" style="color: var(--color-ink-3);">SLA violations in selected window</p>
                 <div class="flex items-center justify-center" style="height:120px;">
                     <canvas id="chartSLA"></canvas>
                 </div>
@@ -312,6 +325,7 @@ let liveTotal       = 0;
 let liveSuccessCount = 0;
 let liveFailCount   = 0;
 let charts          = {};
+let obsData         = null;
 
 // ── CSS token colours for Chart.js ───────────────────────────────────────────
 let C = {};
@@ -362,6 +376,71 @@ function renderKpiStrip(total, successful, failed, active) {
             <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:var(--color-warning-subtle);"><i class="fas fa-circle-play text-sm" style="color:var(--color-warning);"></i></div>
             <div><p class="text-[10px] font-bold uppercase tracking-wide" style="color:var(--color-ink-3);">Active Runs</p><p class="text-xl font-bold" style="color:var(--color-warning);" id="kpiActive">${active}</p></div>
         </div>`;
+}
+
+function rangeToHours(range) {
+    return ({'1h':1,'6h':6,'24h':24,'7d':168})[range] || 24;
+}
+
+function latestSample(metricName, pipelineName=null) {
+    const samples = obsData && Array.isArray(obsData.samples) ? obsData.samples : [];
+    return samples.find(s => s.metric_name === metricName && (s.pipeline_name || null) === pipelineName);
+}
+
+function renderObservabilityStrip() {
+    const summary = (obsData && obsData.alert_summary) || {};
+    const rules = (obsData && obsData.rules) || [];
+    const collector = (obsData && obsData.collector) || {};
+    const enabledRules = rules.filter(r => r.enabled).length;
+    const sampleCount = obsData && obsData.sample_count != null ? obsData.sample_count : 0;
+    const collectedAt = obsData && obsData.collected_at ? new Date(obsData.collected_at).toLocaleTimeString() : '—';
+    const collectorLabel = collector.auto_collect_enabled ? `Auto · ${collector.interval_seconds || 60}s` : 'Manual';
+    const active = summary.active || 0;
+    const firing = summary.firing || 0;
+
+    document.getElementById('observabilityStrip').innerHTML = `
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:14px 16px;" class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:var(--color-accent-subtle);"><i class="fas fa-database text-sm" style="color:var(--color-accent);"></i></div>
+            <div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-wide" style="color:var(--color-ink-3);">Collected Samples</p><p class="text-xl font-bold" style="color:var(--color-ink);">${sampleCount}</p><p class="text-[10px]" style="color:var(--color-ink-3);">Last: ${collectedAt} · ${collectorLabel}</p></div>
+        </div>
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:14px 16px;" class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:var(--color-warning-subtle);"><i class="fas fa-bell text-sm" style="color:var(--color-warning);"></i></div>
+            <div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-wide" style="color:var(--color-ink-3);">Active Incidents</p><p class="text-xl font-bold" style="color:${active ? 'var(--color-danger)' : 'var(--color-success)'};">${active}</p><p class="text-[10px]" style="color:var(--color-ink-3);">${firing} firing</p></div>
+        </div>
+        <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:14px 16px;" class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:var(--color-success-subtle);"><i class="fas fa-sliders text-sm" style="color:var(--color-success);"></i></div>
+            <div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-wide" style="color:var(--color-ink-3);">Alert Rules</p><p class="text-xl font-bold" style="color:var(--color-ink);">${enabledRules} / ${rules.length}</p><p class="text-[10px]" style="color:var(--color-ink-3);">Enabled</p></div>
+        </div>`;
+
+    const p95 = latestSample('pipeline_p95_duration_seconds');
+    if (p95) {
+        document.getElementById('metP95Duration').textContent = `${Math.round(p95.value)} s`;
+        document.getElementById('metP95Detail').textContent = `P95 duration · ${currentRange} window`;
+        const state = document.getElementById('metP95State');
+        if (p95.value > 60) {
+            state.textContent = 'WATCH';
+            state.style.background = 'var(--color-warning-subtle)';
+            state.style.borderColor = 'var(--color-warning)';
+            state.style.color = 'var(--color-warning)';
+        } else {
+            state.textContent = 'OK';
+            state.style.background = 'var(--color-success-subtle)';
+            state.style.borderColor = 'var(--color-success)';
+            state.style.color = 'var(--color-success)';
+        }
+    }
+
+    const sla = latestSample('sla_violations_total');
+    if (sla) {
+        const hasViolations = sla.value > 0;
+        document.getElementById('metSlaCompliance').textContent = hasViolations ? `${sla.value} breach${sla.value === 1 ? '' : 'es'}` : '100%';
+        document.getElementById('metSlaDetail').textContent = hasViolations ? `SLA breaches · ${currentRange} window` : `No SLA breaches · ${currentRange} window`;
+        const state = document.getElementById('metSlaState');
+        state.textContent = hasViolations ? 'BREACH' : 'OK';
+        state.style.background = hasViolations ? 'var(--color-danger-subtle)' : 'var(--color-success-subtle)';
+        state.style.borderColor = hasViolations ? 'var(--color-danger)' : 'var(--color-success)';
+        state.style.color = hasViolations ? 'var(--color-danger)' : 'var(--color-success)';
+    }
 }
 
 // ── Health Map ────────────────────────────────────────────────────────────────
@@ -608,6 +687,40 @@ async function loadTimeseries(range) {
     } catch(e) {}
 }
 
+async function loadObservabilityDashboard() {
+    try {
+        const data = await fetch(`/observability/dashboard?range=${currentRange}`).then(r => r.ok ? r.json() : null);
+        if (data) {
+            obsData = data;
+            renderObservabilityStrip();
+        }
+    } catch(e) {
+        document.getElementById('observabilityStrip').innerHTML = `<div class="panel-card md:col-span-3 text-sm" style="color:var(--color-ink-3);">Observability data unavailable</div>`;
+    }
+}
+
+async function collectMetrics() {
+    try {
+        const payload = {
+            range_hours: rangeToHours(currentRange),
+            store: true,
+            evaluate: true,
+            notify: true
+        };
+        const data = await fetch('/observability/collect', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        }).then(r => r.ok ? r.json() : Promise.reject(r));
+        obsData = data;
+        renderObservabilityStrip();
+        loadSlaViolations();
+        showToast(`Collected ${data.sample_count || 0} metric samples`, 'success');
+    } catch(e) {
+        showToast('Metric collection failed', 'error');
+    }
+}
+
 // ── Time range ────────────────────────────────────────────────────────────────
 function setTimeRange(range) {
     currentRange = range;
@@ -621,6 +734,7 @@ function setTimeRange(range) {
         }
     });
     loadTimeseries(range);
+    loadObservabilityDashboard();
     showToast(`Metrics updated · ${range} window`, 'info');
 }
 
@@ -628,6 +742,7 @@ function refreshMetrics() {
     loadLiveStats();
     loadSlaViolations();
     loadTimeseries(currentRange);
+    loadObservabilityDashboard();
     showToast(`Metrics refreshed · ${currentRange}`, 'success');
 }
 
@@ -657,6 +772,7 @@ function connectLiveStream() {
     es.addEventListener('queue_update', () => {
         // A run changed — update charts + SLA
         loadLiveStats();
+        loadObservabilityDashboard();
     });
 
     es.addEventListener('heartbeat', () => {});
@@ -674,6 +790,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadLiveStats();
     loadSlaViolations();
     loadQueueBadge();
+    loadObservabilityDashboard();
     connectLiveStream();
 
     function toggleDarkMode() {

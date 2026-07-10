@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+<script>
+(function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
+</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deployments - Data Platform Suite</title>
+    <link rel="stylesheet" href="/static/tokens.css">
+    <link rel="stylesheet" href="/static/sidebar.css">
+    <link rel="stylesheet" href="/static/tailwind-static.css">
+    <style>html, body { overflow-x: clip; }</style>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.35} }
+        .panel-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 26px;
+            padding: 4px 9px;
+            border-radius: var(--radius-full);
+            font-size: var(--text-xs);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .status-deployed { background: oklch(95% 0.045 155); color: oklch(36% 0.115 155); border: 1px solid oklch(82% 0.085 155); }
+        .status-failed { background: oklch(96% 0.035 25); color: oklch(42% 0.160 25); border: 1px solid oklch(84% 0.090 25); }
+        .status-rolled_back { background: oklch(96% 0.022 255); color: oklch(36% 0.080 255); border: 1px solid oklch(84% 0.050 255); }
+        .status-validating { background: oklch(96% 0.050 75); color: oklch(40% 0.100 65); border: 1px solid oklch(84% 0.075 75); }
+        .active-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); animation: pulse-dot 1.5s ease-in-out infinite; }
+        .dp-primary {
+            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
+            color: var(--color-accent-text);
+            box-shadow: 0 8px 16px oklch(61% 0.210 38 / .18);
+        }
+        .dp-primary:hover { filter: brightness(.97); }
+        .dp-secondary {
+            background: var(--color-surface);
+            color: var(--color-ink);
+            border: 1px solid var(--color-border);
+        }
+        .dp-secondary:hover { background: var(--color-paper-2); }
+        .dp-field {
+            width: 100%;
+            background: var(--color-surface);
+            color: var(--color-ink);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 9px 10px;
+            font-size: var(--text-sm);
+            outline: none;
+        }
+        .dp-field:focus {
+            border-color: var(--color-accent);
+            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / .20);
+        }
+        .deployment-row {
+            transition: background .15s, border-color .15s;
+            cursor: pointer;
+        }
+        .deployment-row:hover { background: var(--color-paper-2); }
+        .deployment-row.is-selected {
+            background: var(--color-accent-subtle);
+            box-shadow: inset 3px 0 0 var(--color-accent);
+        }
+        .layer-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            background: var(--color-paper-2);
+            color: var(--color-ink);
+            font-size: var(--text-xs);
+            font-weight: 700;
+        }
+        .code-panel {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            background: var(--color-paper-3);
+            border: 1px solid var(--color-border);
+            color: var(--color-ink);
+            border-radius: var(--radius-md);
+            overflow: auto;
+            max-height: 260px;
+            white-space: pre-wrap;
+        }
+        @media (max-width: 900px) {
+            .deploy-grid { grid-template-columns: minmax(0, 1fr) !important; }
+            .top-actions { flex-wrap: wrap; justify-content: flex-start !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen" style="background: var(--color-paper); font-family: var(--font-body); overflow-x: clip;">
+
+<button class="dp-sidebar-toggle" id="dpSidebarToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="dpSidebar">
+  <i class="fas fa-bars" aria-hidden="true"></i>
+</button>
+<div class="dp-sidebar-overlay" id="dpSidebarOverlay" aria-hidden="true"></div>
+<aside class="dp-sidebar" id="dpSidebar" role="navigation" aria-label="Main navigation">
+  <div class="dp-sidebar__brand">
+    <div class="dp-sidebar__logo" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
+    <div class="dp-sidebar__brand-text">
+      <span class="dp-sidebar__brand-name">Data Platform</span>
+      <span class="dp-sidebar__brand-sub">Suite</span>
+    </div>
+  </div>
+  <nav class="dp-sidebar__nav" aria-label="Application navigation">
+    <a href="/" class="dp-sidebar__item">
+      <i class="fas fa-house dp-sidebar__icon" aria-hidden="true"></i><span>Overview</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Pipelines</div>
+    <a href="/dashboard" class="dp-sidebar__item">
+      <i class="fas fa-wave-square dp-sidebar__icon" aria-hidden="true"></i><span>DP Flow</span>
+    </a>
+    <a href="/job-builder" class="dp-sidebar__item">
+      <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
+    </a>
+    <a href="/deployments" class="dp-sidebar__item is-active" aria-current="page">
+      <i class="fas fa-rocket dp-sidebar__icon" aria-hidden="true"></i><span>Deployments</span>
+    </a>
+    <a href="/templates-ui" class="dp-sidebar__item">
+      <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
+    </a>
+    <a href="/generator" class="dp-sidebar__item">
+      <i class="fas fa-wand-magic-sparkles dp-sidebar__icon" aria-hidden="true"></i><span>Generator</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Observability</div>
+    <a href="/monitoring" class="dp-sidebar__item">
+      <i class="fas fa-chart-line dp-sidebar__icon" aria-hidden="true"></i><span>Monitoring</span>
+    </a>
+    <a href="/lineage-viz" class="dp-sidebar__item">
+      <i class="fas fa-diagram-project dp-sidebar__icon" aria-hidden="true"></i><span>Lineage</span>
+    </a>
+    <a href="/alerts" class="dp-sidebar__item">
+      <i class="fas fa-bell dp-sidebar__icon" aria-hidden="true"></i><span>Alerts</span>
+      <span id="navAlertBadge" class="dp-sidebar__badge hidden" aria-label="active alerts">1</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Governance</div>
+    <a href="/catalog" class="dp-sidebar__item">
+      <i class="fas fa-database dp-sidebar__icon" aria-hidden="true"></i><span>Catalog</span>
+    </a>
+    <a href="/costs" class="dp-sidebar__item">
+      <i class="fas fa-coins dp-sidebar__icon" aria-hidden="true"></i><span>Costs</span>
+    </a>
+    <a href="/git-integration" class="dp-sidebar__item">
+      <i class="fas fa-code-branch dp-sidebar__icon" aria-hidden="true"></i><span>Git Integration</span>
+    </a>
+    <div class="dp-sidebar__group" aria-hidden="true">Admin</div>
+    <a href="/admin" class="dp-sidebar__item">
+      <i class="fas fa-shield-halved dp-sidebar__icon" aria-hidden="true"></i><span>Users &amp; Roles</span>
+    </a>
+  </nav>
+  <div class="dp-sidebar__footer">
+    <div class="dp-sidebar__avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
+    <div class="dp-sidebar__user-info">
+      <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
+      <span class="dp-sidebar__userrole">Data Platform</span>
+    </div>
+    <button id="darkModeBtn" class="dp-sidebar__darkmode" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+      <i class="fas fa-moon" id="darkModeIcon" aria-hidden="true"></i>
+    </button>
+    <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
+      <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+    </button>
+  </div>
+</aside>
+<script>
+(function(){var t=document.getElementById('dpSidebarToggle'),s=document.getElementById('dpSidebar'),o=document.getElementById('dpSidebarOverlay');if(!t||!s||!o)return;function open(){s.classList.add('is-open');o.classList.add('is-open');o.removeAttribute('aria-hidden');t.setAttribute('aria-expanded','true');t.querySelector('i').className='fas fa-xmark';}function close(){s.classList.remove('is-open');o.classList.remove('is-open');o.setAttribute('aria-hidden','true');t.setAttribute('aria-expanded','false');t.querySelector('i').className='fas fa-bars';}t.addEventListener('click',function(){s.classList.contains('is-open')?close():open();});o.addEventListener('click',close);document.addEventListener('keydown',function(e){if(e.key==='Escape'&&s.classList.contains('is-open'))close();});}());
+</script>
+
+<div class="pl-56 min-h-screen flex flex-col" style="background: var(--color-paper);">
+    <header class="px-6 py-3.5 sticky top-0 z-30"
+            style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);">
+        <div class="flex items-center justify-between gap-4 top-actions">
+            <nav class="flex items-center gap-1.5 text-sm">
+                <a href="/" style="color: var(--color-ink-3);" class="hover:opacity-80 transition-opacity">Home</a>
+                <i class="fas fa-chevron-right text-[10px]" style="color: var(--color-border-2);"></i>
+                <span style="color: var(--color-ink); font-weight: 600;">Deployments</span>
+            </nav>
+            <div class="flex items-center gap-2">
+                <button onclick="validateDeployment()" class="dp-secondary inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold">
+                    <i class="fas fa-shield-halved"></i><span>Validate</span>
+                </button>
+                <button onclick="deployPipeline()" class="dp-primary inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold">
+                    <i class="fas fa-rocket"></i><span>Deploy</span>
+                </button>
+                <button onclick="openConnectionModal()" class="dp-secondary inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold">
+                    <i class="fas fa-plug"></i><span>Target</span>
+                </button>
+                <button onclick="loadAll()" class="dp-secondary w-9 h-9 rounded-lg" title="Refresh" aria-label="Refresh">
+                    <i class="fas fa-rotate-right text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 p-6">
+        <section class="grid grid-cols-4 gap-4 mb-5">
+            <div class="panel-card p-4">
+                <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--color-ink-3);">Active</p>
+                <p id="activeDeploymentsCount" class="text-2xl font-black mt-1" style="color: var(--color-ink);">0</p>
+            </div>
+            <div class="panel-card p-4">
+                <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--color-ink-3);">Connections</p>
+                <p id="connectionsCount" class="text-2xl font-black mt-1" style="color: var(--color-ink);">0</p>
+            </div>
+            <div class="panel-card p-4">
+                <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--color-ink-3);">Target Types</p>
+                <p id="targetsCount" class="text-2xl font-black mt-1" style="color: var(--color-ink);">0</p>
+            </div>
+            <div class="panel-card p-4">
+                <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--color-ink-3);">History</p>
+                <p id="historyCount" class="text-2xl font-black mt-1" style="color: var(--color-ink);">0</p>
+            </div>
+        </section>
+
+        <section class="deploy-grid grid gap-5" style="grid-template-columns: minmax(360px, .9fr) minmax(0, 1.4fr);">
+            <div class="space-y-5">
+                <div class="panel-card p-5">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <div>
+                            <h1 class="text-lg font-black" style="color: var(--color-ink);">Release Intent</h1>
+                            <p id="validationState" class="text-xs mt-1" style="color: var(--color-ink-3);">No validation</p>
+                        </div>
+                        <span id="validationPill" class="status-pill status-validating hidden">
+                            <i class="fas fa-circle-check"></i><span>Valid</span>
+                        </span>
+                    </div>
+
+                    <div class="space-y-4">
+                        <label class="block">
+                            <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Pipeline</span>
+                            <select id="pipelineSelect" class="dp-field"></select>
+                        </label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="block">
+                                <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Profile</span>
+                                <select id="profileSelect" class="dp-field"></select>
+                            </label>
+                            <label class="block">
+                                <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Target</span>
+                                <select id="targetSelect" class="dp-field"></select>
+                            </label>
+                        </div>
+                        <label class="block">
+                            <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Connected Target</span>
+                            <select id="connectionSelect" class="dp-field"></select>
+                        </label>
+                        <label class="block">
+                            <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Notes</span>
+                            <textarea id="deploymentNotes" rows="3" class="dp-field resize-none" placeholder="Release notes"></textarea>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="panel-card p-5">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-sm font-black" style="color: var(--color-ink);">Validation</h2>
+                        <span id="taskCountLabel" class="text-xs font-bold" style="color: var(--color-ink-3);">0 tasks</span>
+                    </div>
+                    <div id="validationMessages" class="space-y-2 text-xs" style="color: var(--color-ink-3);"></div>
+                    <div id="layerChips" class="flex flex-wrap gap-2 mt-4"></div>
+                </div>
+            </div>
+
+            <div class="space-y-5">
+                <div class="panel-card p-5">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <h2 class="text-sm font-black" style="color: var(--color-ink);">Connected Targets</h2>
+                        <button onclick="openConnectionModal()" class="dp-secondary w-8 h-8 rounded-lg" title="Register target" aria-label="Register target">
+                            <i class="fas fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                    <div id="deploymentConnectionsList" class="grid gap-3"></div>
+                </div>
+
+                <div class="panel-card p-5">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <h2 class="text-sm font-black" style="color: var(--color-ink);">Active Deployments</h2>
+                        <button onclick="loadDeployments()" class="dp-secondary w-8 h-8 rounded-lg" title="Refresh active deployments" aria-label="Refresh active deployments">
+                            <i class="fas fa-rotate-right text-xs"></i>
+                        </button>
+                    </div>
+                    <div id="activeDeploymentsList" class="grid gap-3"></div>
+                </div>
+
+                <div class="panel-card overflow-hidden">
+                    <div class="p-5 flex items-center justify-between gap-3" style="border-bottom: 1px solid var(--color-border);">
+                        <h2 class="text-sm font-black" style="color: var(--color-ink);">Deployment History</h2>
+                        <select id="historyStatusFilter" class="dp-field max-w-[170px]" onchange="loadDeployments()">
+                            <option value="">All statuses</option>
+                            <option value="deployed">Deployed</option>
+                            <option value="failed">Failed</option>
+                            <option value="rolled_back">Rolled back</option>
+                        </select>
+                    </div>
+                    <div id="deploymentsTable" class="divide-y" style="border-color: var(--color-border);"></div>
+                </div>
+
+                <div class="panel-card p-5">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-sm font-black" style="color: var(--color-ink);">Manifest</h2>
+                        <span id="manifestHash" class="text-xs font-mono" style="color: var(--color-ink-3);"></span>
+                    </div>
+                    <pre id="manifestPanel" class="code-panel p-3">No manifest selected</pre>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div id="connectionModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: rgba(15, 23, 42, .45);">
+    <div class="panel-card w-full max-w-2xl overflow-hidden">
+        <div class="p-5 flex items-center justify-between gap-3" style="border-bottom: 1px solid var(--color-border);">
+            <div>
+                <h2 class="text-base font-black" style="color: var(--color-ink);">Register Target</h2>
+                <p class="text-xs mt-1" style="color: var(--color-ink-3);">Cloud accounts, Kubernetes clusters, Docker hosts, local nodes, and private sites.</p>
+            </div>
+            <button onclick="closeConnectionModal()" class="dp-secondary w-8 h-8 rounded-lg" aria-label="Close">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+        <form id="connectionForm" class="p-5 grid gap-4">
+            <div class="grid grid-cols-2 gap-3">
+                <label class="block">
+                    <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Name</span>
+                    <input id="connectionName" class="dp-field" required placeholder="prod-eks-us-east-1">
+                </label>
+                <label class="block">
+                    <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Target Type</span>
+                    <select id="connectionTarget" class="dp-field" required></select>
+                </label>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+                <label class="block">
+                    <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Provider</span>
+                    <input id="connectionProvider" class="dp-field" placeholder="aws, gcp, azure, eks">
+                </label>
+                <label class="block">
+                    <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Region</span>
+                    <input id="connectionRegion" class="dp-field" placeholder="us-east-1">
+                </label>
+                <label class="block">
+                    <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Namespace</span>
+                    <input id="connectionNamespace" class="dp-field" placeholder="data-platform">
+                </label>
+            </div>
+            <label class="block">
+                <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Endpoint</span>
+                <input id="connectionEndpoint" class="dp-field" placeholder="https://cluster.example.com or account alias">
+            </label>
+            <div class="grid grid-cols-2 gap-3">
+                <label class="block">
+                    <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Status</span>
+                    <select id="connectionStatus" class="dp-field">
+                        <option value="connected">Connected</option>
+                        <option value="unknown">Unknown</option>
+                        <option value="disconnected">Disconnected</option>
+                    </select>
+                </label>
+                <label class="block">
+                    <span class="block text-xs font-bold mb-1" style="color: var(--color-ink-2);">Credentials Ref</span>
+                    <input id="connectionCredentialsRef" class="dp-field" placeholder="env:AWS_PROFILE or vault:path">
+                </label>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-1">
+                <button type="button" onclick="closeConnectionModal()" class="dp-secondary px-3 py-2 rounded-lg text-xs font-bold">Cancel</button>
+                <button type="submit" class="dp-primary px-3 py-2 rounded-lg text-xs font-bold">Save Target</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let PIPELINES = [];
+let PROFILES = [];
+let TARGETS = [];
+let CONNECTIONS = [];
+let DEPLOYMENTS = [];
+let LAST_VALIDATION = null;
+let SELECTED_DEPLOYMENT_ID = null;
+
+function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+function fmtDate(value) {
+    if (!value) return 'never';
+    try { return new Date(value).toLocaleString(); } catch (_) { return value; }
+}
+
+function statusPill(status, active) {
+    const safe = esc(status || 'unknown');
+    const cls = ['deployed','failed','rolled_back'].includes(status) ? `status-${status}` : 'status-validating';
+    return `<span class="status-pill ${cls}">${active ? '<span class="active-dot"></span>' : '<i class="fas fa-circle text-[7px]"></i>'}<span>${safe.replace('_',' ')}</span></span>`;
+}
+
+function connectionPill(status) {
+    if (status === 'connected') return '<span class="status-pill status-deployed"><span class="active-dot"></span><span>connected</span></span>';
+    if (status === 'disconnected') return '<span class="status-pill status-failed"><i class="fas fa-link-slash"></i><span>disconnected</span></span>';
+    return '<span class="status-pill status-rolled_back"><i class="fas fa-circle-question"></i><span>unknown</span></span>';
+}
+
+function selectedPipeline() {
+    const path = document.getElementById('pipelineSelect').value;
+    return PIPELINES.find(p => p.file_path === path) || null;
+}
+
+function selectedConnection() {
+    const id = document.getElementById('connectionSelect').value;
+    return CONNECTIONS.find(c => c.connection_id === id) || null;
+}
+
+function renderSelectors() {
+    const pipelineSelect = document.getElementById('pipelineSelect');
+    pipelineSelect.innerHTML = PIPELINES.map(p => `
+        <option value="${esc(p.file_path)}">${esc(p.display_name || p.name)}</option>
+    `).join('') || '<option value="">No pipelines</option>';
+
+    const profileSelect = document.getElementById('profileSelect');
+    profileSelect.innerHTML = PROFILES.map(p => `
+        <option value="${esc(p.id)}">${esc(p.name || p.id)}</option>
+    `).join('');
+
+    const targetSelect = document.getElementById('targetSelect');
+    targetSelect.innerHTML = TARGETS.map(t => `
+        <option value="${esc(t.id)}">${esc(t.name || t.id)}</option>
+    `).join('');
+
+    const connectionTarget = document.getElementById('connectionTarget');
+    if (connectionTarget) {
+        connectionTarget.innerHTML = TARGETS.map(t => `
+            <option value="${esc(t.id)}">${esc(t.name || t.id)}</option>
+        `).join('');
+    }
+    renderConnectionSelect();
+}
+
+function renderConnectionSelect() {
+    const targetId = document.getElementById('targetSelect').value;
+    const select = document.getElementById('connectionSelect');
+    const current = select.value;
+    const matches = CONNECTIONS.filter(c => c.target_id === targetId);
+    if (!matches.length) {
+        select.innerHTML = '<option value="">No configured target instances</option>';
+        select.disabled = true;
+        return;
+    }
+    select.disabled = false;
+    select.innerHTML = matches.map(c => `
+        <option value="${esc(c.connection_id)}">${esc(c.name)} - ${esc(c.provider)} - ${esc(c.status)}</option>
+    `).join('');
+    if (matches.some(c => c.connection_id === current)) {
+        select.value = current;
+    } else {
+        const connected = matches.find(c => c.status === 'connected') || matches[0];
+        select.value = connected.connection_id;
+    }
+}
+
+function renderValidation(payload) {
+    const pill = document.getElementById('validationPill');
+    const state = document.getElementById('validationState');
+    const messages = document.getElementById('validationMessages');
+    const taskCount = document.getElementById('taskCountLabel');
+    const chips = document.getElementById('layerChips');
+    const manifest = document.getElementById('manifestPanel');
+    const hash = document.getElementById('manifestHash');
+
+    if (!payload) {
+        pill.classList.add('hidden');
+        state.textContent = 'No validation';
+        messages.innerHTML = '<div>No validation result</div>';
+        taskCount.textContent = '0 tasks';
+        chips.innerHTML = '';
+        manifest.textContent = 'No manifest selected';
+        hash.textContent = '';
+        return;
+    }
+
+    const validation = payload.validation || {};
+    pill.classList.remove('hidden', 'status-deployed', 'status-failed', 'status-validating');
+    pill.classList.add(validation.is_valid ? 'status-deployed' : 'status-failed');
+    pill.innerHTML = validation.is_valid
+        ? '<i class="fas fa-circle-check"></i><span>Valid</span>'
+        : '<i class="fas fa-triangle-exclamation"></i><span>Blocked</span>';
+    const connLabel = payload.connection?.name ? ` / ${payload.connection.name}` : '';
+    state.textContent = `${payload.pipeline_name} -> ${payload.profile?.name || payload.profile?.id} / ${payload.target?.name || payload.target?.id}${connLabel}`;
+    taskCount.textContent = `${validation.task_count || 0} tasks`;
+
+    const rows = [];
+    (validation.errors || []).forEach(e => rows.push(`<div class="p-2 rounded-lg" style="background: oklch(96% 0.035 25); color: oklch(42% 0.160 25); border: 1px solid oklch(84% 0.090 25);"><i class="fas fa-triangle-exclamation mr-1"></i>${esc(e)}</div>`));
+    (validation.warnings || []).forEach(w => rows.push(`<div class="p-2 rounded-lg" style="background: oklch(96% 0.050 75); color: oklch(40% 0.100 65); border: 1px solid oklch(84% 0.075 75);"><i class="fas fa-circle-info mr-1"></i>${esc(w)}</div>`));
+    if (!rows.length) rows.push('<div class="p-2 rounded-lg" style="background: var(--color-paper-2); color: var(--color-ink-3); border: 1px solid var(--color-border);">Clean validation</div>');
+    messages.innerHTML = rows.join('');
+
+    const layers = (payload.execution_fabric?.layers || []).filter(l => l.enabled);
+    chips.innerHTML = layers.map(layer => `
+        <span class="layer-chip"><i class="fas fa-layer-group text-[10px]"></i>${esc(layer.name)}<span style="color: var(--color-ink-3);">${layer.task_count}</span></span>
+    `).join('');
+    manifest.textContent = JSON.stringify(payload.manifest || {}, null, 2);
+    hash.textContent = payload.manifest?.version_hash ? payload.manifest.version_hash.slice(0, 12) : '';
+}
+
+function renderDeployments() {
+    const active = DEPLOYMENTS.filter(d => d.active);
+    document.getElementById('activeDeploymentsCount').textContent = active.length;
+    document.getElementById('historyCount').textContent = DEPLOYMENTS.length;
+    document.getElementById('targetsCount').textContent = TARGETS.length;
+    document.getElementById('connectionsCount').textContent = CONNECTIONS.filter(c => c.status === 'connected').length;
+
+    const activeList = document.getElementById('activeDeploymentsList');
+    activeList.innerHTML = active.map(d => `
+        <button class="deployment-row text-left panel-card p-3 ${d.deployment_id === SELECTED_DEPLOYMENT_ID ? 'is-selected' : ''}" onclick="selectDeployment('${esc(d.deployment_id)}')">
+            <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-sm font-black truncate" style="color: var(--color-ink);">${esc(d.pipeline_name)}</p>
+                    <p class="text-xs truncate mt-0.5" style="color: var(--color-ink-3);">${esc(d.environment_profile)} / ${esc(d.connection_name || d.target_name)}</p>
+                </div>
+                ${statusPill(d.status, d.active)}
+            </div>
+            <div class="flex items-center justify-between gap-3 mt-3 text-xs" style="color: var(--color-ink-3);">
+                <span>${esc(d.actor || 'system')}</span>
+                <span>${fmtDate(d.deployed_at)}</span>
+            </div>
+        </button>
+    `).join('') || '<div class="text-sm p-4 rounded-lg" style="color: var(--color-ink-3); background: var(--color-paper-2); border: 1px solid var(--color-border);">No active deployments</div>';
+
+    const table = document.getElementById('deploymentsTable');
+    table.innerHTML = DEPLOYMENTS.map(d => `
+        <div class="deployment-row p-4 ${d.deployment_id === SELECTED_DEPLOYMENT_ID ? 'is-selected' : ''}" onclick="selectDeployment('${esc(d.deployment_id)}')">
+            <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <p class="text-sm font-black truncate" style="color: var(--color-ink);">${esc(d.pipeline_name)}</p>
+                        ${statusPill(d.status, d.active)}
+                    </div>
+                    <p class="text-xs mt-1 truncate" style="color: var(--color-ink-3);">${esc(d.config_path)}</p>
+                    <div class="flex items-center gap-3 mt-2 text-xs flex-wrap" style="color: var(--color-ink-3);">
+                        <span><i class="fas fa-user mr-1"></i>${esc(d.actor || 'system')}</span>
+                        <span><i class="fas fa-server mr-1"></i>${esc(d.environment_profile)} / ${esc(d.connection_name || d.target_name)}</span>
+                        <span><i class="fas fa-clock mr-1"></i>${fmtDate(d.updated_at)}</span>
+                    </div>
+                </div>
+                ${d.active ? `<button onclick="event.stopPropagation(); rollbackDeployment('${esc(d.deployment_id)}')" class="dp-secondary inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold"><i class="fas fa-clock-rotate-left"></i><span>Rollback</span></button>` : ''}
+            </div>
+        </div>
+    `).join('') || '<div class="p-5 text-sm" style="color: var(--color-ink-3);">No deployment history</div>';
+
+    if (!SELECTED_DEPLOYMENT_ID && DEPLOYMENTS.length) selectDeployment(DEPLOYMENTS[0].deployment_id, false);
+}
+
+function renderConnections() {
+    renderConnectionSelect();
+    document.getElementById('connectionsCount').textContent = CONNECTIONS.filter(c => c.status === 'connected').length;
+    const list = document.getElementById('deploymentConnectionsList');
+    const targetNames = Object.fromEntries(TARGETS.map(t => [t.id, t.name || t.id]));
+    list.innerHTML = CONNECTIONS.map(c => `
+        <div class="panel-card p-3">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-sm font-black truncate" style="color: var(--color-ink);">${esc(c.name)}</p>
+                    <p class="text-xs truncate mt-0.5" style="color: var(--color-ink-3);">${esc(targetNames[c.target_id] || c.target_id)} / ${esc(c.provider)}</p>
+                </div>
+                ${connectionPill(c.status)}
+            </div>
+            <div class="flex items-center gap-3 mt-3 text-xs flex-wrap" style="color: var(--color-ink-3);">
+                ${c.region ? `<span><i class="fas fa-location-dot mr-1"></i>${esc(c.region)}</span>` : ''}
+                ${c.namespace ? `<span><i class="fas fa-cube mr-1"></i>${esc(c.namespace)}</span>` : ''}
+                ${c.endpoint ? `<span class="truncate"><i class="fas fa-link mr-1"></i>${esc(c.endpoint)}</span>` : ''}
+            </div>
+        </div>
+    `).join('') || '<div class="text-sm p-4 rounded-lg" style="color: var(--color-ink-3); background: var(--color-paper-2); border: 1px solid var(--color-border);">No configured target instances</div>';
+}
+
+function selectDeployment(deploymentId, rerender = true) {
+    SELECTED_DEPLOYMENT_ID = deploymentId;
+    const deployment = DEPLOYMENTS.find(d => d.deployment_id === deploymentId);
+    const manifest = document.getElementById('manifestPanel');
+    const hash = document.getElementById('manifestHash');
+    if (deployment) {
+        manifest.textContent = JSON.stringify(deployment.manifest || deployment.execution_fabric || {}, null, 2);
+        hash.textContent = deployment.version_hash ? deployment.version_hash.slice(0, 12) : '';
+    }
+    if (rerender) renderDeployments();
+}
+
+async function loadCatalog() {
+    const [pipelineData, envData, connectionData] = await Promise.all([
+        fetch('/pipelines').then(r => r.ok ? r.json() : Promise.reject(r)),
+        fetch('/environment-profiles').then(r => r.ok ? r.json() : Promise.reject(r)),
+        fetch('/deployment-connections').then(r => r.ok ? r.json() : Promise.reject(r)),
+    ]);
+    PIPELINES = pipelineData.pipelines || [];
+    PROFILES = envData.profiles || [];
+    TARGETS = envData.deployment_targets || [];
+    CONNECTIONS = connectionData.connections || [];
+    renderSelectors();
+    renderConnections();
+}
+
+async function loadDeployments() {
+    const status = document.getElementById('historyStatusFilter')?.value || '';
+    const url = status ? `/deployments/records?status=${encodeURIComponent(status)}&limit=100` : '/deployments/records?limit=100';
+    const data = await fetch(url).then(r => r.ok ? r.json() : Promise.reject(r));
+    DEPLOYMENTS = data.deployments || [];
+    renderDeployments();
+}
+
+async function validateDeployment() {
+    const pipeline = selectedPipeline();
+    if (!pipeline) return;
+    document.getElementById('validationState').textContent = 'Validating';
+    const body = {
+        config_path: pipeline.file_path,
+        environment_profile: document.getElementById('profileSelect').value,
+        target_id: document.getElementById('targetSelect').value,
+        connection_id: document.getElementById('connectionSelect').value || null,
+    };
+    try {
+        const data = await fetch('/deployments/validate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(async r => r.ok ? r.json() : Promise.reject(await r.json()));
+        LAST_VALIDATION = data;
+        renderValidation(data);
+    } catch (err) {
+        LAST_VALIDATION = {validation: {is_valid: false, errors: [err.detail || 'Validation failed'], warnings: [], task_count: 0}};
+        renderValidation(LAST_VALIDATION);
+    }
+}
+
+async function deployPipeline() {
+    const pipeline = selectedPipeline();
+    if (!pipeline) return;
+    const body = {
+        config_path: pipeline.file_path,
+        environment_profile: document.getElementById('profileSelect').value,
+        target_id: document.getElementById('targetSelect').value,
+        connection_id: document.getElementById('connectionSelect').value || null,
+        notes: document.getElementById('deploymentNotes').value || null,
+    };
+    try {
+        const data = await fetch('/deployments/deploy', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(async r => r.ok ? r.json() : Promise.reject(await r.json()));
+        LAST_VALIDATION = {
+            pipeline_name: data.deployment.pipeline_name,
+            profile: {id: data.deployment.environment_profile, name: data.deployment.environment_profile},
+            target: {id: data.deployment.target_id, name: data.deployment.target_name},
+            connection: data.deployment.connection_id ? {
+                connection_id: data.deployment.connection_id,
+                name: data.deployment.connection_name,
+                provider: data.deployment.connection_provider,
+            } : null,
+            validation: data.validation,
+            execution_fabric: data.deployment.execution_fabric,
+            manifest: data.manifest,
+        };
+        renderValidation(LAST_VALIDATION);
+        SELECTED_DEPLOYMENT_ID = data.deployment.deployment_id;
+        await loadDeployments();
+    } catch (err) {
+        const detail = err.detail || {};
+        if (detail.validation) {
+            LAST_VALIDATION = {
+                pipeline_name: detail.deployment?.pipeline_name || pipeline.display_name,
+                profile: {id: body.environment_profile, name: body.environment_profile},
+                target: {id: body.target_id, name: body.target_id},
+                connection: body.connection_id ? selectedConnection() : null,
+                validation: detail.validation,
+                execution_fabric: detail.deployment?.execution_fabric,
+                manifest: detail.deployment?.manifest,
+            };
+            renderValidation(LAST_VALIDATION);
+            await loadDeployments();
+        } else {
+            alert(typeof detail === 'string' ? detail : 'Deployment failed');
+        }
+    }
+}
+
+async function rollbackDeployment(deploymentId) {
+    try {
+        const data = await fetch(`/deployments/records/${deploymentId}/rollback`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({reason: 'UI rollback'}),
+        }).then(async r => r.ok ? r.json() : Promise.reject(await r.json()));
+        SELECTED_DEPLOYMENT_ID = data.restored?.deployment_id || null;
+        await loadDeployments();
+    } catch (err) {
+        alert(err.detail || 'Rollback failed');
+    }
+}
+
+function openConnectionModal() {
+    document.getElementById('connectionModal').classList.remove('hidden');
+    document.getElementById('connectionModal').classList.add('flex');
+    const target = document.getElementById('targetSelect').value || 'local';
+    document.getElementById('connectionTarget').value = target;
+    document.getElementById('connectionStatus').value = 'connected';
+}
+
+function closeConnectionModal() {
+    document.getElementById('connectionModal').classList.add('hidden');
+    document.getElementById('connectionModal').classList.remove('flex');
+    document.getElementById('connectionForm').reset();
+}
+
+async function submitConnection(event) {
+    event.preventDefault();
+    const body = {
+        name: document.getElementById('connectionName').value,
+        target_id: document.getElementById('connectionTarget').value,
+        provider: document.getElementById('connectionProvider').value || null,
+        endpoint: document.getElementById('connectionEndpoint').value || null,
+        region: document.getElementById('connectionRegion').value || null,
+        namespace: document.getElementById('connectionNamespace').value || null,
+        status: document.getElementById('connectionStatus').value,
+        credentials_ref: document.getElementById('connectionCredentialsRef').value || null,
+    };
+    try {
+        const data = await fetch('/deployment-connections', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(async r => r.ok ? r.json() : Promise.reject(await r.json()));
+        closeConnectionModal();
+        await loadCatalog();
+        document.getElementById('targetSelect').value = data.connection.target_id;
+        renderConnectionSelect();
+        document.getElementById('connectionSelect').value = data.connection.connection_id;
+        LAST_VALIDATION = null;
+        renderValidation(null);
+    } catch (err) {
+        alert(err.detail || 'Could not save target');
+    }
+}
+
+async function loadCurrentUser() {
+    try {
+        const data = await fetch('/me').then(r => r.ok ? r.json() : null);
+        if (data && data.username) document.getElementById('sidebarUsername').textContent = data.username;
+    } catch (_) {}
+}
+
+function toggleDarkMode() {
+    const root = document.documentElement;
+    const isDark = root.classList.toggle('dp-dark');
+    root.classList.toggle('dp-light', !isDark);
+    localStorage.setItem('dpDarkMode', isDark ? 'dark' : 'light');
+    const icon = document.getElementById('darkModeIcon');
+    if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+}
+
+function syncTargetToProfile() {
+    const profile = PROFILES.find(p => p.id === document.getElementById('profileSelect').value);
+    if (profile?.deployment_target) {
+        document.getElementById('targetSelect').value = profile.deployment_target;
+    }
+    renderConnectionSelect();
+}
+
+async function loadAll() {
+    await loadCatalog();
+    await loadDeployments();
+    if (!LAST_VALIDATION && PIPELINES.length) await validateDeployment();
+}
+
+document.getElementById('pipelineSelect').addEventListener('change', () => { LAST_VALIDATION = null; renderValidation(null); });
+document.getElementById('profileSelect').addEventListener('change', () => { syncTargetToProfile(); LAST_VALIDATION = null; renderValidation(null); });
+document.getElementById('targetSelect').addEventListener('change', () => { renderConnectionSelect(); LAST_VALIDATION = null; renderValidation(null); });
+document.getElementById('connectionSelect').addEventListener('change', () => { LAST_VALIDATION = null; renderValidation(null); });
+document.getElementById('connectionForm').addEventListener('submit', submitConnection);
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await fetch('/logout', {method: 'POST'});
+    window.location.href = '/login';
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadCurrentUser();
+    renderValidation(null);
+    loadAll();
+});
+</script>
+</body>
+</html>

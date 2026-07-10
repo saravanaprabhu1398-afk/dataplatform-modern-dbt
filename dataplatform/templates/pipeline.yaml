@@ -2,15 +2,23 @@ pipeline_name: sample_pipeline
 
 file_path: data/sample.csv
 
+execution:
+  profile: local
+  deployment_target: local
+  default_layer: transform
+  max_parallel_tasks: 4
+
 tasks:
   - name: ingest
     type: executor
     plugin: duckdb
+    execution_layer: ingest
     retries: 2
 
   - name: transform
     type: transformer
     plugin: dbt
+    execution_layer: transform
     depends_on:
       - ingest
     retries: 1

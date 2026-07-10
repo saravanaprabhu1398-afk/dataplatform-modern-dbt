@@ -39,6 +39,47 @@ class TaskQuality(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Execution fabric
+# ---------------------------------------------------------------------------
+
+ExecutionLayer = Literal["ingest", "quality", "transform", "serve", "operate"]
+DeploymentTarget = Literal["local", "docker", "kubernetes", "cloud", "on_prem"]
+
+
+class PipelineExecution(BaseModel):
+    """Pipeline-level execution intent.
+
+    The current runtime still executes through the local worker pool unless a
+    deployment wires a different worker behind the selected profile. These
+    fields make the intent explicit so the API, UI, and future workers share a
+    single contract.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    profile: Optional[str] = None
+    deployment_target: Optional[DeploymentTarget] = None
+    default_layer: Optional[ExecutionLayer] = None
+    max_parallel_tasks: Optional[int] = Field(default=None, ge=1, le=64)
+
+    @field_validator("profile")
+    @classmethod
+    def normalize_profile(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip().lower().replace("-", "_")
+        if not cleaned:
+            raise ValueError("execution profile must not be empty")
+        return cleaned
+
+    @field_validator("deployment_target", "default_layer", mode="before")
+    @classmethod
+    def normalize_execution_tokens(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip().lower().replace("-", "_")
+        return value
+
+
+# ---------------------------------------------------------------------------
 # SLA and alerting
 # ---------------------------------------------------------------------------
 
@@ -93,6 +134,7 @@ class Task(BaseModel):
     type: Literal["executor", "transformer"]
     plugin: str
     operation: Optional[str] = None
+    execution_layer: Optional[ExecutionLayer] = None
     config: Optional[Dict[str, Any]] = None
     retries: int = Field(default=0, ge=0)
     timeout: Optional[int] = None     # per-task timeout in seconds; enforced by executor
@@ -124,6 +166,13 @@ class Task(BaseModel):
             return value.strip().lower()
         return value
 
+    @field_validator("execution_layer", mode="before")
+    @classmethod
+    def normalize_execution_layer(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip().lower().replace("-", "_")
+        return value
+
     @field_validator("depends_on")
     @classmethod
     def normalize_dependencies(cls, value: Optional[List[str]]) -> Optional[List[str]]:
@@ -152,6 +201,7 @@ class PipelineConfig(BaseModel):
     team: Optional[str] = None           # owning team — used for RBAC and discovery
     tasks: List[Task] = Field(min_length=1)
     schedule: Optional[Dict[str, str]] = None
+    execution: Optional[PipelineExecution] = None
 
     # Phase 2 — observability
     sla: Optional[SLAConfig] = None

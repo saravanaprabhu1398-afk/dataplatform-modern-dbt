@@ -173,8 +173,21 @@ class TestBuiltinTemplates:
         content = get_template_content("daily_python_etl")
         assert content is not None
 
+    def test_ai_solution_templates_exist(self):
+        for template_id in [
+            "ai_rag_knowledge_pipeline",
+            "ai_document_intelligence_pipeline",
+            "ai_llm_eval_guardrails_pipeline",
+        ]:
+            content = get_template_content(template_id)
+            assert content is not None
+            data = yaml.safe_load(content)
+            assert "ai" in data.get("tags", [])
+            assert len(data["tasks"]) >= 5
+
     def test_list_returns_all_builtin_templates(self):
         templates = list_templates()
         ids = {t["template_id"] for t in templates}
         assert "etl_postgres_to_duckdb" in ids
         assert "dbt_run_and_test" in ids
+        assert "ai_rag_knowledge_pipeline" in ids

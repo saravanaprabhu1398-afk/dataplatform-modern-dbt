@@ -356,6 +356,9 @@ hr.border-slate-100{border-color:var(--color-border)!important;}
     <a href="/job-builder" class="dp-sidebar__item is-active" aria-current="page">
       <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
     </a>
+    <a href="/deployments" class="dp-sidebar__item">
+      <i class="fas fa-rocket dp-sidebar__icon" aria-hidden="true"></i><span>Deployments</span>
+    </a>
     <a href="/templates-ui" class="dp-sidebar__item">
       <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
     </a>
@@ -716,6 +719,32 @@ const TV = {
   muted:   'oklch(52% 0.015 250)', // --color-ink-3
 };
 
+const EXECUTION_LAYERS = [
+  {id:'ingest',    label:'Ingest',    desc:'Land files, events, APIs, and database reads'},
+  {id:'quality',   label:'Quality',   desc:'Validate freshness, shape, and business rules'},
+  {id:'transform', label:'Transform', desc:'Prepare trusted datasets with SQL, dbt, Python, or Spark'},
+  {id:'serve',     label:'Serve',     desc:'Publish curated outputs to warehouses, marts, APIs, or files'},
+  {id:'operate',   label:'Operate',   desc:'Notify, audit, recover, and automate operations'},
+];
+
+const DEPLOYMENT_TARGETS = [
+  {id:'local',      label:'Local'},
+  {id:'docker',     label:'Docker'},
+  {id:'kubernetes', label:'Kubernetes'},
+  {id:'cloud',      label:'Cloud'},
+  {id:'on_prem',    label:'On-Prem'},
+];
+
+const EXECUTION_PROFILES = [
+  {id:'local',      label:'Local'},
+  {id:'dev',        label:'Development'},
+  {id:'prod',       label:'Production'},
+  {id:'docker',     label:'Docker'},
+  {id:'kubernetes', label:'Kubernetes'},
+  {id:'cloud',      label:'Cloud'},
+  {id:'on_prem',    label:'On-Prem'},
+];
+
 // NOTE: 5 task types (pipeline, loop, condition, set_var, on_error) are intentionally
 // omitted from the palette — backend executor plugins for them don't exist yet, and
 // PipelineConfig forbids the extra YAML keys (variables:/connections:/depends_on_failure:)
@@ -777,6 +806,12 @@ let varIdCtr = 1, connIdCtr = 1;
 const meta = {
   team: '',
   tags: [],          // [string]
+  execution: {
+    profile: 'local',
+    deployment_target: 'local',
+    default_layer: 'transform',
+    max_parallel_tasks: 4,
+  },
   sla: null,         // { max_duration_minutes, alert: {type, email|webhook_url} }
   triggers: [],      // [{ type, watch_path?, upstream_pipeline?, poll_interval_seconds }]
 };
@@ -800,6 +835,19 @@ const CONN_DEFAULTS = {
   kafka:     {brokers:'localhost:9092', security_protocol:'PLAINTEXT'},
   http:      {base_url:'https://api.example.com', auth_type:'bearer', token:'${API_TOKEN}'},
 };
+
+function inferLayerForType(typeKey) {
+  if (['api','file','kafka'].includes(typeKey)) return 'ingest';
+  if (typeKey === 'validation') return 'quality';
+  if (['sql','python','dbt','spark'].includes(typeKey)) return 'transform';
+  if (typeKey === 'email') return 'operate';
+  return 'transform';
+}
+
+function layerLabel(layerId) {
+  const found = EXECUTION_LAYERS.find(l => l.id === layerId);
+  return found ? found.label : 'Transform';
+}
 
 // ── Current left tab ──
 let activeTab = 'tasks';
@@ -1070,6 +1118,7 @@ function renderMetaPanel() {
   const alertVal  = meta.sla && meta.sla.alert
     ? (alertType === 'email' ? (meta.sla.alert.email||'') : (meta.sla.alert.webhook_url||''))
     : '';
+  const execution = meta.execution || {};
 
   panel.innerHTML = `
     <section>
@@ -1084,6 +1133,40 @@ function renderMetaPanel() {
         <input class="finput" placeholder="finance, daily, critical" value="${esc(tagsStr)}"
                oninput="setMetaTags(this.value)">
         <p class="text-[10px] mt-1" style="color:var(--color-ink-3)">Surfaced in /catalog and /templates-ui</p>
+      </div>
+    </section>
+
+    <section>
+      <p class="text-[10px] font-bold uppercase tracking-widest mb-2" style="color:var(--color-ink-2)">Execution Fabric</p>
+      <div class="frow">
+        <label class="flabel">Runtime Profile</label>
+        <select class="finput" onchange="setExecutionField('profile', this.value)">
+          ${EXECUTION_PROFILES.map(profile => `
+            <option value="${profile.id}" ${(execution.profile || 'local') === profile.id ? 'selected' : ''}>${profile.label}</option>
+          `).join('')}
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">Deployment Target</label>
+        <select class="finput" onchange="setExecutionField('deployment_target', this.value)">
+          ${DEPLOYMENT_TARGETS.map(target => `
+            <option value="${target.id}" ${(execution.deployment_target || 'local') === target.id ? 'selected' : ''}>${target.label}</option>
+          `).join('')}
+        </select>
+      </div>
+      <div class="frow">
+        <label class="flabel">Default Layer</label>
+        <select class="finput" onchange="setExecutionField('default_layer', this.value)">
+          ${EXECUTION_LAYERS.map(layer => `
+            <option value="${layer.id}" ${(execution.default_layer || 'transform') === layer.id ? 'selected' : ''}>${layer.label}</option>
+          `).join('')}
+        </select>
+        <p class="text-[10px] mt-1" style="color:var(--color-ink-3)">Task-level layers can override this default.</p>
+      </div>
+      <div class="frow">
+        <label class="flabel">Max parallel tasks</label>
+        <input class="finput" type="number" min="1" max="64" value="${execution.max_parallel_tasks || 4}"
+               oninput="setExecutionField('max_parallel_tasks', parseInt(this.value)||1)">
       </div>
     </section>
 
@@ -1163,6 +1246,12 @@ function renderMetaPanel() {
 
 function setMetaTags(value) {
   meta.tags = value.split(',').map(s => s.trim()).filter(Boolean);
+  updateYAMLPreview();
+}
+
+function setExecutionField(field, value) {
+  if (!meta.execution) meta.execution = {};
+  meta.execution[field] = value;
   updateYAMLPreview();
 }
 
@@ -1277,7 +1366,11 @@ function addTask(typeKey) {
   while (state.tasks.some(t => Math.abs(t.x - x) < 20 && Math.abs(t.y - y) < 60)) {
     y += 130;
   }
-  const task = {id, typeKey, name, x, y, retries:0, config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey]))};
+  const task = {
+    id, typeKey, name, x, y, retries:0,
+    execution_layer: inferLayerForType(typeKey),
+    config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey])),
+  };
   state.tasks.push(task);
   mountNode(task);
   selectTask(id);
@@ -1296,8 +1389,11 @@ function addTaskAt(typeKey, x, y) {
   const id    = 'task_' + state.nextId++;
   const count = state.tasks.filter(t => t.typeKey === typeKey).length + 1;
   const label = TT[typeKey].label.toLowerCase().replace(/\s+/g,'_');
-  const task  = {id, typeKey, name:`${label}_${count}`, x, y, retries:0,
-                 config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey]))};
+  const task  = {
+    id, typeKey, name:`${label}_${count}`, x, y, retries:0,
+    execution_layer: inferLayerForType(typeKey),
+    config: JSON.parse(JSON.stringify(DEFAULT_CONFIGS[typeKey])),
+  };
   state.tasks.push(task);
   mountNode(task);
   selectTask(id);
@@ -1404,6 +1500,7 @@ function taskSummary(task) {
   const reads  = (task.lineage && task.lineage.reads_from)  || [];
   const writes = (task.lineage && task.lineage.writes_to)   || [];
   const checks = (task.quality && task.quality.checks)      || [];
+  badges.push(layerLabel(task.execution_layer || inferLayerForType(task.typeKey)));
   if (reads.length || writes.length) badges.push(`📊${reads.length}↓${writes.length}↑`);
   if (checks.length) badges.push(`✓${checks.length}`);
   const badge = badges.length ? ` · ${badges.join(' ')}` : '';
@@ -1815,6 +1912,15 @@ function renderConfigPanel(task) {
       <label class="flabel">Task Name</label>
       <input class="finput" value="${esc(task.name)}"
              oninput="updateTaskName('${task.id}', this.value)">
+    </div>
+    <div class="frow">
+      <label class="flabel">Execution Layer</label>
+      <select class="finput" onchange="updateField('${task.id}','execution_layer',this.value);refreshNode(getTask('${task.id}'))">
+        ${EXECUTION_LAYERS.map(layer => `
+          <option value="${layer.id}" ${(task.execution_layer || inferLayerForType(task.typeKey)) === layer.id ? 'selected' : ''}>${layer.label}</option>
+        `).join('')}
+      </select>
+      <p class="text-[10px] mt-1" style="color:var(--color-ink-3)">Used by run planning, cataloging, and deployment profiles.</p>
     </div>
     <div class="frow">
       <label class="flabel">Retries</label>
@@ -2381,7 +2487,13 @@ function restoreAutosave() {
     state.edges    = d.edges || [];
     state.nextId   = d.nextId || (d.tasks.length + 1);
     state.schedule = d.schedule || null;
-    Object.assign(meta, { team:'', tags:[], sla:null, triggers:[] }, d.meta || {});
+    Object.assign(meta, {
+      team:'',
+      tags:[],
+      execution:{ profile:'local', deployment_target:'local', default_layer:'transform', max_parallel_tasks:4 },
+      sla:null,
+      triggers:[],
+    }, d.meta || {});
     pipeline.variables   = (d.pipeline && d.pipeline.variables)   || [];
     pipeline.connections = (d.pipeline && d.pipeline.connections) || [];
     if (d.pipelineName) document.getElementById('pipelineName').value = d.pipelineName;
@@ -2427,6 +2539,15 @@ function generateYAML() {
     meta.tags.forEach(tag => lines.push(`  - "${escY(tag)}"`));
   }
 
+  if (meta.execution) {
+    const ex = meta.execution;
+    lines.push('', 'execution:');
+    if (ex.profile) lines.push(`  profile: ${ex.profile}`);
+    if (ex.deployment_target) lines.push(`  deployment_target: ${ex.deployment_target}`);
+    if (ex.default_layer) lines.push(`  default_layer: ${ex.default_layer}`);
+    if (ex.max_parallel_tasks) lines.push(`  max_parallel_tasks: ${parseInt(ex.max_parallel_tasks) || 4}`);
+  }
+
   if (meta.sla && meta.sla.max_duration_minutes > 0) {
     lines.push('', 'sla:');
     lines.push(`  max_duration_minutes: ${meta.sla.max_duration_minutes}`);
@@ -2467,6 +2588,7 @@ function generateYAML() {
     lines.push(`    id: ${task.id}`);
     lines.push(`    type: ${isTransformer ? 'transformer' : 'executor'}`);
     lines.push(`    plugin: ${plugin}`);
+    lines.push(`    execution_layer: ${task.execution_layer || inferLayerForType(task.typeKey)}`);
     if ((task.retries||0) > 0) lines.push(`    retries: ${task.retries}`);
     if (deps.length) lines.push(`    depends_on: [${deps.join(', ')}]`);
 
@@ -2933,7 +3055,11 @@ function clearCanvas() {
   saveSnap();
   state.tasks = []; state.edges = []; state.selected = null;
   state.schedule = null;
-  meta.team = ''; meta.tags = []; meta.sla = null; meta.triggers = [];
+  meta.team = '';
+  meta.tags = [];
+  meta.execution = { profile:'local', deployment_target:'local', default_layer:'transform', max_parallel_tasks:4 };
+  meta.sla = null;
+  meta.triggers = [];
   document.getElementById('schedBtn').textContent = 'Schedule';
   document.getElementById('canvas-inner').querySelectorAll('.task-node').forEach(el => el.remove());
   document.getElementById('config-panel').classList.remove('open');
@@ -3119,6 +3245,12 @@ function importParsedConfig(cfg) {
   // Pipeline-level metadata (team, tags, sla, triggers)
   meta.team     = cfg.team || '';
   meta.tags     = Array.isArray(cfg.tags) ? cfg.tags.slice() : [];
+  meta.execution = cfg.execution ? JSON.parse(JSON.stringify(cfg.execution)) : {
+    profile: 'local',
+    deployment_target: 'local',
+    default_layer: 'transform',
+    max_parallel_tasks: 4,
+  };
   meta.sla      = cfg.sla ? JSON.parse(JSON.stringify(cfg.sla)) : null;
   meta.triggers = Array.isArray(cfg.triggers) ? cfg.triggers.map(t => ({...t})) : [];
   renderMetaPanel();
@@ -3149,6 +3281,7 @@ function importParsedConfig(cfg) {
       name:    rt.name || `task_${i+1}`,
       x: 0, y: 0,
       retries: rt.retries || 0,
+      execution_layer: rt.execution_layer || inferLayerForType(typeKey),
       config:  buildImportedConfig(typeKey, rt.plugin, rt.config || {}),
       lineage: rt.lineage ? {
         reads_from: Array.isArray(rt.lineage.reads_from) ? rt.lineage.reads_from.slice() : [],

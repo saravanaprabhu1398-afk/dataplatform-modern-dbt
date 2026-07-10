@@ -191,6 +191,22 @@ class TestPipelineQueue:
         assert any(r["run_id"] == "run-filt1" for r in queued)
         assert any(r["run_id"] == "run-filt2" for r in running)
 
+    def test_claim_next_queued_run_claims_oldest_and_marks_running(self):
+        db.enqueue_run("run-claim1", "pipe_old", "old.yaml")
+        db.enqueue_run("run-claim2", "pipe_new", "new.yaml")
+
+        claimed = db.claim_next_queued_run()
+
+        assert claimed is not None
+        assert claimed["run_id"] == "run-claim1"
+        assert claimed["status"] == "running"
+        assert claimed["started_at"] is not None
+        remaining = db.get_queue_run("run-claim2")
+        assert remaining["status"] == "queued"
+
+    def test_claim_next_queued_run_returns_none_when_empty(self):
+        assert db.claim_next_queued_run() is None
+
     def test_recover_skips_completed_and_failed(self):
         db.enqueue_run("run-done1", "pipe_f", "p.yaml")
         db.set_run_status_in_queue("run-done1", "completed")

@@ -16,6 +16,7 @@ dependencies = [
     "networkx",
     "apscheduler",
     "fastapi",
+    "httpx<0.28",
     "uvicorn",
     "snowflake-connector-python",
     "pandas",
@@ -53,6 +54,7 @@ dataplatform = ["templates/*"]
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-asyncio",
     "black",
     "flake8",
     "mypy",

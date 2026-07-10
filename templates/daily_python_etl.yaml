@@ -6,11 +6,18 @@ tags:
   - daily
   - shell
 
+execution:
+  profile: local
+  deployment_target: local
+  default_layer: transform
+  max_parallel_tasks: 4
+
 tasks:
   - name: extract_data
     type: executor
     plugin: shell
     operation: execute
+    execution_layer: ingest
     config:
       command: "python scripts/extract.py --date $(date +%Y-%m-%d)"
       cwd: "."
@@ -23,6 +30,7 @@ tasks:
     type: executor
     plugin: python
     operation: run_script
+    execution_layer: transform
     depends_on:
       - extract_data
     config:
@@ -40,6 +48,7 @@ tasks:
     type: executor
     plugin: duckdb
     operation: load
+    execution_layer: serve
     depends_on:
       - transform_data
     config:
@@ -60,6 +69,7 @@ tasks:
     type: executor
     plugin: email
     operation: send
+    execution_layer: operate
     depends_on:
       - load_to_warehouse
     config:

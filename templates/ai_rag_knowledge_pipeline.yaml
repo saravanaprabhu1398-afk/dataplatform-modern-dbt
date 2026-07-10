@@ -1,0 +1,214 @@
+pipeline_name: ai_rag_knowledge_pipeline
+description: Production-ready Retrieval Augmented Generation pipeline for enterprise knowledge assistants
+tags:
+  - ai
+  - rag
+  - embeddings
+  - vector-store
+  - llm-evaluation
+
+execution:
+  profile: dev
+  deployment_target: cloud
+  default_layer: transform
+  max_parallel_tasks: 6
+
+tasks:
+  - name: ingest_knowledge_sources
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: ingest
+    config:
+      code: |
+        from pathlib import Path
+        import json
+
+        Path("data/ai").mkdir(parents=True, exist_ok=True)
+        manifest = {
+            "sources": sources,
+            "loaders": loaders,
+            "status": "ready_for_parsing"
+        }
+        Path(output_manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        print(f"Prepared {len(sources)} knowledge source groups")
+      parameters:
+        sources:
+          - docs/
+          - wiki/
+          - s3://company-knowledge-base
+        loaders:
+          - pdf
+          - markdown
+          - html
+          - notion
+          - database
+        output_manifest: data/ai/rag_sources_manifest.json
+    lineage:
+      reads_from:
+        - file://docs
+        - s3://company-knowledge-base
+      writes_to:
+        - file://data/ai/rag_sources_manifest.json
+
+  - name: chunk_and_enrich_documents
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: transform
+    depends_on:
+      - ingest_knowledge_sources
+    config:
+      code: |
+        from pathlib import Path
+        import json
+
+        Path("data/ai").mkdir(parents=True, exist_ok=True)
+        chunk_plan = {
+            "chunk_size_tokens": chunk_size_tokens,
+            "chunk_overlap_tokens": chunk_overlap_tokens,
+            "metadata_fields": metadata_fields,
+            "strategy": "semantic_recursive"
+        }
+        Path(output_chunks).write_text(json.dumps(chunk_plan, indent=2), encoding="utf-8")
+        print("Document chunking plan created")
+      parameters:
+        chunk_size_tokens: 800
+        chunk_overlap_tokens: 120
+        metadata_fields:
+          - source_uri
+          - title
+          - section
+          - owner
+          - last_modified
+          - access_level
+        output_chunks: data/ai/rag_chunks_manifest.json
+    lineage:
+      reads_from:
+        - file://data/ai/rag_sources_manifest.json
+      writes_to:
+        - file://data/ai/rag_chunks_manifest.json
+
+  - name: embed_and_index_vectors
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: transform
+    depends_on:
+      - chunk_and_enrich_documents
+    config:
+      code: |
+        from pathlib import Path
+        import json
+
+        index_config = {
+            "embedding_provider": embedding_provider,
+            "embedding_model": embedding_model,
+            "vector_store": vector_store,
+            "index_name": index_name,
+            "hybrid_search": hybrid_search
+        }
+        Path(output_index_manifest).write_text(json.dumps(index_config, indent=2), encoding="utf-8")
+        print(f"Vector index contract prepared for {vector_store}")
+      parameters:
+        embedding_provider: openai
+        embedding_model: text-embedding-3-large
+        vector_store: openai_vector_store_or_pgvector
+        index_name: enterprise_knowledge_rag
+        hybrid_search: true
+        output_index_manifest: data/ai/rag_vector_index_manifest.json
+    lineage:
+      reads_from:
+        - file://data/ai/rag_chunks_manifest.json
+      writes_to:
+        - vector://enterprise_knowledge_rag
+        - file://data/ai/rag_vector_index_manifest.json
+
+  - name: build_retriever_and_reranker
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: serve
+    depends_on:
+      - embed_and_index_vectors
+    config:
+      code: |
+        retriever_contract = {
+            "retrieval_mode": retrieval_mode,
+            "top_k": top_k,
+            "reranker": reranker,
+            "citation_required": citation_required
+        }
+        print(f"Retriever configured: {retriever_contract}")
+      parameters:
+        retrieval_mode: hybrid_semantic_keyword
+        top_k: 8
+        reranker: cross_encoder_or_provider_rerank
+        citation_required: true
+    lineage:
+      reads_from:
+        - vector://enterprise_knowledge_rag
+
+  - name: generate_grounded_answers
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: serve
+    depends_on:
+      - build_retriever_and_reranker
+    config:
+      code: |
+        response_contract = {
+            "api": generation_api,
+            "model": generation_model,
+            "grounding": "retrieved_context_with_citations",
+            "fallback": fallback_behavior
+        }
+        print(f"Generation contract ready: {response_contract}")
+      parameters:
+        generation_api: openai_responses_api
+        generation_model: "${OPENAI_CHAT_MODEL}"
+        prompt_template: answer_with_citations_and_refusal_policy
+        fallback_behavior: ask_clarifying_question_or_refuse
+
+  - name: evaluate_rag_quality
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: quality
+    depends_on:
+      - generate_grounded_answers
+    config:
+      code: |
+        required_metrics = {
+            "faithfulness_min": faithfulness_min,
+            "context_precision_min": context_precision_min,
+            "citation_coverage_min": citation_coverage_min,
+            "toxicity_max": toxicity_max
+        }
+        print(f"RAG evaluation gates: {required_metrics}")
+      parameters:
+        faithfulness_min: 0.85
+        context_precision_min: 0.75
+        citation_coverage_min: 0.95
+        toxicity_max: 0.02
+
+  - name: publish_rag_service_contract
+    type: executor
+    plugin: file
+    operation: create
+    execution_layer: operate
+    depends_on:
+      - evaluate_rag_quality
+    config:
+      file_path: data/ai/rag_service_contract.json
+      content: |
+        {
+          "service": "enterprise_knowledge_rag",
+          "retrieval": "hybrid_semantic_keyword",
+          "index": "enterprise_knowledge_rag",
+          "quality_gate": "faithfulness_context_precision_citations"
+        }
+    lineage:
+      writes_to:
+        - file://data/ai/rag_service_contract.json

@@ -15,6 +15,12 @@ dp_quality_check_results_total{pipeline, task, result}
 dp_sla_violations_total{pipeline}
     Counter — total SLA violations recorded per pipeline.
 
+dp_pipeline_queue_depth{status}
+    Gauge — current number of runs in the persistent queue by status.
+
+dp_observability_metric_value{metric, pipeline, unit}
+    Gauge — latest collected observability metric samples.
+
 Usage::
 
     from dataplatform.core.metrics import generate_prometheus_text
@@ -25,6 +31,8 @@ import logging
 from typing import List
 
 from dataplatform.core.database import (
+    get_latest_metric_samples,
+    get_queue_counts_by_status,
     get_quality_counts,
     get_run_counts_by_status,
     get_sla_violation_counts,
@@ -83,6 +91,38 @@ def generate_prometheus_text() -> str:
             lines.append(f"dp_sla_violations_total{{{label}}} {row['count']}")
     except Exception as exc:
         logger.warning("metrics: failed to read SLA violation counts: %s", exc)
+
+    lines.append("")
+
+    # ------------------------------------------------------------------
+    # dp_pipeline_queue_depth
+    # ------------------------------------------------------------------
+    lines.append("# HELP dp_pipeline_queue_depth Current persistent run queue depth by status.")
+    lines.append("# TYPE dp_pipeline_queue_depth gauge")
+    try:
+        for row in get_queue_counts_by_status():
+            label = f'status="{_esc(row["status"])}"'
+            lines.append(f"dp_pipeline_queue_depth{{{label}}} {row['count']}")
+    except Exception as exc:
+        logger.warning("metrics: failed to read queue depth: %s", exc)
+
+    lines.append("")
+
+    # ------------------------------------------------------------------
+    # dp_observability_metric_value
+    # ------------------------------------------------------------------
+    lines.append("# HELP dp_observability_metric_value Latest collected observability metric sample value.")
+    lines.append("# TYPE dp_observability_metric_value gauge")
+    try:
+        for row in get_latest_metric_samples():
+            label = (
+                f'metric="{_esc(row["metric_name"])}",'
+                f'pipeline="{_esc(row.get("pipeline_name") or "")}",'
+                f'unit="{_esc(row.get("unit") or "")}"'
+            )
+            lines.append(f"dp_observability_metric_value{{{label}}} {row['value']}")
+    except Exception as exc:
+        logger.warning("metrics: failed to read collected metric samples: %s", exc)
 
     lines.append("")
     return "\n".join(lines)

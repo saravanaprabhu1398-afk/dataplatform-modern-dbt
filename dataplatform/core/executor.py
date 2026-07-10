@@ -10,6 +10,8 @@ from dataplatform.core.config import Task
 from dataplatform.plugins.base import Plugin
 from dataplatform.core.logging_config import log_task_start, log_task_success, log_task_failure
 from dataplatform.core.secrets import resolve_secrets
+from dataplatform.core.execution_fabric import infer_task_execution_layer
+from dataplatform.core.runtime_guardrails import validate_plugin_execution_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,7 @@ class TaskExecutor:
             "plugin": task.plugin,
             "type": task.type,
             "operation": task.operation,
+            "execution_layer": infer_task_execution_layer(task),
             "depends_on": task.depends_on or [],
             "timeout_seconds": task.timeout,
             "started_at": started_at,
@@ -150,6 +153,7 @@ class TaskExecutor:
             log_task_start(task.name, attempt + 1)
 
             try:
+                validate_plugin_execution_allowed(task.plugin)
                 plugin = self.load_plugin(task.plugin, task.type)
 
                 if task.timeout:
@@ -363,6 +367,7 @@ class PipelineExecutor:
                                 "plugin": task.plugin,
                                 "type": task.type,
                                 "operation": task.operation,
+                                "execution_layer": infer_task_execution_layer(task),
                                 "depends_on": task.depends_on or [],
                                 "timeout_seconds": task.timeout,
                                 "started_at": now,
@@ -432,6 +437,7 @@ class PipelineExecutor:
                                 "plugin": skipped_task.plugin,
                                 "type": skipped_task.type,
                                 "operation": skipped_task.operation,
+                                "execution_layer": infer_task_execution_layer(skipped_task),
                                 "depends_on": skipped_task.depends_on or [],
                                 "timeout_seconds": skipped_task.timeout,
                                 "started_at": None,

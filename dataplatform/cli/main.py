@@ -115,6 +115,72 @@ def serve(host: str = "0.0.0.0", port: int = 8000):
 
 
 @app.command()
+def worker(
+    poll_interval: float = typer.Option(2.0, help="Seconds to wait between empty queue polls."),
+    once: bool = typer.Option(False, help="Process at most one queued run, then exit."),
+    recover_orphans: bool = typer.Option(True, help="Mark stale queued/running runs failed on worker startup."),
+):
+    """Start an external queue worker for DATAPLATFORM_EXECUTION_MODE=external."""
+    from dataplatform.core.queue_worker import run_worker_loop
+
+    typer.echo(f"Starting external queue worker (poll_interval={poll_interval}s)")
+    run_worker_loop(
+        poll_interval=poll_interval,
+        once=once,
+        recover_orphans=recover_orphans,
+    )
+
+
+@app.command()
+def collect_metrics(
+    range_hours: int = typer.Option(24, help="Lookback window for metric collection."),
+    evaluate: bool = typer.Option(True, help="Evaluate enabled alert rules after collecting."),
+    notify: bool = typer.Option(True, help="Send alert notifications for newly firing incidents."),
+    seed_default_rules: bool = typer.Option(True, help="Create built-in alert rules if missing."),
+):
+    """Collect one observability metric snapshot and evaluate alerts."""
+    from dataplatform.core.observability import collect_once_with_defaults
+
+    result = collect_once_with_defaults(
+        range_hours=range_hours,
+        store=True,
+        evaluate=evaluate,
+        notify=notify,
+        seed_default_rules=seed_default_rules,
+    )
+    typer.echo(
+        "Collected "
+        f"{result['sample_count']} samples; "
+        f"evaluated {result['evaluation']['rules_evaluated']} rules; "
+        f"fired {len(result['evaluation']['fired'])} incidents; "
+        f"seeded {result['default_rules']['created_count']} default rules."
+    )
+
+
+@app.command()
+def metrics_collector(
+    interval: float = typer.Option(60.0, help="Seconds between collection cycles."),
+    range_hours: int = typer.Option(24, help="Lookback window for each collection."),
+    once: bool = typer.Option(False, help="Collect one snapshot, then exit."),
+    notify: bool = typer.Option(True, help="Send alert notifications for newly firing incidents."),
+    seed_default_rules: bool = typer.Option(True, help="Create built-in alert rules if missing."),
+):
+    """Run the observability metrics collector loop."""
+    from dataplatform.core.observability import run_observability_collector_loop
+
+    typer.echo(
+        f"Starting observability collector (interval={interval}s, range_hours={range_hours})"
+    )
+    run_observability_collector_loop(
+        interval_seconds=interval,
+        range_hours=range_hours,
+        notify=notify,
+        seed_default_rules=seed_default_rules,
+        once=once,
+    )
+
+
+@app.command()
 def install(plugin_name: str):
     """Install a plugin from the marketplace."""
     from dataplatform.core.marketplace import get_registry

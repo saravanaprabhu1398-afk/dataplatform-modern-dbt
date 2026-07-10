@@ -114,6 +114,9 @@
     <a href="/job-builder" class="dp-sidebar__item">
       <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
     </a>
+    <a href="/deployments" class="dp-sidebar__item">
+      <i class="fas fa-rocket dp-sidebar__icon" aria-hidden="true"></i><span>Deployments</span>
+    </a>
     <a href="/templates-ui" class="dp-sidebar__item">
       <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
     </a>
@@ -397,6 +400,31 @@
                     </div>
                 </div>
 
+                <!-- Notification routes card -->
+                <div class="dp-card">
+                    <div class="dp-card__head">
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">Notification Routes</span>
+                        <span id="channelsCount" class="text-xs" style="color: var(--color-ink-3);">0 routes</span>
+                    </div>
+                    <div id="notificationChannelsList" class="divide-y text-xs" style="border-color: var(--color-border);"></div>
+                    <div class="px-5 py-3" style="border-top: 1px solid var(--color-border);">
+                        <button onclick="openNewNotificationChannel()"
+                                class="w-full text-xs font-semibold py-1 transition-colors"
+                                style="color: var(--color-accent);">
+                            <i class="fas fa-plus mr-1.5"></i>Add route
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Delivery attempts card -->
+                <div class="dp-card">
+                    <div class="dp-card__head">
+                        <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">Delivery Attempts</span>
+                        <span id="deliveriesCount" class="text-xs" style="color: var(--color-ink-3);">0 attempts</span>
+                    </div>
+                    <div id="notificationDeliveriesList" class="divide-y text-xs" style="border-color: var(--color-border);"></div>
+                </div>
+
             </div>
         </div>
 
@@ -405,33 +433,117 @@
 
 <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
 
+<div id="ruleModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: rgba(15, 23, 42, 0.48);">
+    <div class="w-full max-w-2xl dp-card" style="background: var(--color-surface);">
+        <div class="dp-card__head">
+            <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">New Alert Rule</span>
+            <button onclick="closeNewAlertRule()" class="w-8 h-8 rounded-lg" style="color: var(--color-ink-3);" aria-label="Close">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+        <form id="ruleForm" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Name
+                <input id="ruleName" required class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);" placeholder="High failure rate">
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Metric
+                <select id="ruleMetric" required class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);"></select>
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Comparator
+                <select id="ruleComparator" class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);">
+                    <option value=">">&gt;</option>
+                    <option value=">=">&gt;=</option>
+                    <option value="<">&lt;</option>
+                    <option value="<=">&lt;=</option>
+                    <option value="==">==</option>
+                    <option value="!=">!=</option>
+                </select>
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Threshold
+                <input id="ruleThreshold" type="number" step="0.01" required class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);" placeholder="30">
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Severity
+                <select id="ruleSeverity" class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);">
+                    <option value="critical">Critical</option>
+                    <option value="warning" selected>Warning</option>
+                    <option value="info">Info</option>
+                </select>
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Pipeline
+                <input id="rulePipeline" class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);" placeholder="All pipelines">
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Notify
+                <select id="ruleDestinationType" class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);">
+                    <option value="">None</option>
+                    <option value="webhook">Webhook</option>
+                    <option value="email">Email</option>
+                </select>
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Destination
+                <input id="ruleDestination" class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);" placeholder="URL or email">
+            </label>
+            <div class="md:col-span-2 flex items-center justify-between pt-2" style="border-top: 1px solid var(--color-border);">
+                <label class="flex items-center gap-2 text-xs font-semibold" style="color: var(--color-ink-2);">
+                    <input id="ruleEnabled" type="checkbox" checked class="tog-input"><span class="tog-track"></span>Enabled
+                </label>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeNewAlertRule()" class="text-xs font-semibold px-3 py-2 rounded-lg" style="color: var(--color-ink-3);">Cancel</button>
+                    <button type="submit" class="text-xs font-semibold px-3 py-2 rounded-lg" style="background: var(--color-accent); color: var(--color-surface);">Create Rule</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="channelModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: rgba(15, 23, 42, 0.48);">
+    <div class="w-full max-w-xl dp-card" style="background: var(--color-surface);">
+        <div class="dp-card__head">
+            <span class="text-sm font-bold dp-section-head" style="color: var(--color-ink);">New Notification Route</span>
+            <button onclick="closeNewNotificationChannel()" class="w-8 h-8 rounded-lg" style="color: var(--color-ink-3);" aria-label="Close">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+        <form id="channelForm" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Name
+                <input id="channelName" required class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);" placeholder="Platform Slack">
+            </label>
+            <label class="text-xs font-semibold" style="color: var(--color-ink-2);">Type
+                <select id="channelType" required class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);">
+                    <option value="webhook">Webhook</option>
+                    <option value="email">Email</option>
+                </select>
+            </label>
+            <label class="md:col-span-2 text-xs font-semibold" style="color: var(--color-ink-2);">Destination
+                <input id="channelDestination" required class="mt-1 w-full rounded-lg px-3 py-2 text-sm" style="background: var(--color-paper-2); border: 1px solid var(--color-border); color: var(--color-ink);" placeholder="Webhook URL or email address">
+            </label>
+            <div class="md:col-span-2">
+                <p class="text-xs font-semibold mb-2" style="color: var(--color-ink-2);">Severities</p>
+                <div class="flex flex-wrap gap-3 text-xs" style="color: var(--color-ink-2);">
+                    <label class="flex items-center gap-1.5"><input type="checkbox" class="channelSeverity" value="critical" checked>Critical</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" class="channelSeverity" value="warning" checked>Warning</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" class="channelSeverity" value="info">Info</label>
+                </div>
+            </div>
+            <div class="md:col-span-2 flex items-center justify-between pt-2" style="border-top: 1px solid var(--color-border);">
+                <label class="flex items-center gap-2 text-xs font-semibold" style="color: var(--color-ink-2);">
+                    <input id="channelEnabled" type="checkbox" checked class="tog-input"><span class="tog-track"></span>Enabled
+                </label>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeNewNotificationChannel()" class="text-xs font-semibold px-3 py-2 rounded-lg" style="color: var(--color-ink-3);">Cancel</button>
+                    <button type="submit" class="text-xs font-semibold px-3 py-2 rounded-lg" style="background: var(--color-accent); color: var(--color-surface);">Create Route</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────────
-let ALERTS = [
-    { id:1, sev:'critical', title:'Pipeline failed consecutively', pipeline:'sales_intel',  cond:'3 failures in 1 h · threshold: 2',       fired:'14 min ago', state:'firing' },
-    { id:2, sev:'warning',  title:'Task duration SLA breach',      pipeline:'etl_orders',   cond:'P95 duration 78 s exceeds 60 s SLA',     fired:'38 min ago', state:'acknowledged', ack_by:'A. Chen' },
-    { id:3, sev:'warning',  title:'Data freshness degraded',       pipeline:'mkt_attrib',   cond:'Last run 22 h ago · threshold: 12 h',    fired:'2 h ago',    state:'acknowledged', ack_by:'M. Santos' },
-    { id:4, sev:'info',     title:'New pipeline registered',       pipeline:'user_profile', cond:'Pipeline added to scheduler',            fired:'5 h ago',    state:'resolved' },
-    { id:5, sev:'info',     title:'Scheduled run skipped',         pipeline:'finance_rpt',  cond:'Resource contention at 09:00 UTC',       fired:'8 h ago',    state:'resolved' },
-    { id:6, sev:'critical', title:'Retry limit exhausted',         pipeline:'data_quality', cond:'Max retries (3) reached, pipeline halted', fired:'yesterday', state:'resolved' },
-];
-
-const ALERT_RULES = [
-    { name:'Pipeline Failure Rate', cond:'failure_rate > 30% / 1 h',  sev:'critical', on:true  },
-    { name:'Task Duration SLA',     cond:'p95_duration > 60 s',        sev:'warning',  on:true  },
-    { name:'Data Freshness',        cond:'last_run > 12 h ago',        sev:'warning',  on:true  },
-    { name:'Retry Exhaustion',      cond:'retries_exhausted = true',   sev:'critical', on:true  },
-    { name:'No Activity (12 h)',    cond:'no runs in window',          sev:'info',     on:false },
-];
-
-const TIMELINE = [
-    { time:'14 min ago', sev:'critical', text:'sales_intel triggered "Pipeline failed consecutively"', state:'firing' },
-    { time:'38 min ago', sev:'warning',  text:'etl_orders triggered "Task duration SLA breach" — acknowledged by A. Chen', state:'acknowledged' },
-    { time:'2 h ago',    sev:'warning',  text:'mkt_attrib triggered "Data freshness degraded" — acknowledged', state:'acknowledged' },
-    { time:'5 h ago',    sev:'info',     text:'user_profile: new pipeline registered and scheduled', state:'resolved' },
-    { time:'8 h ago',    sev:'info',     text:'finance_rpt: scheduled run skipped due to resource contention — auto-resolved', state:'resolved' },
-    { time:'Yesterday',  sev:'critical', text:'data_quality: retry limit exhausted — resolved after manual restart', state:'resolved' },
-];
+let ALERTS = [];
+let ALERT_RULES = [];
+let TIMELINE = [];
+let METRIC_CATALOG = [];
+let NOTIFICATION_CHANNELS = [];
+let NOTIFICATION_DELIVERIES = [];
 
 const SEV = {
     critical: { dot:'bg-red-500',   badge:'bg-red-100 text-red-700',     tl:'bg-red-100 text-red-600 border-red-200' },
@@ -446,6 +558,22 @@ const STATE = {
 const SEV_DOT_CLS = { critical:'text-red-500', warning:'text-amber-500', info:'text-blue-400' };
 
 let activeFilter = 'all';
+
+function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function humanAgo(d) {
+    if (!d) return '—';
+    try {
+        const diff = Date.now() - new Date(d).getTime();
+        const mins = Math.max(0, Math.floor(diff / 60000));
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins}m ago`;
+        if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
+        return `${Math.floor(mins / 1440)}d ago`;
+    } catch { return d; }
+}
 
 // ── Toast ──────────────────────────────────────────────────────────────────────
 function showToast(msg, type='info') {
@@ -493,22 +621,22 @@ function renderAlerts() {
                 <div class="flex-1 min-w-0">
                     <div class="flex flex-wrap items-center gap-2 mb-1">
                         <span class="${sc.badge} text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">${a.sev}</span>
-                        <span class="text-sm font-semibold" style="color:var(--color-ink);">${a.title}</span>
+                        <span class="text-sm font-semibold" style="color:var(--color-ink);">${esc(a.title)}</span>
                     </div>
                     <p class="text-xs mb-1.5" style="color:var(--color-ink-3);">
-                        <span class="font-semibold" style="color:var(--color-ink-2);">${a.pipeline}</span> &middot; ${a.cond}
+                        <span class="font-semibold" style="color:var(--color-ink-2);">${esc(a.pipeline)}</span> &middot; ${esc(a.cond)}
                     </p>
                     <div class="flex flex-wrap items-center gap-3 text-[11px]" style="color:var(--color-ink-3);">
-                        <span><i class="fas fa-clock mr-1"></i>${a.fired}</span>
+                        <span><i class="fas fa-clock mr-1"></i>${esc(a.fired)}</span>
                         <span class="${st.cls} flex items-center gap-1.5">
                             <span class="w-1.5 h-1.5 rounded-full ${st.dot} inline-block"></span>${st.label}
                         </span>
-                        ${a.ack_by?`<span>Ack: ${a.ack_by}</span>`:''}
+                        ${a.ack_by?`<span>Ack: ${esc(a.ack_by)}</span>`:''}
                     </div>
                 </div>
                 <div class="flex gap-1.5 shrink-0">
-                    ${a.state==='firing'?`<button onclick="ackAlert(${a.id})" class="text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-colors" style="background:var(--color-warning-subtle);border:1px solid var(--color-warning);color:var(--color-warning);"><i class="fas fa-check mr-1"></i>Ack</button>`:''}
-                    ${a.state!=='resolved'?`<button onclick="resolveAlert(${a.id})" class="text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-colors" style="background:var(--color-success-subtle);border:1px solid var(--color-success);color:var(--color-success);"><i class="fas fa-check-double mr-1"></i>Resolve</button>`:''}
+                    ${a.state==='firing'?`<button onclick="ackAlert('${esc(a.id)}')" class="text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-colors" style="background:var(--color-warning-subtle);border:1px solid var(--color-warning);color:var(--color-warning);"><i class="fas fa-check mr-1"></i>Ack</button>`:''}
+                    ${a.state!=='resolved'?`<button onclick="resolveAlert('${esc(a.id)}')" class="text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-colors" style="background:var(--color-success-subtle);border:1px solid var(--color-success);color:var(--color-success);"><i class="fas fa-check-double mr-1"></i>Resolve</button>`:''}
                 </div>
             </div>
         </div>`;
@@ -530,20 +658,34 @@ function filterAlerts(state) {
     renderAlerts();
 }
 
-function ackAlert(id) {
+async function ackAlert(id) {
     const a = ALERTS.find(x=>x.id===id); if(!a) return;
-    a.state='acknowledged';
-    a.ack_by=document.getElementById('sidebarUsername').textContent||'You';
-    renderAlerts();
-    showToast(`"${a.title}" acknowledged`, 'warning');
+    try {
+        await fetch(`/alerts/incidents/${id}/ack`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({actor: document.getElementById('sidebarUsername').textContent || 'You'})
+        }).then(r => r.ok ? r.json() : Promise.reject(r));
+        showToast(`"${a.title}" acknowledged`, 'warning');
+        loadAlertsData();
+    } catch(e) {
+        showToast('Acknowledge failed', 'error');
+    }
 }
-function resolveAlert(id) {
+async function resolveAlert(id) {
     const a = ALERTS.find(x=>x.id===id); if(!a) return;
-    a.state='resolved';
-    renderAlerts();
-    showToast(`"${a.title}" resolved`, 'success');
+    try {
+        await fetch(`/alerts/incidents/${id}/resolve`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({actor: document.getElementById('sidebarUsername').textContent || 'You'})
+        }).then(r => r.ok ? r.json() : Promise.reject(r));
+        showToast(`"${a.title}" resolved`, 'success');
+        loadAlertsData();
+    } catch(e) {
+        showToast('Resolve failed', 'error');
+    }
 }
-function openNewAlertRule() { showToast('Alert rule editor — coming soon', 'info'); }
 
 // ── Render Timeline ──────────────────────────────────────────────────────────
 function renderTimeline() {
@@ -555,6 +697,13 @@ function renderTimeline() {
     const TL_DEFAULT_STYLE = 'border:2px solid var(--color-border);background:var(--color-paper-2);';
     const ICONS  = { firing:'fa-circle-exclamation text-red-500', acknowledged:'fa-check text-amber-500', resolved:'fa-check-double text-emerald-500' };
     const ICON_DEFAULT = 'fa-info-circle';
+    if (!TIMELINE.length) {
+        document.getElementById('alertTimeline').innerHTML = `<div class="flex flex-col items-center justify-center py-8 gap-2">
+            <i class="fas fa-check-circle text-2xl" style="color:var(--color-success);"></i>
+            <span class="dp-empty">No incident activity yet</span>
+        </div>`;
+        return;
+    }
     document.getElementById('alertTimeline').innerHTML = TIMELINE.map(e => `
         <div class="flex items-start gap-3">
             <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
@@ -563,35 +712,294 @@ function renderTimeline() {
                    style="color:var(--color-ink-3);"></i>
             </div>
             <div class="flex-1 min-w-0 pb-3 last:pb-0" style="border-bottom:1px solid var(--color-border);">
-                <p class="text-xs leading-snug" style="color:var(--color-ink-2);">${e.text}</p>
-                <p class="text-[10px] mt-0.5" style="color:var(--color-ink-3);">${e.time}</p>
+                <p class="text-xs leading-snug" style="color:var(--color-ink-2);">${esc(e.text)}</p>
+                <p class="text-[10px] mt-0.5" style="color:var(--color-ink-3);">${esc(e.time)}</p>
             </div>
         </div>`).join('');
 }
 
 // ── Render Alert Rules ────────────────────────────────────────────────────────
 function renderAlertRules() {
-    const enabled = ALERT_RULES.filter(r=>r.on).length;
+    const enabled = ALERT_RULES.filter(r=>r.enabled).length;
     document.getElementById('rulesCount').textContent = `${enabled} / ${ALERT_RULES.length} enabled`;
-    document.getElementById('alertRulesList').innerHTML = ALERT_RULES.map((r,i) => `
+    if (!ALERT_RULES.length) {
+        document.getElementById('alertRulesList').innerHTML = `<div class="px-5 py-8 text-center dp-empty">No alert rules configured</div>`;
+        return;
+    }
+    document.getElementById('alertRulesList').innerHTML = ALERT_RULES.map((r) => `
         <div class="px-4 py-3.5 flex items-center gap-3 transition-colors dp-trigger-row">
             <label class="shrink-0 flex items-center">
-                <input type="checkbox" class="tog-input" ${r.on?'checked':''} onchange="toggleRule(${i})">
+                <input type="checkbox" class="tog-input" ${r.enabled?'checked':''} onchange="toggleRule('${esc(r.rule_id)}')">
                 <span class="tog-track"></span>
             </label>
             <div class="flex-1 min-w-0">
-                <p class="text-xs font-semibold" style="color:var(--color-ink-2);">${r.name}</p>
-                <p class="text-[10px] font-mono mt-0.5 truncate" style="color:var(--color-ink-3);">${r.cond}</p>
+                <p class="text-xs font-semibold" style="color:var(--color-ink-2);">${esc(r.name)}</p>
+                <p class="text-[10px] font-mono mt-0.5 truncate" style="color:var(--color-ink-3);">${esc(r.metric_name)} ${esc(r.comparator)} ${r.threshold}${r.pipeline_name ? ' · ' + esc(r.pipeline_name) : ''}</p>
             </div>
-            <i class="fas fa-circle text-[8px] ${SEV_DOT_CLS[r.sev]||''} shrink-0"
-               style="${!SEV_DOT_CLS[r.sev]?'color:var(--color-border-2);':''}"></i>
+            <i class="fas fa-circle text-[8px] ${SEV_DOT_CLS[r.severity]||''} shrink-0"
+               style="${!SEV_DOT_CLS[r.severity]?'color:var(--color-border-2);':''}"></i>
         </div>`).join('');
 }
 
-function toggleRule(i) {
-    ALERT_RULES[i].on = !ALERT_RULES[i].on;
-    renderAlertRules();
-    showToast(`Rule "${ALERT_RULES[i].name}" ${ALERT_RULES[i].on?'enabled':'disabled'}`, 'info');
+async function toggleRule(ruleId) {
+    const rule = ALERT_RULES.find(r => r.rule_id === ruleId);
+    if (!rule) return;
+    try {
+        const updated = await fetch(`/alert-rules/${ruleId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({enabled: !rule.enabled})
+        }).then(r => r.ok ? r.json() : Promise.reject(r));
+        const nextRule = updated.rule;
+        ALERT_RULES = ALERT_RULES.map(r => r.rule_id === ruleId ? nextRule : r);
+        renderAlertRules();
+        showToast(`Rule "${nextRule.name}" ${nextRule.enabled?'enabled':'disabled'}`, 'info');
+    } catch(e) {
+        showToast('Rule update failed', 'error');
+        loadAlertRules();
+    }
+}
+
+function renderNotificationChannels() {
+    const enabled = NOTIFICATION_CHANNELS.filter(c => c.enabled).length;
+    document.getElementById('channelsCount').textContent = `${enabled} / ${NOTIFICATION_CHANNELS.length} enabled`;
+    const list = document.getElementById('notificationChannelsList');
+    if (!NOTIFICATION_CHANNELS.length) {
+        list.innerHTML = `<div class="px-5 py-8 text-center dp-empty">No shared routes configured</div>`;
+        return;
+    }
+    list.innerHTML = NOTIFICATION_CHANNELS.map(c => `
+        <div class="px-4 py-3.5 flex items-center gap-3 transition-colors dp-trigger-row">
+            <label class="shrink-0 flex items-center">
+                <input type="checkbox" class="tog-input" ${c.enabled?'checked':''} onchange="toggleNotificationChannel('${esc(c.channel_id)}')">
+                <span class="tog-track"></span>
+            </label>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs font-semibold" style="color:var(--color-ink-2);">${esc(c.name)}</p>
+                <p class="text-[10px] font-mono mt-0.5 truncate" style="color:var(--color-ink-3);">${esc(c.channel_type)} · ${(c.severities || []).map(esc).join(', ')}</p>
+            </div>
+            <i class="fas ${c.channel_type === 'email' ? 'fa-envelope' : 'fa-link'} text-[11px] shrink-0" style="color:var(--color-accent);"></i>
+        </div>`).join('');
+}
+
+function renderNotificationDeliveries() {
+    document.getElementById('deliveriesCount').textContent = `${NOTIFICATION_DELIVERIES.length} attempt${NOTIFICATION_DELIVERIES.length === 1 ? '' : 's'}`;
+    const list = document.getElementById('notificationDeliveriesList');
+    if (!NOTIFICATION_DELIVERIES.length) {
+        list.innerHTML = `<div class="px-5 py-8 text-center dp-empty">No delivery attempts yet</div>`;
+        return;
+    }
+    const colors = {sent:'var(--color-success)', failed:'var(--color-danger)', skipped:'var(--color-warning)'};
+    list.innerHTML = NOTIFICATION_DELIVERIES.slice(0, 8).map(d => `
+        <div class="px-4 py-3.5 transition-colors dp-trigger-row">
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full shrink-0" style="background:${colors[d.status] || 'var(--color-border-2)'}"></span>
+                <span class="text-xs font-semibold truncate" style="color:var(--color-ink-2);">${esc(d.channel_name || d.destination_type)}</span>
+                <span class="ml-auto text-[10px]" style="color:var(--color-ink-3);">${humanAgo(d.attempted_at)}</span>
+            </div>
+            <p class="text-[10px] mt-1 font-mono truncate" style="color:var(--color-ink-3);">${esc(d.status)} · ${esc(d.destination_type)}${d.error ? ' · ' + esc(d.error) : ''}</p>
+        </div>`).join('');
+}
+
+async function toggleNotificationChannel(channelId) {
+    const channel = NOTIFICATION_CHANNELS.find(c => c.channel_id === channelId);
+    if (!channel) return;
+    try {
+        const updated = await fetch(`/notification-channels/${channelId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({enabled: !channel.enabled})
+        }).then(r => r.ok ? r.json() : Promise.reject(r));
+        const next = updated.channel;
+        NOTIFICATION_CHANNELS = NOTIFICATION_CHANNELS.map(c => c.channel_id === channelId ? next : c);
+        renderNotificationChannels();
+        showToast(`Route "${next.name}" ${next.enabled?'enabled':'disabled'}`, 'info');
+    } catch(e) {
+        showToast('Route update failed', 'error');
+        loadNotificationChannels();
+    }
+}
+
+function incidentToAlert(row) {
+    return {
+        id: row.incident_id,
+        sev: row.severity || 'info',
+        title: row.rule_name || row.metric_name,
+        pipeline: row.pipeline_name || 'global',
+        cond: row.message || `${row.metric_name}=${row.observed_value} · threshold ${row.threshold}`,
+        fired: humanAgo(row.fired_at || row.updated_at),
+        state: row.status || 'resolved',
+        ack_by: row.acknowledged_by || null,
+    };
+}
+
+async function loadAlertIncidents() {
+    try {
+        const data = await fetch('/alerts/incidents?limit=100').then(r => r.ok ? r.json() : Promise.reject(r));
+        const incidents = data.incidents || [];
+        ALERTS = incidents.map(incidentToAlert);
+        TIMELINE = incidents.slice(0, 8).map(row => ({
+            time: humanAgo(row.updated_at || row.fired_at),
+            sev: row.severity || 'info',
+            text: `${row.pipeline_name || 'global'} triggered "${row.rule_name || row.metric_name}"`,
+            state: row.status || 'resolved'
+        }));
+        renderAlerts();
+        renderTimeline();
+    } catch(e) {
+        ALERTS = [];
+        TIMELINE = [];
+        renderAlerts();
+        renderTimeline();
+    }
+}
+
+async function loadAlertRules() {
+    try {
+        const data = await fetch('/alert-rules').then(r => r.ok ? r.json() : Promise.reject(r));
+        ALERT_RULES = data.rules || [];
+        renderAlertRules();
+    } catch(e) {
+        ALERT_RULES = [];
+        renderAlertRules();
+    }
+}
+
+async function loadNotificationChannels() {
+    try {
+        const data = await fetch('/notification-channels').then(r => r.ok ? r.json() : Promise.reject(r));
+        NOTIFICATION_CHANNELS = data.channels || [];
+        renderNotificationChannels();
+    } catch(e) {
+        NOTIFICATION_CHANNELS = [];
+        renderNotificationChannels();
+    }
+}
+
+async function loadNotificationDeliveries() {
+    try {
+        const data = await fetch('/notification-deliveries?limit=20').then(r => r.ok ? r.json() : Promise.reject(r));
+        NOTIFICATION_DELIVERIES = data.deliveries || [];
+        renderNotificationDeliveries();
+    } catch(e) {
+        NOTIFICATION_DELIVERIES = [];
+        renderNotificationDeliveries();
+    }
+}
+
+async function loadMetricCatalog() {
+    try {
+        const data = await fetch('/metrics/catalog').then(r => r.ok ? r.json() : Promise.reject(r));
+        METRIC_CATALOG = data.metrics || [];
+    } catch(e) {
+        METRIC_CATALOG = [
+            {metric_name:'pipeline_failure_rate', label:'Failure rate', unit:'percent'},
+            {metric_name:'pipeline_p95_duration_seconds', label:'P95 duration', unit:'seconds'},
+            {metric_name:'queue_depth', label:'Queue depth', unit:'count'},
+            {metric_name:'sla_violations_total', label:'SLA violations', unit:'count'},
+        ];
+    }
+    const select = document.getElementById('ruleMetric');
+    if (select) {
+        select.innerHTML = METRIC_CATALOG.map(m => `<option value="${esc(m.metric_name)}">${esc(m.label || m.metric_name)} (${esc(m.unit || '')})</option>`).join('');
+    }
+}
+
+async function loadAlertsData() {
+    await Promise.all([
+        loadAlertIncidents(),
+        loadAlertRules(),
+        loadNotificationChannels(),
+        loadNotificationDeliveries(),
+    ]);
+}
+
+function openNewAlertRule() {
+    loadMetricCatalog();
+    const modal = document.getElementById('ruleModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.getElementById('ruleName').focus();
+}
+
+function closeNewAlertRule() {
+    const modal = document.getElementById('ruleModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.getElementById('ruleForm').reset();
+    document.getElementById('ruleEnabled').checked = true;
+}
+
+async function submitAlertRule(event) {
+    event.preventDefault();
+    const payload = {
+        name: document.getElementById('ruleName').value,
+        metric_name: document.getElementById('ruleMetric').value,
+        comparator: document.getElementById('ruleComparator').value,
+        threshold: Number(document.getElementById('ruleThreshold').value),
+        severity: document.getElementById('ruleSeverity').value,
+        window_minutes: 60,
+        pipeline_name: document.getElementById('rulePipeline').value || null,
+        enabled: document.getElementById('ruleEnabled').checked,
+        destination_type: document.getElementById('ruleDestinationType').value || null,
+        destination: document.getElementById('ruleDestination').value || null
+    };
+    try {
+        await fetch('/alert-rules', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        }).then(r => r.ok ? r.json() : Promise.reject(r));
+        closeNewAlertRule();
+        showToast('Alert rule created', 'success');
+        loadAlertRules();
+    } catch(e) {
+        showToast('Rule creation failed', 'error');
+    }
+}
+
+function openNewNotificationChannel() {
+    const modal = document.getElementById('channelModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.getElementById('channelName').focus();
+}
+
+function closeNewNotificationChannel() {
+    const modal = document.getElementById('channelModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.getElementById('channelForm').reset();
+    document.getElementById('channelEnabled').checked = true;
+    document.querySelectorAll('.channelSeverity').forEach(cb => {
+        cb.checked = cb.value === 'critical' || cb.value === 'warning';
+    });
+}
+
+async function submitNotificationChannel(event) {
+    event.preventDefault();
+    const severities = Array.from(document.querySelectorAll('.channelSeverity'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
+    const payload = {
+        name: document.getElementById('channelName').value,
+        channel_type: document.getElementById('channelType').value,
+        destination: document.getElementById('channelDestination').value,
+        severities,
+        enabled: document.getElementById('channelEnabled').checked
+    };
+    try {
+        await fetch('/notification-channels', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        }).then(r => r.ok ? r.json() : Promise.reject(r));
+        closeNewNotificationChannel();
+        showToast('Notification route created', 'success');
+        loadNotificationChannels();
+    } catch(e) {
+        showToast('Route creation failed', 'error');
+    }
 }
 
 // ── API: Dashboard Summary ────────────────────────────────────────────────────
@@ -711,9 +1119,10 @@ async function loadTriggers() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    renderAlerts();
-    renderTimeline();
-    renderAlertRules();
+    document.getElementById('ruleForm').addEventListener('submit', submitAlertRule);
+    document.getElementById('channelForm').addEventListener('submit', submitNotificationChannel);
+    loadMetricCatalog();
+    loadAlertsData();
     loadDashboardSummary();
     loadSlaViolations();
     loadTriggers();

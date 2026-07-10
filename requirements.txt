@@ -20,6 +20,7 @@ sqlalchemy==2.0.23
 
 # API and HTTP
 requests==2.31.0
+httpx<0.28
 
 # Distributed processing (optional)
 pyspark==3.5.0  # Spark
