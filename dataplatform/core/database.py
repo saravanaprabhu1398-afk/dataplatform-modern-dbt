@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -2820,12 +2820,13 @@ def get_queue_run(run_id: str) -> Optional[Dict[str, Any]]:
     return dict(row._mapping) if row else None
 
 
-def recover_orphaned_runs() -> int:
-    """Mark any run stuck in queued/running state as failed on server restart.
+def recover_orphaned_runs(stale_after_seconds: int = 3600) -> int:
+    """Mark stale queued/running runs as failed on restart.
 
     Returns the number of runs recovered.
     """
     now = datetime.utcnow().isoformat() + "Z"
+    cutoff_iso = (datetime.utcnow() - timedelta(seconds=max(stale_after_seconds, 0))).isoformat() + "Z"
     with _get_conn() as conn:
         result = conn.execute(
             text(
@@ -2833,9 +2834,10 @@ def recover_orphaned_runs() -> int:
                 UPDATE pipeline_queue
                 SET status = 'failed', completed_at = :now, error = 'Server restarted'
                 WHERE status IN ('queued', 'running')
+                  AND COALESCE(started_at, queued_at) <= :cutoff
                 """
             ),
-            {"now": now},
+            {"now": now, "cutoff": cutoff_iso},
         )
         conn.commit()
     recovered = result.rowcount
