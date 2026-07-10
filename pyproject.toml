@@ -12,7 +12,7 @@ dependencies = [
     "typer",
     "pyyaml",
     "duckdb",
-    "dbt-core",
+    "dbt-core==1.7.19",
     "networkx",
     "apscheduler",
     "fastapi",

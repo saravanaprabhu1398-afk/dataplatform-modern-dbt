@@ -72,6 +72,16 @@ services:
       - dp_data:/app/data
       - dp_logs:/app/logs
       - dp_pipelines:/app/pipelines
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"from pathlib import Path; from dataplatform.core.database import init_db; init_db(); cmd=Path('/proc/1/cmdline').read_bytes().decode(); raise SystemExit(0 if 'worker' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
 
 volumes:
