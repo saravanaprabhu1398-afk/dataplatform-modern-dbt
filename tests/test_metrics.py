@@ -15,7 +15,8 @@ def isolated_db(tmp_path, monkeypatch):
 
 
 from dataplatform.core.database import (
-    init_db, save_run_status, save_quality_result, save_sla_violation
+    enqueue_run, init_db, save_metric_sample, save_run_status, save_quality_result,
+    save_sla_violation, set_run_status_in_queue
 )
 from dataplatform.core.metrics import generate_prometheus_text, _esc
 
@@ -34,6 +35,7 @@ class TestPrometheusTextFormat:
         assert "# TYPE dp_pipeline_runs_total counter" in text
         assert "# HELP dp_quality_check_results_total" in text
         assert "# HELP dp_sla_violations_total" in text
+        assert "# HELP dp_pipeline_queue_depth" in text
 
     def test_pipeline_run_counter_included(self):
         save_run_status("pipe_a", "r1", "completed", "done")
@@ -85,6 +87,27 @@ class TestPrometheusTextFormat:
         data_lines = [l for l in text.splitlines()
                       if l and not l.startswith("#") and l.strip()]
         assert data_lines == []
+
+    def test_queue_depth_metric_included(self):
+        enqueue_run("q1", "pipe_a", "p.yaml")
+        enqueue_run("q2", "pipe_b", "p.yaml")
+        set_run_status_in_queue("q2", "running")
+        text = generate_prometheus_text()
+        assert 'dp_pipeline_queue_depth{status="queued"} 1' in text
+        assert 'dp_pipeline_queue_depth{status="running"} 1' in text
+
+    def test_collected_metric_samples_included(self):
+        save_metric_sample(
+            metric_name="pipeline_failure_rate",
+            value=12.5,
+            unit="percent",
+            pipeline_name="pipe_a",
+        )
+        text = generate_prometheus_text()
+        assert "# HELP dp_observability_metric_value" in text
+        assert 'metric="pipeline_failure_rate"' in text
+        assert 'pipeline="pipe_a"' in text
+        assert " 12.5" in text
 
 
 class TestLabelEscaping:

@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import sys
 from io import StringIO
 
 from dataplatform.plugins.base import ExecutorPlugin

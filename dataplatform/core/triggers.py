@@ -28,6 +28,8 @@ class TriggerManager:
         self._lock = threading.Lock()
         # file_sensor: trigger_id -> threading.Event (set to stop)
         self._stop_events: Dict[str, threading.Event] = {}
+        # file_sensor: trigger_id -> polling thread
+        self._threads: Dict[str, threading.Thread] = {}
         # pipeline_completion: upstream_pipeline -> [(trigger_id, callback)]
         self._completion_callbacks: Dict[str, List] = {}
 
@@ -58,6 +60,8 @@ class TriggerManager:
                     if p.exists():
                         mtime = p.stat().st_mtime
                         if last_mtime is not None and mtime != last_mtime:
+                            if stop_event.is_set():
+                                break
                             logger.info("File sensor triggered: %s", watch_path)
                             try:
                                 callback()
@@ -68,14 +72,21 @@ class TriggerManager:
                         last_mtime = mtime
                 except Exception as exc:
                     logger.warning("File sensor poll error for %s: %s", watch_path, exc)
-                stop_event.wait(poll_interval)
-
-        with self._lock:
-            self._stop_events[trigger_id] = stop_event
+                if stop_event.wait(poll_interval):
+                    break
 
         t = threading.Thread(
             target=_poll, name=f"file-sensor-{trigger_id}", daemon=True
         )
+        with self._lock:
+            previous_stop = self._stop_events.get(trigger_id)
+            previous_thread = self._threads.get(trigger_id)
+            if previous_stop is not None:
+                previous_stop.set()
+            self._stop_events[trigger_id] = stop_event
+            self._threads[trigger_id] = t
+        if previous_thread is not None and previous_thread is not threading.current_thread():
+            previous_thread.join(timeout=5.0)
         t.start()
         logger.info("File sensor trigger %s watching %s", trigger_id, watch_path)
 
@@ -118,10 +129,12 @@ class TriggerManager:
     def unregister(self, trigger_id: str) -> bool:
         """Stop and remove a trigger. Returns True if the trigger was found."""
         found = False
+        thread_to_join: Optional[threading.Thread] = None
         with self._lock:
             if trigger_id in self._stop_events:
                 self._stop_events[trigger_id].set()
                 del self._stop_events[trigger_id]
+                thread_to_join = self._threads.pop(trigger_id, None)
                 found = True
             for upstream, callbacks in self._completion_callbacks.items():
                 before = len(callbacks)
@@ -130,6 +143,8 @@ class TriggerManager:
                 ]
                 if len(self._completion_callbacks[upstream]) < before:
                     found = True
+        if thread_to_join is not None and thread_to_join is not threading.current_thread():
+            thread_to_join.join(timeout=5.0)
         return found
 
     def stop_all(self) -> None:
@@ -137,8 +152,14 @@ class TriggerManager:
         with self._lock:
             for stop_event in self._stop_events.values():
                 stop_event.set()
+            threads = list(self._threads.values())
             self._stop_events.clear()
+            self._threads.clear()
             self._completion_callbacks.clear()
+        current = threading.current_thread()
+        for thread in threads:
+            if thread is not current:
+                thread.join(timeout=5.0)
 
     def list_active(self) -> Dict[str, Any]:
         """Return a summary of active in-memory triggers."""

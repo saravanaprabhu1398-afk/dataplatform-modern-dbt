@@ -55,6 +55,42 @@ tasks:
     assert cfg.tags == ["finance", "daily"]
 
 
+def test_execution_fabric_metadata_persists_through_save_and_load():
+    cfg = _roundtrip(
+        """
+pipeline_name: execution_fabric_demo
+execution:
+  profile: prod
+  deployment_target: kubernetes
+  default_layer: transform
+  max_parallel_tasks: 8
+tasks:
+  - name: extract
+    id: task_1
+    type: executor
+    plugin: api
+    execution_layer: ingest
+    config: { method: GET, url: "https://api.example.com/orders" }
+  - name: model
+    id: task_2
+    type: transformer
+    plugin: dbt
+    execution_layer: transform
+    depends_on: [task_1]
+    config: { operation: run, project_dir: dbt_project }
+""",
+        "execution_fabric_demo",
+    )
+
+    assert cfg.execution is not None
+    assert cfg.execution.profile == "prod"
+    assert cfg.execution.deployment_target == "kubernetes"
+    assert cfg.execution.default_layer == "transform"
+    assert cfg.execution.max_parallel_tasks == 8
+    assert cfg.tasks[0].execution_layer == "ingest"
+    assert cfg.tasks[1].execution_layer == "transform"
+
+
 # ---------------------------------------------------------------------------
 # SLA: email + webhook variants
 # ---------------------------------------------------------------------------

@@ -2,13 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+<script>
+(function(){var m=localStorage.getItem('dpDarkMode');if(m==='dark')document.documentElement.classList.add('dp-dark');else if(m==='light')document.documentElement.classList.add('dp-light');}());
+</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management — Data Platform Suite</title>
     <link rel="stylesheet" href="/static/tokens.css">
     <link rel="stylesheet" href="/static/sidebar.css">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>html, body { overflow-x: clip; }</style>
+    <link rel="stylesheet" href="/static/tailwind-static.css">
+    <style>
+html, body { overflow-x: clip; }
+@media (max-width: 767px) {
+    .dp-sidebar-toggle { display: flex !important; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 8px !important; }
+    #admin-main { padding-left: 0 !important; }
+    #toastContainer {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+    }
+    .admin-new-user-label {
+        display: none;
+    }
+}
+.dp-admin-primary {
+    background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
+    color: white;
+    box-shadow: 0 8px 16px oklch(61% 0.210 38 / 0.18);
+}
+.dp-admin-primary:hover { filter: brightness(0.96); }
+.dp-admin-iconbox {
+    background: oklch(96% 0.040 58) !important;
+    border: 1px solid oklch(88% 0.060 58);
+}
+.dp-admin-icon,
+.dp-admin-accent-text {
+    color: oklch(55% 0.180 38) !important;
+}
+.dp-admin-field:focus {
+    border-color: oklch(61% 0.210 38) !important;
+    box-shadow: 0 0 0 2px oklch(61% 0.210 38 / 0.22) !important;
+}
+.dp-role-editor {
+    background: oklch(96% 0.040 58) !important;
+    color: oklch(40% 0.120 38) !important;
+    border: 1px solid oklch(88% 0.060 58) !important;
+}
+</style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body style="background: var(--color-paper); overflow-x: clip;">
@@ -36,6 +78,9 @@
     </a>
     <a href="/job-builder" class="dp-sidebar__item">
       <i class="fas fa-cubes dp-sidebar__icon" aria-hidden="true"></i><span>Job Builder</span>
+    </a>
+    <a href="/deployments" class="dp-sidebar__item">
+      <i class="fas fa-rocket dp-sidebar__icon" aria-hidden="true"></i><span>Deployments</span>
     </a>
     <a href="/templates-ui" class="dp-sidebar__item">
       <i class="fas fa-store dp-sidebar__icon" aria-hidden="true"></i><span>Templates</span>
@@ -75,6 +120,9 @@
       <span class="dp-sidebar__username" id="sidebarUsername">Admin</span>
       <span class="dp-sidebar__userrole">Data Platform</span>
     </div>
+    <button id="darkModeBtn" class="dp-sidebar__darkmode" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+      <i class="fas fa-moon" id="darkModeIcon" aria-hidden="true"></i>
+    </button>
     <button id="logoutBtn" class="dp-sidebar__logout" title="Sign out" aria-label="Sign out">
       <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
     </button>
@@ -85,10 +133,10 @@
 </script>
 
 <!-- ─────────────────────────────── MAIN LAYOUT ─────────────────────────── -->
-<div class="pl-56 min-h-screen bg-slate-50 flex flex-col">
+<div class="pl-56 min-h-screen bg-slate-50 flex flex-col" id="admin-main">
 
     <!-- Top Bar -->
-    <header class="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between shadow-sm">
+    <header class="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 md:px-6 py-3.5 pl-14 md:pl-6 flex items-center justify-between shadow-sm">
         <nav class="flex items-center gap-1.5 text-sm">
             <a href="/" class="text-slate-400 hover:text-slate-600 transition-colors">Home</a>
             <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
@@ -96,8 +144,8 @@
             <i class="fas fa-chevron-right text-slate-300 text-[10px]"></i>
             <span class="text-slate-700 font-semibold">User Management</span>
         </nav>
-        <button id="openCreateModal" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
-            <i class="fas fa-plus text-xs"></i>New User
+        <button id="openCreateModal" class="dp-admin-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors" aria-label="New user" title="New user">
+            <i class="fas fa-plus text-xs"></i><span class="admin-new-user-label">New User</span>
         </button>
     </header>
 
@@ -117,8 +165,8 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- Total Users Card -->
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                    <i class="fas fa-users text-indigo-500"></i>
+                <div class="dp-admin-iconbox w-10 h-10 rounded-lg flex items-center justify-center shrink-0">
+                    <i class="dp-admin-icon fas fa-users"></i>
                 </div>
                 <div>
                     <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Users</p>
@@ -132,7 +180,7 @@
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
                         admin <span id="statAdminCount" class="font-bold">0</span>
                     </span>
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                    <span class="dp-role-editor inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold">
                         editor <span id="statEditorCount" class="font-bold">0</span>
                     </span>
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
@@ -144,6 +192,7 @@
 
         <!-- Users Table -->
         <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div style="overflow-x:auto">
             <table class="w-full">
                 <thead class="bg-slate-50 border-b border-slate-200">
                     <tr>
@@ -167,6 +216,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
 
     </main>
@@ -178,8 +228,8 @@
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                    <i class="fas fa-user-plus text-indigo-500 text-sm"></i>
+                <div class="dp-admin-iconbox w-8 h-8 rounded-lg flex items-center justify-center">
+                    <i class="dp-admin-icon fas fa-user-plus text-sm"></i>
                 </div>
                 <h2 class="text-base font-bold text-slate-800">Create New User</h2>
             </div>
@@ -203,7 +253,7 @@
                     required
                     autocomplete="off"
                     placeholder="e.g. alice"
-                    class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder-slate-400 text-slate-800"
+                    class="dp-admin-field w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none transition placeholder-slate-400 text-slate-800"
                 />
             </div>
             <!-- Password -->
@@ -216,7 +266,7 @@
                         required
                         autocomplete="new-password"
                         placeholder="Min. 6 characters"
-                        class="w-full px-3.5 py-2.5 pr-10 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder-slate-400 text-slate-800"
+                        class="dp-admin-field w-full px-3.5 py-2.5 pr-10 text-sm border border-slate-200 rounded-lg focus:outline-none transition placeholder-slate-400 text-slate-800"
                     />
                     <button
                         type="button"
@@ -235,7 +285,7 @@
                 <label class="block text-sm font-medium text-slate-700 mb-1.5" for="createRole">Role</label>
                 <select
                     id="createRole"
-                    class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition bg-white text-slate-800"
+                    class="dp-admin-field w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none transition bg-white text-slate-800"
                 >
                     <option value="viewer">viewer — Read only</option>
                     <option value="editor">editor — Run &amp; schedule pipelines</option>
@@ -250,7 +300,7 @@
                     type="text"
                     autocomplete="off"
                     placeholder="e.g. data-engineering"
-                    class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition placeholder-slate-400 text-slate-800"
+                    class="dp-admin-field w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none transition placeholder-slate-400 text-slate-800"
                 />
             </div>
         </div>
@@ -259,7 +309,7 @@
             <button id="cancelCreateModal" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
                 Cancel
             </button>
-            <button id="submitCreate" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+            <button id="submitCreate" class="dp-admin-primary inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
                 <i class="fas fa-plus text-xs" id="submitCreateIcon"></i>
                 <span id="submitCreateLabel">Create User</span>
             </button>
@@ -273,10 +323,10 @@
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                    <i class="fas fa-user-gear text-indigo-500 text-sm"></i>
+                <div class="dp-admin-iconbox w-8 h-8 rounded-lg flex items-center justify-center">
+                    <i class="dp-admin-icon fas fa-user-gear text-sm"></i>
                 </div>
-                <h2 class="text-base font-bold text-slate-800">Change Role — <span id="roleModalUsername" class="text-indigo-600"></span></h2>
+                <h2 class="text-base font-bold text-slate-800">Change Role — <span id="roleModalUsername" class="dp-admin-accent-text"></span></h2>
             </div>
             <button id="closeRoleModal" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
                 <i class="fas fa-xmark"></i>
@@ -287,7 +337,7 @@
             <label class="block text-sm font-medium text-slate-700 mb-1.5" for="roleSelect">New Role</label>
             <select
                 id="roleSelect"
-                class="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition bg-white text-slate-800"
+                class="dp-admin-field w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none transition bg-white text-slate-800"
             >
                 <option value="viewer">viewer — Read only</option>
                 <option value="editor">editor — Run &amp; schedule pipelines</option>
@@ -299,7 +349,7 @@
             <button id="cancelRoleModal" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
                 Cancel
             </button>
-            <button id="submitChangeRole" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+            <button id="submitChangeRole" class="dp-admin-primary inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
                 <i class="fas fa-check text-xs" id="submitRoleIcon"></i>
                 <span id="submitRoleLabel">Save Role</span>
             </button>
@@ -439,7 +489,7 @@ function roleIcon(role) {
 function roleBadge(role) {
     return {
         admin:  'bg-red-100 text-red-700 border border-red-200',
-        editor: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+        editor: 'dp-role-editor',
         viewer: 'bg-slate-100 text-slate-600 border border-slate-200',
     }[role] || 'bg-slate-100 text-slate-600 border border-slate-200';
 }
@@ -578,7 +628,7 @@ async function loadUsers() {
                         <i class="fas fa-circle-exclamation text-red-400 text-2xl"></i>
                         <p class="font-semibold text-slate-700">Failed to load users</p>
                         <p class="text-slate-400">Check your connection and try again.</p>
-                        <button onclick="loadUsers()" class="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors">
+                        <button onclick="loadUsers()" class="dp-admin-primary mt-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors">
                             Retry
                         </button>
                     </div>
@@ -811,7 +861,37 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('openCreateModal').addEventListener('click', openCreateModal);
 
     // Logout
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
+    function toggleDarkMode() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (html.classList.contains('dp-dark')) {
+        // dark → system
+        html.classList.remove('dp-dark');
+        localStorage.setItem('dpDarkMode', 'system');
+        if (icon) { icon.className = 'fas fa-circle-half-stroke'; }
+    } else if (html.classList.contains('dp-light')) {
+        // light → dark
+        html.classList.remove('dp-light');
+        html.classList.add('dp-dark');
+        localStorage.setItem('dpDarkMode', 'dark');
+        if (icon) { icon.className = 'fas fa-sun'; }
+    } else {
+        // system → light
+        html.classList.add('dp-light');
+        localStorage.setItem('dpDarkMode', 'light');
+        if (icon) { icon.className = 'fas fa-moon'; }
+    }
+}
+function syncDarkModeIcon() {
+    const html = document.documentElement;
+    const icon = document.getElementById('darkModeIcon');
+    if (!icon) return;
+    if (html.classList.contains('dp-dark'))  icon.className = 'fas fa-sun';
+    else if (html.classList.contains('dp-light')) icon.className = 'fas fa-moon';
+    else icon.className = 'fas fa-circle-half-stroke';
+}
+document.addEventListener('DOMContentLoaded', syncDarkModeIcon);
+document.getElementById('logoutBtn').addEventListener('click', async () => {
         await fetch('/logout', { method: 'POST' }).catch(() => {});
         window.location.href = '/login';
     });

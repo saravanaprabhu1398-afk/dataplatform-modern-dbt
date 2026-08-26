@@ -32,7 +32,7 @@ DataPlatform is a self-hosted pipeline orchestration platform. It lets teams def
 | **Scheduling** | Cron-based scheduling via APScheduler; schedule state persisted in DB |
 | **Run queue** | Persistent `pipeline_queue` table — runs survive server restarts; orphan recovery on startup |
 | **Real-time logs** | Per-run log files streamed via Server-Sent Events at `GET /run/{run_id}/logs/stream` |
-| **Git integration** | Push/pull pipelines to GitHub/GitLab/Bitbucket; full push history |
+| **Git integration** | Repository workspace for GitHub/GitLab/Bitbucket/local remotes with file browse/edit, status, diff, commit, pull, push, pipeline import/export, and push history |
 | **Secrets** | Env-var interpolation (`${MY_VAR}`) + HashiCorp Vault KV v1/v2 via hvac |
 | **Lineage** | Auto-captured from DuckDB SQL (FROM/JOIN/INSERT INTO); manual declaration in YAML |
 | **Data quality** | SQL-based checks on task output; pass/fail history per pipeline |
@@ -41,10 +41,13 @@ DataPlatform is a self-hosted pipeline orchestration platform. It lets teams def
 | **Data catalog** | Searchable asset catalog across all pipelines |
 | **Templates** | Pipeline template marketplace with one-click reuse |
 | **Versioning** | Hash-based pipeline YAML versioning with diff view |
+| **Execution fabric** | Pipeline and task metadata for ingest / quality / transform / serve / operate layers plus local, Docker, Kubernetes, cloud, and on-prem deployment profiles |
+| **Deployment control plane** | Validated deployment records with profile/target/connection selection, cloud account and cluster inventory, active deployment tracking, audit metadata, and rollback |
 | **SLA monitoring** | Per-pipeline SLA limits with webhook/email alerts on breach |
+| **Operational observability** | Automatic metric collector, persisted metric samples, Grafana-style dashboard data, default/configurable alert rules, reusable notification routes, delivery audit, and incident state |
 | **Error handlers** | Webhook/email dispatch on pipeline or task failure |
 | **LLM pipeline gen** | Natural language → pipeline YAML via Anthropic/OpenAI, regex fallback |
-| **Prometheus metrics** | `/metrics` endpoint for Grafana scraping |
+| **Prometheus metrics** | `/metrics` endpoint for Grafana scraping, including latest collected observability samples |
 | **RBAC** | Admin / Editor / Viewer roles; bcrypt password hashing |
 | **UI** | Web interface: Job Builder, pipeline catalog, lineage graph, run history |
 
@@ -93,11 +96,17 @@ DataPlatform is a self-hosted pipeline orchestration platform. It lets teams def
 │   │  ↓ waves        │ │    │  │  • lineage_records             │
 │   │  PipelineExecutor│ │   │  │  • quality_results             │
 │   │  ↓ parallel     │ │    │  │  • sla_violations              │
-│   │  TaskExecutor   │ │    │  │  • pipeline_versions           │
-│   │  ↓ per task     │ │    │  │  • pipeline_costs              │
-│   │  Plugin (DuckDB │ │    │  │  • git_remotes / push_log      │
-│   │  Python, PG,    │ │    │  │  • metric_results              │
-│   │  Snowflake...)  │ │    │  └───────────────┘                │
+│   │  TaskExecutor   │ │    │  │  • metric_samples              │
+│   │  ↓ per task     │ │    │  │  • alert_rules / incidents     │
+│   │  Plugin (DuckDB │ │    │  │  • notification_channels       │
+│   │  Python, PG,    │ │    │  │  • notification_deliveries     │
+│   │  Snowflake...)  │ │    │  │  • deployment_connections      │
+│   │                 │ │    │  │  • deployments                 │
+│   │                 │ │    │  │  • pipeline_versions           │
+│   │                 │ │    │  │  • pipeline_costs              │
+│   │                 │ │    │  │  • git_remotes / push_log      │
+│   │                 │ │    │  │  • metric_results              │
+│   │                 │ │    │  └───────────────┘                │
 │   └─────────────────┘ │    │                                   │
 │                       │    │  ┌───────────────┐                │
 │   writes per-run log  │    │  │  Filesystem   │                │
@@ -130,6 +139,86 @@ TaskExecutor
      │
      └── type: transformer
              └── plugin: <custom>   → TransformerPlugin subclass
+```
+
+### Execution Fabric
+
+The platform separates pipeline intent from the physical runtime. A pipeline can declare an `execution` block with a runtime profile, deployment target, default layer, and maximum parallel task count. Individual tasks can declare `execution_layer` to describe where they sit in the platform flow:
+
+```
+ingest → quality → transform → serve → operate
+```
+
+Runtime profiles are currently metadata-aware wrappers around the local worker pool. They are exposed through `/execution-fabric` and `/environment-profiles`, included in run details, and passed to plugins through the runtime context. This creates a stable contract for future remote workers without changing pipeline YAML:
+
+| Profile | Target | Typical deployment |
+|---|---|---|
+| `local` | `local` | Laptop, VM, single-process server |
+| `dev` | `docker` | Shared development container |
+| `prod` | `kubernetes` | Team production namespace |
+| `docker` | `docker` | Portable single-host stack |
+| `kubernetes` | `kubernetes` | Scaled cluster workers |
+| `cloud` | `cloud` | Managed cloud infrastructure |
+| `on_prem` | `on_prem` | Private network or air-gapped stack |
+
+### AI / RAG Solution Architecture
+
+AI workloads use the same pipeline contract as data workloads: source ingestion, transformation, quality gates, serving handoff, and operations. The template marketplace ships three solution patterns that can be instantiated as normal YAML pipelines:
+
+| Solution | Architecture | Typical stack choices |
+|---|---|---|
+| Enterprise RAG | Ingest -> chunk -> embed -> index -> retrieve/rerank -> generate -> evaluate | OpenAI Responses API, OpenAI/vector-store file search, pgvector, Qdrant, Pinecone, hybrid search, citation gates |
+| Document Intelligence | Collect -> OCR/layout parse -> extract entities/tables -> validate -> human review -> publish | LlamaParse, Docling, Unstructured, schema extraction, confidence thresholds, review queues |
+| LLM Eval + Guardrails | Collect eval data -> quality eval -> safety eval -> model compare -> release gate | Golden datasets, judge model, prompt-injection checks, PII checks, model challenger comparison |
+
+```
+Enterprise RAG pipeline
+
+Knowledge sources
+  │
+  ├── docs / PDFs / HTML / wikis / database rows
+  ▼
+Ingestion task  ──► Chunk + metadata enrichment ──► Embedding task
+                                                     │
+                                                     ▼
+                                              Vector store index
+                                                     │
+                                                     ▼
+Query path: user question ──► retriever ──► reranker ──► LLM response
+                                                     │
+                                                     ▼
+                                      citations + grounded answer contract
+                                                     │
+                                                     ▼
+                                  RAG eval: faithfulness, precision, safety
+```
+
+The platform treats AI quality gates as first-class pipeline tasks. This keeps model and retrieval releases auditable alongside normal data pipelines:
+
+```
+POST /run ai_rag_knowledge_pipeline
+    │
+    ├── task timeline records ingestion, chunking, embedding, retrieval, generation
+    ├── run details persist runtime parameters and environment profile
+    ├── lineage records map source docs -> vector index -> service contract
+    ├── quality checks record RAG/eval thresholds
+    └── versioning stores the YAML architecture before promotion
+```
+
+### Deployment Control Plane
+
+The deployment hub records promotion intent separately from pipeline execution. `deployment_connections` stores selectable destinations such as AWS/GCP/Azure cloud accounts, Kubernetes clusters, Docker hosts, local nodes, and private sites. `POST /deployments/validate` runs the same YAML, DAG, plugin, and execution-fabric checks as `/validate`, scoped to a requested environment profile, target type, and optional connection. `POST /deployments/deploy` snapshots or reuses the pipeline version hash, stores the deployment manifest, marks the deployment active for its pipeline/profile/target/connection, and deactivates the prior active record for that same destination. Rollback reactivates the previous successful deployment and marks the rolled-back record with its restored deployment ID.
+
+```
+POST /deployments/deploy
+    │
+    ├── load_config() + DAG/plugin validation
+    ├── build_execution_fabric(profile, target)
+    ├── resolve deployment_connections.connection_id
+    ├── save/reuse pipeline_versions hash
+    ├── insert deployments record
+    ├── deactivate previous active deployment
+    └── append_audit_event("deployment", "deployed")
 ```
 
 ### Pipeline Run Lifecycle
@@ -382,10 +471,14 @@ docker stop dataplatform && docker rm dataplatform
 
 ```bash
 cat > .env << 'EOF'
-DATAPLATFORM_USERNAME=admin
-DATAPLATFORM_PASSWORD=changeme_in_prod
-DATAPLATFORM_SESSION_SECRET=change_this_to_a_random_32char_string
+DATAPLATFORM_ENV=production
+DATAPLATFORM_USERNAME=platform-admin
+DATAPLATFORM_PASSWORD=change_this_to_a_real_secret
+DATAPLATFORM_SESSION_SECRET=change_this_to_a_random_64_hex_char_secret
 DATAPLATFORM_PORT=8000
+POSTGRES_DB=dataplatform
+POSTGRES_USER=dataplatform
+POSTGRES_PASSWORD=change_this_postgres_password
 LOG_LEVEL=INFO
 LOG_JSON=false
 EOF
@@ -400,49 +493,16 @@ docker compose up -d
 ### Step 3 — Verify
 
 ```bash
-docker compose ps            # both services should be healthy
+docker compose ps            # postgres, API, and worker should be healthy/running
 docker compose logs -f       # follow logs
 curl http://localhost:8000/health
 ```
 
-### Step 4 (optional) — Add PostgreSQL
+The Compose topology includes PostgreSQL plus a separate `dataplatform-worker`
+service. The API runs with `DATAPLATFORM_EXECUTION_MODE=external`, so `/run`
+requests are persisted to `pipeline_queue` and then claimed by the worker.
 
-Create `docker-compose.override.yml`:
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: dataplatform
-      POSTGRES_USER: dpflow
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-dpflow_dev}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "dpflow"]
-      interval: 10s
-      retries: 5
-
-  dataplatform:
-    environment:
-      POSTGRES_URL: postgresql://dpflow:${DB_PASSWORD:-dpflow_dev}@postgres:5432/dataplatform
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-volumes:
-  pg_data:
-```
-
-```bash
-echo "DB_PASSWORD=$(openssl rand -hex 16)" >> .env
-docker compose up -d
-```
-
-The app will use PostgreSQL automatically when `POSTGRES_URL` is set.
-
-### Step 5 (optional) — Add NGINX + TLS
+### Step 4 (optional) — Add NGINX + TLS
 
 Create `nginx.conf`:
 
@@ -830,16 +890,27 @@ docker compose up -d
 
 | Variable | Default | Description |
 |---|---|---|
+| `DATAPLATFORM_ENV` | `development` | Set to `production` to enable fail-fast runtime guardrails |
 | `DATAPLATFORM_USERNAME` | `admin` | Admin login username |
 | `DATAPLATFORM_PASSWORD` | `admin` | Admin login password (change in production) |
 | `DATAPLATFORM_SESSION_SECRET` | `dpflow-dev-secret-change-me` | HMAC signing key for session cookies |
+| `DATAPLATFORM_EXECUTION_MODE` | `embedded` | `embedded` runs tasks in the API process; `external` leaves runs for `dataplatform worker` |
+| `DATAPLATFORM_ALLOW_EMBEDDED_WORKER` | _(not set)_ | Explicit production override for embedded execution mode |
+| `DATAPLATFORM_ALLOW_UNSAFE_EXECUTORS` | `false` | Explicit production override for local-code plugins (`python`, `shell`) |
 | `DATAPLATFORM_PORT` | `8000` | Port the server listens on |
 | `DATABASE_PATH` | `data/platform.db` | SQLite database path (ignored if POSTGRES_URL set) |
 | `POSTGRES_URL` | _(not set)_ | If set, uses PostgreSQL instead of SQLite |
-| `PIPELINE_WORKERS` | `4` | Max concurrent pipeline runs in the worker pool |
+| `PIPELINE_WORKERS` | `4` | Max concurrent pipeline runs in embedded worker mode |
+| `DATAPLATFORM_OBSERVABILITY_AUTO_COLLECT` | `true` | Start the API-side metrics collector loop on startup |
+| `DATAPLATFORM_OBSERVABILITY_INTERVAL_SECONDS` | `60` | Seconds between automatic metric collection cycles |
+| `DATAPLATFORM_OBSERVABILITY_INITIAL_DELAY_SECONDS` | `5` | Startup delay before the first automatic collection |
+| `DATAPLATFORM_OBSERVABILITY_RANGE_HOURS` | `24` | Lookback window used by automatic metric collection |
+| `DATAPLATFORM_OBSERVABILITY_SEED_DEFAULT_RULES` | `true` | Create built-in alert rules when missing |
+| `DATAPLATFORM_OBSERVABILITY_NOTIFY` | `true` | Send email/webhook notifications for newly firing metric incidents |
 | `DATA_DIR` | `data` | Directory for scheduler state and other data files |
 | `PIPELINES_PATH` | `pipelines` | Directory where pipeline YAML files are stored |
 | `GIT_CLONES_PATH` | `data/git-clones` | Directory for cloned Git repositories |
+| `GIT_WORKSPACE_MAX_FILE_BYTES` | `1048576` | Max UTF-8 text file size editable through the Git workspace UI |
 | `LOG_LEVEL` | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `LOG_FILE` | `logs/pipeline.log` | Application log file path |
 | `LOG_JSON` | `false` | Set to `true` for JSON-structured logging |
@@ -863,22 +934,18 @@ docker compose up -d
 ```
 NOW                         T+3 months              T+9 months             T+18 months
 ────────────────────────    ─────────────────────   ──────────────────     ───────────────────
-Single FastAPI process   →  Postgres + separate  →  Kubernetes + Helm  →   Cloud-native or
-SQLite storage              worker process          HPA autoscaling        on-prem full stack
-Docker single container     Docker Compose          Vault wired            Keycloak SSO
-                            NGINX + TLS             Alembic migrations     MinIO object store
-                                                    Pipeline YAML in DB    Loki log aggregation
+Postgres + API/worker    →  NGINX + TLS          →  Kubernetes + Helm  →   Cloud-native or
+Docker Compose             Alembic migrations       HPA autoscaling        on-prem full stack
+External queue worker       Prometheus queue depth   Vault wired            Keycloak SSO
+Production guardrails                               Pipeline YAML in DB    Loki log aggregation
 ```
 
 ### What still needs to be built for Tier 1
 
 | Item | Effort | Unlocks |
 |---|---|---|
-| `dataplatform/cli/worker.py` — separate worker process | 1–2 days | API and execution fully decoupled |
 | Alembic migrations (`alembic init`) | 1 day | Safe schema upgrades in prod |
-| PostgreSQL in `docker-compose.yml` | 2 hours | Persistent multi-writer storage |
 | NGINX config with SSE headers | 2 hours | TLS termination, SSE through proxy |
-| Prometheus `pipeline_queue_depth` metric | 2 hours | Grafana dashboard, HPA trigger |
 
 ### What still needs to be built for Tier 2 (Kubernetes)
 

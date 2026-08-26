@@ -12,10 +12,11 @@ dependencies = [
     "typer",
     "pyyaml",
     "duckdb",
-    "dbt-core",
+    "dbt-core==1.7.19",
     "networkx",
     "apscheduler",
     "fastapi",
+    "httpx<0.28",
     "uvicorn",
     "snowflake-connector-python",
     "pandas",
@@ -53,6 +54,7 @@ dataplatform = ["templates/*"]
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-asyncio",
     "black",
     "flake8",
     "mypy",

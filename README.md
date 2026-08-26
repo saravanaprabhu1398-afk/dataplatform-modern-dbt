@@ -11,8 +11,9 @@ A self-hosted data orchestration platform built in Python. Define pipelines in Y
 ## What it does
 
 - **Run data pipelines** defined in YAML with task dependencies (DAG execution)
+- **Deploy pipelines** through a governed control plane with validation, targets, history, and rollback
 - **Generate pipelines from plain English** using the built-in NLP generator
-- **Monitor runs** in real time with a web dashboard, alerts page, and metrics dashboard
+- **Monitor runs** in real time with a metrics collector, Grafana-style dashboard, alert rules, and incidents
 - **Schedule pipelines** with cron expressions
 - **Trigger pipelines** via webhooks or API events
 - **Track lineage, costs, and data quality** per pipeline and asset
@@ -63,12 +64,41 @@ Navigate to `http://localhost:8000` and log in with the credentials you set abov
 
 ---
 
+## Production Runtime
+
+For production-style deployments, run the API and worker separately:
+
+```bash
+export DATAPLATFORM_ENV=production
+export DATAPLATFORM_EXECUTION_MODE=external
+export DATAPLATFORM_USERNAME=platform-admin
+export DATAPLATFORM_PASSWORD='use-a-real-secret'
+export DATAPLATFORM_SESSION_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+export POSTGRES_URL='postgresql+psycopg2://user:password@host:5432/dataplatform'
+
+dataplatform serve --host 0.0.0.0 --port 8000
+dataplatform worker --poll-interval 2
+```
+
+`DATAPLATFORM_ENV=production` fails fast when unsafe defaults are used. In production, the app requires a strong session secret and external queue workers unless `DATAPLATFORM_ALLOW_EMBEDDED_WORKER=true` is explicitly set.
+
+Docker Compose now starts PostgreSQL, the API, and a separate queue worker:
+
+```bash
+cp .env.example .env
+# Set strong DATAPLATFORM_* and POSTGRES_* values before production use.
+docker compose up -d
+```
+
+---
+
 ## Web dashboard
 
 | Page | URL | Purpose |
 |------|-----|---------|
 | Home | `/` | Workspace overview, quick links |
 | Pipelines | `/dashboard` | DAG view, run status, execution history |
+| Deployments | `/deployments` | Deployment validation, target selection, history, rollback |
 | Generator | `/generator` | NLP pipeline builder |
 | Catalog | `/catalog` | Data asset catalog |
 | Lineage | `/lineage-viz` | Visual data lineage graph |
@@ -77,6 +107,70 @@ Navigate to `http://localhost:8000` and log in with the credentials you set abov
 | Alerts | `/alerts` | Incident management (Zenduty-style) |
 | Monitoring | `/monitoring` | Metrics dashboard (Grafana-style) |
 | Admin | `/admin` | User and role management |
+
+---
+
+## Observability and Alerting
+
+The platform collects operational metrics from the metadata store and persists snapshots in `metric_samples`. Metrics include run volume, success/failure rate, queue depth, active/running runs, SLA violations, quality failure rate, P95 duration, and per-pipeline freshness.
+
+- `GET /monitoring` shows live charts and collector status.
+- `POST /observability/collect` stores a metric snapshot and evaluates alert rules.
+- `GET /metrics` exposes Prometheus-compatible scrape output, including latest collected samples.
+- `GET /alerts` manages alert rules and incidents.
+
+The API starts an automatic collector by default. Tune it with:
+
+```bash
+export DATAPLATFORM_OBSERVABILITY_AUTO_COLLECT=true
+export DATAPLATFORM_OBSERVABILITY_INTERVAL_SECONDS=60
+export DATAPLATFORM_OBSERVABILITY_RANGE_HOURS=24
+```
+
+Default alert rules are seeded on startup unless `DATAPLATFORM_OBSERVABILITY_SEED_DEFAULT_RULES=false`. Built-ins cover queue depth, failure rate, P95 duration, SLA violations, quality failures, and stale pipeline activity.
+
+For a dedicated collector process:
+
+```bash
+dataplatform metrics-collector --interval 60 --range-hours 24
+dataplatform collect-metrics --range-hours 24
+```
+
+Alert rules support comparators such as `>`, `>=`, `<`, `<=`, `==`, and `!=`, optional pipeline scoping, wildcard pipeline scoping with `*`, severity, and email/webhook destinations. If a rule has no direct destination, the incident is routed to reusable notification channels matching the incident severity. Every delivery attempt is stored for audit and troubleshooting.
+
+Shared notification routes can be managed from `/alerts` or via:
+
+```bash
+curl -b cookies.txt -X POST http://localhost:8000/notification-channels \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Platform Slack","channel_type":"webhook","destination":"https://hooks.example.com/...","severities":["critical","warning"]}'
+```
+
+---
+
+## Deployment Hub
+
+`/deployments` provides a control plane for promoting pipeline YAML into a selected runtime profile, deployment target type, and connected target instance. It records the governed deployment intent: config snapshot hash, version ID, validation result, execution fabric manifest, selected cloud account/cluster/host, actor, active deployment, and rollback relationship.
+
+Deployment records use the existing execution profiles and target types (`local`, `docker`, `kubernetes`, `cloud`, `on_prem`). The actual selectable destinations are stored as deployment connections, for example AWS/GCP/Azure cloud accounts, EKS/GKE/AKS/Kubernetes clusters, Docker hosts, or private on-prem sites. Successful deployments mark the previous active deployment for the same pipeline/profile/target/connection inactive; rollback restores the previous successful deployment for that same destination.
+
+Register target instances from `/deployments` or via:
+
+```bash
+curl -b cookies.txt -X POST http://localhost:8000/deployment-connections \
+  -H "Content-Type: application/json" \
+  -d '{"connection_id":"eks-prod-a","name":"EKS Prod A","target_id":"kubernetes","provider":"eks","endpoint":"https://eks.example.com","region":"us-east-1","namespace":"data-platform","status":"connected","credentials_ref":"env:AWS_PROFILE"}'
+```
+
+```bash
+curl -b cookies.txt -X POST http://localhost:8000/deployments/validate \
+  -H "Content-Type: application/json" \
+  -d '{"config_path":"pipelines/daily_orders.yaml","environment_profile":"prod","target_id":"kubernetes"}'
+
+curl -b cookies.txt -X POST http://localhost:8000/deployments/deploy \
+  -H "Content-Type: application/json" \
+  -d '{"config_path":"pipelines/daily_orders.yaml","environment_profile":"prod","target_id":"kubernetes","connection_id":"eks-prod-a","notes":"release candidate"}'
+```
 
 ---
 
@@ -151,6 +245,7 @@ tasks:
 | `id` | No | Used in `depends_on` references (defaults to slugified name) |
 | `type` | Yes | `executor` or `transformer` |
 | `plugin` | Yes | Plugin name (see plugins below) |
+| `execution_layer` | No | Platform layer: `ingest`, `quality`, `transform`, `serve`, or `operate` |
 | `config` | No | Plugin-specific config dict |
 | `depends_on` | No | List of task IDs this task waits for |
 | `retries` | No | Number of retry attempts on failure (default 0) |
@@ -164,6 +259,55 @@ Wave 1: [extract_postgres]  [fetch_api]          ← run concurrently
 Wave 2: [validate]                               ← waits for both above
 Wave 3: [load_snowflake]  [send_email]           ← run concurrently
 ```
+
+### Execution fabric
+
+Pipelines can declare how they map onto the platform execution fabric. This keeps the same YAML portable across laptop, Docker, Kubernetes, cloud, or private/on-prem deployments.
+
+```yaml
+execution:
+  profile: prod
+  deployment_target: kubernetes
+  default_layer: transform
+  max_parallel_tasks: 8
+
+tasks:
+  - name: extract_orders
+    type: executor
+    plugin: postgres
+    execution_layer: ingest
+
+  - name: validate_orders
+    type: executor
+    plugin: duckdb
+    operation: validate
+    execution_layer: quality
+    depends_on: [extract_orders]
+
+  - name: build_marts
+    type: transformer
+    plugin: dbt
+    execution_layer: transform
+    depends_on: [validate_orders]
+
+  - name: publish_marts
+    type: executor
+    plugin: snowflake
+    execution_layer: serve
+    depends_on: [build_marts]
+```
+
+Available layers are:
+
+| Layer | Purpose |
+|------|---------|
+| `ingest` | Land files, API extracts, events, and database reads |
+| `quality` | Validate shape, freshness, completeness, and business rules |
+| `transform` | Prepare trusted datasets with SQL, dbt, Python, DuckDB, or Spark |
+| `serve` | Publish curated outputs to warehouses, marts, APIs, or files |
+| `operate` | Notify, audit, recover, and automate operational tasks |
+
+Runtime profiles are exposed by `GET /execution-fabric` and `GET /environment-profiles`. Built-in profiles include `local`, `dev`, `prod`, `docker`, `kubernetes`, `cloud`, and `on_prem`.
 
 ---
 
@@ -283,14 +427,15 @@ config:
 
 ## REST API
 
-All endpoints require a session cookie obtained from `POST /login` (except `/health`).
+All endpoints require a session cookie obtained from `POST /login` except `/health` and the Prometheus scrape endpoint `/metrics`.
 
 ### Authentication
 
 ```bash
 # Login
 curl -c cookies.txt -X POST http://localhost:8000/login \
-  -d "username=admin&password=changeme"
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"changeme"}'
 
 # Use session cookie in subsequent requests
 curl -b cookies.txt http://localhost:8000/pipelines
@@ -306,6 +451,15 @@ curl -b cookies.txt http://localhost:8000/pipelines
 | `POST` | `/run` | editor | Run pipeline (async, returns run ID) |
 | `POST` | `/run/sync` | editor | Run pipeline (blocking, returns result) |
 | `POST` | `/validate` | editor | Validate config without running |
+| `GET` | `/deployment-connections` | viewer | List connected deployment targets |
+| `POST` | `/deployment-connections` | editor | Register cloud account, cluster, host, or site |
+| `PATCH` | `/deployment-connections/{id}` | editor | Update deployment target instance |
+| `DELETE` | `/deployment-connections/{id}` | editor | Delete deployment target instance |
+| `POST` | `/deployments/validate` | editor | Validate a pipeline for a deployment profile/target |
+| `POST` | `/deployments/deploy` | editor | Create an active deployment record |
+| `GET` | `/deployments/records` | viewer | Deployment history |
+| `GET` | `/deployments/records/{id}` | viewer | Deployment detail |
+| `POST` | `/deployments/records/{id}/rollback` | editor | Roll back to previous successful deployment |
 | `POST` | `/generate-pipeline` | editor | Generate YAML from text |
 | `POST` | `/save-pipeline` | editor | Save generated YAML to disk |
 | `GET` | `/status` | viewer | Execution status for all pipelines |
@@ -328,18 +482,54 @@ curl -b cookies.txt http://localhost:8000/pipelines
 | `GET` | `/catalog/pipelines` | viewer | Pipeline-level catalog entries |
 | `GET` | `/quality/{name}` | viewer | Quality check results |
 | `GET` | `/sla/violations` | viewer | SLA breach report |
-| `GET` | `/metrics` | viewer | Execution metrics |
+| `GET` | `/metrics` | — | Prometheus-compatible execution and collected metrics |
+| `GET` | `/metrics/catalog` | viewer | Operational metric catalog |
+| `GET` | `/metrics/timeseries` | viewer | Dashboard time-series data |
 | `GET` | `/metrics/definitions` | viewer | Semantic metric definitions |
 | `POST` | `/metrics/{name}/compute` | editor | Compute a semantic metric |
+| `GET` | `/observability/dashboard` | viewer | Live operational metric and alert dashboard payload |
+| `POST` | `/observability/collect` | viewer | Collect/store operational metric samples and evaluate rules |
+| `GET` | `/alert-rules` | viewer | List alert rules |
+| `POST` | `/alert-rules` | editor | Create alert rule |
+| `PATCH` | `/alert-rules/{id}` | editor | Update alert rule |
+| `DELETE` | `/alert-rules/{id}` | editor | Delete alert rule |
+| `GET` | `/alerts/incidents` | viewer | List alert incidents |
+| `POST` | `/alerts/incidents/{id}/ack` | editor | Acknowledge incident |
+| `POST` | `/alerts/incidents/{id}/resolve` | editor | Resolve incident |
+| `GET` | `/notification-channels` | viewer | List shared alert routes |
+| `POST` | `/notification-channels` | editor | Create shared alert route |
+| `PATCH` | `/notification-channels/{id}` | editor | Update shared alert route |
+| `DELETE` | `/notification-channels/{id}` | editor | Delete shared alert route |
+| `GET` | `/notification-deliveries` | viewer | Alert notification delivery history |
 | `GET` | `/costs/summary` | viewer | Platform-wide cost summary |
 | `GET` | `/costs/{name}` | viewer | Cost breakdown for a pipeline |
 | `GET` | `/templates` | viewer | Available pipeline templates |
 | `POST` | `/templates/{id}/use` | editor | Instantiate a template |
+| `GET` | `/git/remotes` | viewer | List registered Git remotes |
+| `POST` | `/git/remotes` | editor | Register a Git remote |
+| `DELETE` | `/git/remotes/{id}` | admin | Remove a Git remote and local clone |
+| `POST` | `/git/remotes/{id}/test` | viewer | Test remote Git connectivity |
+| `GET` | `/git/remotes/{id}/workspace/tree` | viewer | Browse repository files |
+| `GET` | `/git/remotes/{id}/workspace/file?path=<p>` | viewer | Read a repository file |
+| `PUT` | `/git/remotes/{id}/workspace/file?path=<p>` | editor | Save a repository file |
+| `GET` | `/git/remotes/{id}/workspace/status` | viewer | Git branch, ahead/behind, and changes |
+| `GET` | `/git/remotes/{id}/workspace/diff` | viewer | Unified diff for repo or file |
+| `POST` | `/git/remotes/{id}/workspace/pull` | editor | Pull configured branch when clean |
+| `POST` | `/git/remotes/{id}/workspace/commit` | editor | Commit selected or all workspace changes |
+| `POST` | `/git/remotes/{id}/workspace/push` | editor | Push committed workspace changes |
 | `GET` | `/admin/users` | admin | List all users |
 | `POST` | `/admin/users` | admin | Create user |
 | `PATCH` | `/admin/users/{u}/role` | admin | Change user role |
 | `DELETE` | `/admin/users/{u}` | admin | Delete user |
 | `GET` | `/me` | viewer | Current user info |
+
+---
+
+### Git workspace configuration
+
+The `/git-integration` UI is a full repository workspace: select a remote, browse the cloned tree, edit UTF-8 text files, inspect diffs, commit selected files, pull, and push. Remote definitions live in the metadata DB table `git_remotes`; local clones live under `GIT_CLONES_PATH` (default `data/git-clones`). Set `GIT_WORKSPACE_MAX_FILE_BYTES` to control the largest file editable through the browser (default `1048576`, 1 MiB).
+
+HTTPS token, SSH, and local/no-auth remotes are supported by the same registered remote model. SSH access uses the keys and known-hosts configuration available to the running server process.
 
 ---
 
@@ -390,10 +580,11 @@ dataplatform-modern-dbt/
 │   │   ├── executor.py          # Task + pipeline execution engine (parallel)
 │   │   ├── scheduler.py         # APScheduler cron integration
 │   │   ├── auth.py              # JWT auth + RBAC
-│   │   ├── database.py          # SQLite user store
+│   │   ├── database.py          # SQLite/PostgreSQL metadata store
 │   │   ├── pipeline_generator.py# NLP entry point + legacy regex fallback
 │   │   ├── nlp_generator.py     # NLP engine (50+ verb mappings)
-│   │   ├── alerts.py            # Alert state management
+│   │   ├── alerts.py            # Email/webhook alert delivery
+│   │   ├── observability.py     # Metric collection, alert rules, incidents
 │   │   ├── catalog.py           # Data asset catalog
 │   │   ├── lineage.py           # Lineage tracking
 │   │   ├── costs.py             # Cost attribution

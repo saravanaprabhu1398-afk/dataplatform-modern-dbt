@@ -13,13 +13,16 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
 import asyncio
+import contextlib
 import uvicorn
 import logging
 import os
 import base64
 import hashlib
 import hmac
+import inspect
 import json
+import tempfile
 import time
 from dataplatform.core.config import load_config, PipelineConfig
 from dataplatform.core.dag import DAGBuilder
@@ -43,7 +46,32 @@ from dataplatform.core.database import (
     enqueue_run,
     set_run_status_in_queue,
     get_queue_runs,
+    get_queue_run,
     recover_orphaned_runs,
+    get_run_timeseries,
+    create_alert_rule as db_create_alert_rule,
+    create_deployment_connection as db_create_deployment_connection,
+    delete_alert_rule as db_delete_alert_rule,
+    delete_deployment_connection as db_delete_deployment_connection,
+    get_alert_rule as db_get_alert_rule,
+    list_alert_rules as db_list_alert_rules,
+    list_alert_incidents as db_list_alert_incidents,
+    create_notification_channel as db_create_notification_channel,
+    create_deployment as db_create_deployment,
+    delete_notification_channel as db_delete_notification_channel,
+    get_deployment as db_get_deployment,
+    get_deployment_connection as db_get_deployment_connection,
+    get_notification_channel as db_get_notification_channel,
+    ensure_default_deployment_connections,
+    list_deployment_connections as db_list_deployment_connections,
+    list_deployments as db_list_deployments,
+    list_notification_channels as db_list_notification_channels,
+    list_notification_deliveries as db_list_notification_deliveries,
+    rollback_deployment as db_rollback_deployment,
+    update_deployment_connection as db_update_deployment_connection,
+    update_notification_channel as db_update_notification_channel,
+    update_alert_rule as db_update_alert_rule,
+    update_alert_incident_status,
 )
 from dataplatform.core.lineage import build_lineage_graph, get_asset_lineage
 from dataplatform.core.metrics import generate_prometheus_text, _CONTENT_TYPE as _METRICS_CONTENT_TYPE
@@ -55,16 +83,35 @@ from dataplatform.core.semantic_metrics import list_metrics as list_metric_defin
 from dataplatform.core.costs import record_run_cost, get_cost_summary, get_team_cost_summary, get_pipeline_cost_history
 from dataplatform.core.catalog import search_assets, get_asset_detail, get_pipeline_catalog
 from dataplatform.core.templates import list_templates, get_template_content, use_template
+from dataplatform.core.execution_fabric import (
+    ENVIRONMENT_PROFILES as EXECUTION_ENVIRONMENT_PROFILES,
+    TARGET_IDS as EXECUTION_TARGET_IDS,
+    build_execution_fabric,
+    get_deployment_target,
+    infer_task_execution_layer,
+    list_deployment_targets,
+    list_environment_profiles as list_execution_environment_profiles,
+    list_execution_layers,
+    normalize_environment_profile,
+)
 from dataplatform.core.git_integration import (
+    commit_repo_changes as git_commit_repo_changes,
     register_remote,
     list_remotes,
     get_remote,
     delete_remote,
+    get_repo_diff as git_get_repo_diff,
+    get_repo_status as git_get_repo_status,
+    list_repo_tree as git_list_repo_tree,
+    pull_repo as git_pull_repo,
+    push_repo as git_push_repo,
+    read_repo_file as git_read_repo_file,
     test_connection as git_test_connection,
     push_pipeline as git_push_pipeline,
     pull_pipelines as git_pull_pipelines,
     get_status as git_get_status,
     get_push_log as git_get_push_log,
+    write_repo_file as git_write_repo_file,
 )
 from dataplatform.core.database import (
     save_trigger as db_save_trigger,
@@ -83,6 +130,15 @@ from dataplatform.core.auth import (
     has_permission,
     ROLES,
 )
+from dataplatform.core.runtime_guardrails import normalize_execution_mode, validate_runtime_settings
+from dataplatform.core.observability import (
+    build_observability_dashboard,
+    collect_platform_metrics,
+    ensure_default_alert_rules,
+    list_metric_catalog,
+    validate_alert_rule_fields,
+    validate_notification_channel_fields,
+)
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -97,18 +153,139 @@ logger = setup_logging(
 # FastAPI app
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Data Platform API", version="0.2.0")
+_observability_collector_task: Optional[asyncio.Task] = None
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _observability_auto_collect_enabled() -> bool:
+    return _env_bool("DATAPLATFORM_OBSERVABILITY_AUTO_COLLECT", True)
+
+
+def _observability_seed_rules_enabled() -> bool:
+    return _env_bool("DATAPLATFORM_OBSERVABILITY_SEED_DEFAULT_RULES", True)
+
+
+def _observability_notify_enabled() -> bool:
+    return _env_bool("DATAPLATFORM_OBSERVABILITY_NOTIFY", True)
+
+
+def _observability_interval_seconds() -> float:
+    try:
+        return max(5.0, float(os.getenv("DATAPLATFORM_OBSERVABILITY_INTERVAL_SECONDS", "60")))
+    except ValueError:
+        return 60.0
+
+
+def _observability_range_hours() -> int:
+    try:
+        return max(1, min(int(os.getenv("DATAPLATFORM_OBSERVABILITY_RANGE_HOURS", "24")), 720))
+    except ValueError:
+        return 24
+
+
+def _observability_initial_delay_seconds() -> float:
+    try:
+        return max(0.0, float(os.getenv("DATAPLATFORM_OBSERVABILITY_INITIAL_DELAY_SECONDS", "5")))
+    except ValueError:
+        return 5.0
+
+
+def _observability_collector_status() -> Dict[str, Any]:
+    return {
+        "auto_collect_enabled": _observability_auto_collect_enabled(),
+        "seed_default_rules_enabled": _observability_seed_rules_enabled(),
+        "notify_enabled": _observability_notify_enabled(),
+        "interval_seconds": _observability_interval_seconds(),
+        "range_hours": _observability_range_hours(),
+        "initial_delay_seconds": _observability_initial_delay_seconds(),
+        "running": bool(_observability_collector_task and not _observability_collector_task.done()),
+    }
+
+
+async def _observability_auto_collect_loop() -> None:
+    initial_delay = _observability_initial_delay_seconds()
+    interval = _observability_interval_seconds()
+    range_hours = _observability_range_hours()
+    notify = _observability_notify_enabled()
+
+    if initial_delay:
+        await asyncio.sleep(initial_delay)
+
+    while True:
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: collect_platform_metrics(
+                    range_hours=range_hours,
+                    store=True,
+                    evaluate=True,
+                    notify=notify,
+                ),
+            )
+            logger.info(
+                "Auto-collected %d observability metric sample(s); evaluated %d alert rule(s)",
+                result["sample_count"],
+                result["evaluation"]["rules_evaluated"],
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Observability auto-collector failed: %s", exc, exc_info=True)
+        await asyncio.sleep(interval)
 
 
 @app.on_event("startup")
 async def startup_event():
+    global _observability_collector_task
+    validate_runtime_settings(
+        username=AUTH_USERNAME,
+        password=AUTH_PASSWORD,
+        session_secret=SESSION_SECRET,
+        execution_mode=_execution_mode(),
+    )
     init_db()
-    recovered = recover_orphaned_runs()
-    if recovered:
-        logger.warning("Startup: marked %d orphaned run(s) as failed", recovered)
+    if _uses_embedded_worker():
+        recovered = recover_orphaned_runs()
+        if recovered:
+            logger.warning("Startup: marked %d orphaned run(s) as failed", recovered)
+    else:
+        logger.info("External execution mode enabled; API will enqueue runs only.")
+    ensure_default_deployment_connections()
     scheduler = get_scheduler()
     scheduler.start()
     restore_triggers_from_db(get_trigger_manager())
-    logger.info("Database initialised. Pipeline scheduler and triggers started.")
+    if _observability_seed_rules_enabled():
+        defaults = ensure_default_alert_rules(enabled=True)
+        if defaults["created_count"]:
+            logger.info("Seeded %d default observability alert rule(s)", defaults["created_count"])
+    if _observability_auto_collect_enabled():
+        if _observability_collector_task is None or _observability_collector_task.done():
+            _observability_collector_task = asyncio.create_task(_observability_auto_collect_loop())
+            logger.info(
+                "Observability auto-collector started (interval=%ss, range=%sh)",
+                _observability_interval_seconds(),
+                _observability_range_hours(),
+            )
+    else:
+        logger.info("Observability auto-collector disabled")
+    logger.info("Database initialised. Pipeline scheduler, triggers, and observability started.")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _observability_collector_task
+    if _observability_collector_task and not _observability_collector_task.done():
+        _observability_collector_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await _observability_collector_task
+    _observability_collector_task = None
 
 
 app.add_middleware(
@@ -138,6 +315,8 @@ SESSION_SECRET = os.getenv("DATAPLATFORM_SESSION_SECRET", "dpflow-dev-secret-cha
 PUBLIC_PATH_PREFIXES = ("/login", "/static", "/health")
 PUBLIC_PATHS = {"/login", "/health", "/metrics"}
 
+ENVIRONMENT_PROFILES: Dict[str, Dict[str, Any]] = EXECUTION_ENVIRONMENT_PROFILES
+
 if AUTH_USERNAME == "admin" and AUTH_PASSWORD == "admin":
     logger.warning(
         "Using default DATAPLATFORM_USERNAME/DATAPLATFORM_PASSWORD credentials. "
@@ -148,6 +327,14 @@ if SESSION_SECRET == "dpflow-dev-secret-change-me":
         "Using default DATAPLATFORM_SESSION_SECRET. "
         "Set a strong secret before production use."
     )
+
+
+def _execution_mode() -> str:
+    return normalize_execution_mode(os.getenv("DATAPLATFORM_EXECUTION_MODE", "embedded"))
+
+
+def _uses_embedded_worker() -> bool:
+    return _execution_mode() == "embedded"
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +467,434 @@ def update_pipeline_status(
     return save_run_status(pipeline_name, run_id, status, message, details)
 
 
+def _pending_task_runs(config: PipelineConfig, execution_order: List[str]) -> List[Dict[str, Any]]:
+    task_by_name = {task.name: task for task in config.tasks}
+    task_runs: List[Dict[str, Any]] = []
+    for task_name in execution_order:
+        task = task_by_name.get(task_name)
+        if not task:
+            continue
+        task_runs.append({
+            "task_name": task.name,
+            "status": "pending",
+            "plugin": task.plugin,
+            "type": task.type,
+            "operation": task.operation,
+            "execution_layer": task.execution_layer or infer_task_execution_layer(task),
+            "depends_on": task.depends_on or [],
+            "timeout_seconds": task.timeout,
+            "started_at": None,
+            "completed_at": None,
+            "duration_seconds": None,
+            "attempts": 0,
+            "max_attempts": task.retries + 1,
+            "retry_count": 0,
+            "attempt_history": [],
+            "error": None,
+        })
+    return task_runs
+
+
+def _fallback_task_runs(
+    tasks: Dict[str, Any],
+    execution_waves: List[List[str]],
+    results: Dict[str, bool],
+    errors: Dict[str, str],
+) -> List[Dict[str, Any]]:
+    task_runs: List[Dict[str, Any]] = []
+    for task_name in [name for wave in execution_waves for name in wave]:
+        task = tasks.get(task_name)
+        reported = task_name in results
+        success = results.get(task_name)
+        status = "success" if success is True else "failed" if success is False else "skipped"
+        task_runs.append({
+            "task_name": task_name,
+            "status": status if reported else "skipped",
+            "plugin": getattr(task, "plugin", None),
+            "type": getattr(task, "type", None),
+            "operation": getattr(task, "operation", None),
+            "execution_layer": infer_task_execution_layer(task) if task else None,
+            "depends_on": getattr(task, "depends_on", None) or [],
+            "timeout_seconds": getattr(task, "timeout", None),
+            "started_at": None,
+            "completed_at": None,
+            "duration_seconds": None,
+            "attempts": 1 if reported else 0,
+            "max_attempts": getattr(task, "retries", 0) + 1 if task else None,
+            "retry_count": 0,
+            "attempt_history": [],
+            "error": errors.get(task_name),
+        })
+    return task_runs
+
+
+def _execute_parallel_with_task_runs(
+    executor: Any,
+    *,
+    tasks: Dict[str, Any],
+    execution_waves: List[List[str]],
+    config: Dict[str, Any],
+    pipeline_name: str,
+    run_id: str,
+    max_workers: Optional[int] = None,
+) -> tuple[bool, Dict[str, bool], Dict[str, str], List[Dict[str, Any]]]:
+    kwargs = {
+        "tasks": tasks,
+        "execution_waves": execution_waves,
+        "config": config,
+        "pipeline_name": pipeline_name,
+        "run_id": run_id,
+    }
+    try:
+        signature = inspect.signature(executor.execute_pipeline_parallel)
+        parameters = signature.parameters
+        supports_task_runs = "return_task_runs" in parameters
+        if max_workers is not None and "max_workers" in parameters:
+            kwargs["max_workers"] = max_workers
+    except (TypeError, ValueError):
+        supports_task_runs = False
+
+    if supports_task_runs:
+        success, results, errors, task_runs = executor.execute_pipeline_parallel(
+            **kwargs,
+            return_task_runs=True,
+        )
+    else:
+        success, results, errors = executor.execute_pipeline_parallel(**kwargs)
+        task_runs = _fallback_task_runs(tasks, execution_waves, results, errors)
+
+    return success, results, errors, task_runs
+
+
+def _normalize_environment_profile(profile_id: Optional[str]) -> Dict[str, Any]:
+    return normalize_environment_profile(profile_id)
+
+
+def _select_environment_profile(config: PipelineConfig, requested_profile: Optional[str]) -> Dict[str, Any]:
+    configured = config.execution.profile if config.execution and config.execution.profile else None
+    return _normalize_environment_profile(requested_profile or configured or "local")
+
+
+def _serialize_config_snapshot(config: PipelineConfig) -> str:
+    """Return a stable text snapshot when the YAML file is not directly readable."""
+    if hasattr(config, "model_dump"):
+        return json.dumps(config.model_dump(exclude_none=True), sort_keys=True, default=str)
+    return json.dumps(getattr(config, "__dict__", {}), sort_keys=True, default=str)
+
+
+def _read_config_snapshot(config_path: str, config: PipelineConfig) -> str:
+    path = Path(config_path)
+    if path.exists() and path.is_file():
+        return path.read_text(encoding="utf-8")
+    configured_raw = getattr(config, "file_path", "") or ""
+    configured_path = Path(configured_raw) if configured_raw else None
+    if configured_path and configured_path.exists() and configured_path.is_file():
+        return configured_path.read_text(encoding="utf-8")
+    return _serialize_config_snapshot(config)
+
+
+def _resolve_requested_target(target_id: Optional[str], default_target: Dict[str, Any]) -> Dict[str, Any]:
+    if not target_id:
+        return default_target
+    normalized = target_id.strip().lower().replace("-", "_")
+    if normalized not in EXECUTION_TARGET_IDS:
+        raise HTTPException(status_code=400, detail=f"Unknown deployment target '{target_id}'")
+    return get_deployment_target(normalized)
+
+
+ALLOWED_CONNECTION_STATUSES = {"connected", "disconnected", "unknown"}
+
+
+def _normalize_connection_payload(fields: Dict[str, Any], partial: bool = False) -> Dict[str, Any]:
+    payload = {key: value for key, value in fields.items() if value is not None}
+    if not partial:
+        for key in ("name", "target_id"):
+            if not str(payload.get(key, "")).strip():
+                raise ValueError(f"{key} is required")
+
+    if "target_id" in payload:
+        target_id = str(payload["target_id"]).strip().lower().replace("-", "_")
+        if target_id not in EXECUTION_TARGET_IDS:
+            raise ValueError(f"Unknown deployment target '{payload['target_id']}'")
+        payload["target_id"] = target_id
+
+    if "status" in payload:
+        status = str(payload["status"]).strip().lower().replace("-", "_")
+        if status not in ALLOWED_CONNECTION_STATUSES:
+            raise ValueError("status must be connected, disconnected, or unknown")
+        payload["status"] = status
+
+    for key in ("name", "provider", "endpoint", "region", "namespace", "credentials_ref"):
+        if key in payload and payload[key] is not None:
+            payload[key] = str(payload[key]).strip()
+    if "provider" not in payload or not payload.get("provider"):
+        payload["provider"] = payload.get("target_id", "manual")
+    if "labels" in payload and not isinstance(payload["labels"], dict):
+        raise ValueError("labels must be an object")
+    return payload
+
+
+def _resolve_deployment_connection(
+    connection_id: Optional[str],
+    target: Dict[str, Any],
+    warnings: List[str],
+) -> Optional[Dict[str, Any]]:
+    if not connection_id:
+        return None
+    connection = db_get_deployment_connection(connection_id)
+    if connection is None:
+        raise HTTPException(status_code=404, detail=f"Deployment connection '{connection_id}' not found")
+    if connection["target_id"] != target["id"]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Connection '{connection_id}' belongs to target '{connection['target_id']}', "
+                f"not '{target['id']}'"
+            ),
+        )
+    if connection.get("status") != "connected":
+        warnings.append(
+            f"Selected connection '{connection['name']}' is marked {connection.get('status', 'unknown')}."
+        )
+    return connection
+
+
+def _pipeline_validation_payload(
+    config_path: str,
+    environment_profile: Optional[str] = None,
+    target_id: Optional[str] = None,
+    connection_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    errors: List[str] = []
+    warnings: List[str] = []
+    task_results: List[Dict[str, Any]] = []
+
+    try:
+        config = load_config(config_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Config not found: {config_path}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid config: {exc}")
+
+    execution_waves: List[List[str]] = []
+    try:
+        dag_builder = DAGBuilder(config.tasks)
+        dag_builder.build()
+        execution_waves = dag_builder.get_execution_waves()
+    except ValueError as exc:
+        errors.append(f"DAG error: {exc}")
+
+    task_executor = TaskExecutor()
+    for task in config.tasks:
+        try:
+            task_executor.load_plugin(task.plugin, task.type)
+            task_results.append({
+                "task_name": task.name,
+                "plugin": task.plugin,
+                "plugin_type": task.type,
+                "plugin_loadable": True,
+                "execution_layer": task.execution_layer or infer_task_execution_layer(task),
+            })
+        except Exception as exc:
+            error_msg = str(exc)
+            errors.append(f"Task '{task.name}': {error_msg}")
+            task_results.append({
+                "task_name": task.name,
+                "plugin": task.plugin,
+                "plugin_type": task.type,
+                "plugin_loadable": False,
+                "execution_layer": task.execution_layer or infer_task_execution_layer(task),
+                "error": error_msg,
+            })
+
+    profile = _select_environment_profile(config, environment_profile)
+    execution_fabric = build_execution_fabric(config, profile["id"], execution_waves)
+    warnings.extend(execution_fabric.get("warnings", []))
+    selected_target = _resolve_requested_target(target_id, execution_fabric["deployment_target"])
+    if selected_target["id"] != execution_fabric["deployment_target"]["id"]:
+        warnings.append("Requested deployment target overrides the selected environment profile target.")
+        execution_fabric = {
+            **execution_fabric,
+            "deployment_target": selected_target,
+            "warnings": [*execution_fabric.get("warnings", []), warnings[-1]],
+        }
+    connection = _resolve_deployment_connection(connection_id, selected_target, warnings)
+
+    snapshot = _read_config_snapshot(config_path, config)
+    version_hash = hashlib.sha256(snapshot.encode("utf-8")).hexdigest()
+    validation_summary = {
+        "is_valid": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "task_count": len(config.tasks),
+        "task_results": task_results,
+    }
+
+    return {
+        "config": config,
+        "config_path": config_path,
+        "snapshot": snapshot,
+        "version_hash": version_hash,
+        "pipeline_name": config.pipeline_name,
+        "profile": profile,
+        "target": selected_target,
+        "connection": connection,
+        "execution_fabric": execution_fabric,
+        "execution_waves": execution_waves,
+        "validation": validation_summary,
+    }
+
+
+def _version_id_for_hash(pipeline_name: str, version_hash: str, limit: int = 200) -> Optional[str]:
+    for version in list_versions(pipeline_name, limit=limit):
+        if version.get("version_hash") == version_hash:
+            return version.get("version_id")
+    return None
+
+
+def _build_deployment_manifest(payload: Dict[str, Any], version_id: Optional[str]) -> Dict[str, Any]:
+    return {
+        "pipeline_name": payload["pipeline_name"],
+        "config_path": payload["config_path"],
+        "version_id": version_id,
+        "version_hash": payload["version_hash"],
+        "environment_profile": payload["profile"]["id"],
+        "target": payload["target"],
+        "connection": payload.get("connection"),
+        "execution_layers": [
+            {
+                "id": layer["id"],
+                "name": layer["name"],
+                "task_count": layer["task_count"],
+                "enabled": layer["enabled"],
+            }
+            for layer in payload["execution_fabric"].get("layers", [])
+        ],
+        "task_count": payload["validation"]["task_count"],
+        "validated": payload["validation"]["is_valid"],
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+def _max_parallel_tasks(config: PipelineConfig) -> int:
+    if config.execution and config.execution.max_parallel_tasks:
+        return config.execution.max_parallel_tasks
+    return 4
+
+
+def _runtime_context(
+    *,
+    config: PipelineConfig,
+    parameters: Optional[Dict[str, Any]] = None,
+    environment_profile: Optional[str] = None,
+) -> Dict[str, Any]:
+    profile = _select_environment_profile(config, environment_profile)
+    fabric = build_execution_fabric(config, profile["id"])
+    return {
+        "file_path": config.file_path,
+        "runtime_parameters": parameters or {},
+        "parameters": parameters or {},
+        "environment_profile": profile["id"],
+        "environment": profile,
+        "deployment_target": fabric["deployment_target"],
+        "execution_fabric": fabric,
+    }
+
+
+def _run_detail_context(
+    *,
+    execution_order: List[str],
+    task_runs: List[Dict[str, Any]],
+    parameters: Optional[Dict[str, Any]] = None,
+    environment_profile: Optional[str] = None,
+    config: Optional[PipelineConfig] = None,
+    execution_waves: Optional[List[List[str]]] = None,
+    repair: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    profile = _select_environment_profile(config, environment_profile) if config else _normalize_environment_profile(environment_profile)
+    fabric = build_execution_fabric(config, profile["id"], execution_waves) if config else None
+    details: Dict[str, Any] = {
+        "execution_order": execution_order,
+        "task_runs": task_runs,
+        "runtime_parameters": parameters or {},
+        "environment_profile": profile["id"],
+        "environment": profile,
+    }
+    if fabric:
+        details["deployment_target"] = fabric["deployment_target"]
+        details["execution_fabric"] = fabric
+    if repair:
+        details["repair"] = repair
+    return details
+
+
+def _resolve_config_path_for_run(run_record: Dict[str, Any]) -> str:
+    queue_record = get_queue_run(run_record["run_id"])
+    if queue_record and queue_record.get("config_path"):
+        config_path = Path(queue_record["config_path"])
+        if config_path.exists():
+            return str(config_path)
+
+    pipelines, _, _, _ = _discover_pipeline_files()
+    matches = [
+        pipeline for pipeline in pipelines
+        if pipeline.get("display_name") == run_record.get("pipeline_name")
+    ]
+    if not matches:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not locate config for pipeline '{run_record.get('pipeline_name')}'",
+        )
+    return matches[0]["file_path"]
+
+
+def _first_failed_task(run_record: Dict[str, Any]) -> Optional[str]:
+    details = run_record.get("details") or {}
+    for task_run in details.get("task_runs") or []:
+        if task_run.get("status") == "failed" and task_run.get("task_name"):
+            return task_run["task_name"]
+    errors = details.get("errors") or {}
+    if isinstance(errors, dict) and errors:
+        return next(iter(errors.keys()))
+    results = details.get("results") or {}
+    if isinstance(results, dict):
+        for task_name, ok in results.items():
+            if ok is False:
+                return task_name
+    return None
+
+
+def _repair_execution_waves(
+    config: PipelineConfig,
+    from_task: str,
+) -> List[List[str]]:
+    task_names = {task.name for task in config.tasks}
+    if from_task not in task_names:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task '{from_task}' was not found in pipeline '{config.pipeline_name}'",
+        )
+
+    selected = {from_task}
+    changed = True
+    while changed:
+        changed = False
+        for task in config.tasks:
+            dependencies = set(task.depends_on or [])
+            if task.name not in selected and dependencies.intersection(selected):
+                selected.add(task.name)
+                changed = True
+
+    dag_builder = DAGBuilder(config.tasks)
+    dag_builder.build()
+    full_waves = dag_builder.get_execution_waves()
+    repair_waves = [
+        [task_name for task_name in wave if task_name in selected]
+        for wave in full_waves
+    ]
+    return [wave for wave in repair_waves if wave]
+
+
 # ---------------------------------------------------------------------------
 # Pydantic request / response models
 # ---------------------------------------------------------------------------
@@ -287,6 +902,16 @@ def update_pipeline_status(
 class PipelineRunRequest(BaseModel):
     config_path: str
     dry_run: bool = False
+    parameters: Optional[Dict[str, Any]] = None
+    environment_profile: Optional[str] = None
+
+
+class RepairRunRequest(BaseModel):
+    from_task: Optional[str] = None
+
+
+class VersionRestoreRequest(BaseModel):
+    config_path: Optional[str] = None
 
 
 class PipelineScheduleRequest(BaseModel):
@@ -325,6 +950,7 @@ class PipelineResponse(BaseModel):
     pipeline_name: str
     status: str
     message: str
+    run_id: Optional[str] = None
     execution_order: Optional[List[str]] = None
     results: Optional[Dict[str, bool]] = None
 
@@ -347,11 +973,53 @@ class PipelineValidationRequest(BaseModel):
     config_path: str
 
 
+class DeploymentValidateRequest(BaseModel):
+    config_path: str
+    environment_profile: Optional[str] = None
+    target_id: Optional[str] = None
+    connection_id: Optional[str] = None
+
+
+class DeploymentCreateRequest(DeploymentValidateRequest):
+    version_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class DeploymentRollbackRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class DeploymentConnectionCreateRequest(BaseModel):
+    connection_id: Optional[str] = None
+    name: str
+    target_id: str
+    provider: Optional[str] = None
+    endpoint: Optional[str] = None
+    region: Optional[str] = None
+    namespace: Optional[str] = None
+    status: str = "connected"
+    credentials_ref: Optional[str] = None
+    labels: Optional[Dict[str, Any]] = None
+
+
+class DeploymentConnectionUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    target_id: Optional[str] = None
+    provider: Optional[str] = None
+    endpoint: Optional[str] = None
+    region: Optional[str] = None
+    namespace: Optional[str] = None
+    status: Optional[str] = None
+    credentials_ref: Optional[str] = None
+    labels: Optional[Dict[str, Any]] = None
+
+
 class TaskValidationResult(BaseModel):
     task_name: str
     plugin: str
     plugin_type: str
     plugin_loadable: bool
+    execution_layer: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -363,6 +1031,7 @@ class PipelineValidationResponse(BaseModel):
     task_results: List[TaskValidationResult]
     errors: List[str]
     warnings: List[str]
+    execution_fabric: Optional[Dict[str, Any]] = None
 
 
 # Admin user management models
@@ -411,11 +1080,20 @@ def _discover_pipeline_files():
     for yaml_file in sorted(yaml_files_set):
         try:
             config = load_config(str(yaml_file))
+            profile = _select_environment_profile(config, None)
+            fabric = build_execution_fabric(config, profile["id"])
             pipelines.append({
                 "name": yaml_file.name,
                 "display_name": config.pipeline_name,
                 "description": getattr(config, "description", "No description"),
                 "team": getattr(config, "team", None),
+                "execution_profile": profile["id"],
+                "deployment_target": fabric["deployment_target"],
+                "execution_layers": [
+                    {"id": layer["id"], "name": layer["name"], "task_count": layer["task_count"]}
+                    for layer in fabric["layers"]
+                    if layer["task_count"]
+                ],
                 "file_path": str(yaml_file),
                 "task_count": len(config.tasks),
                 "status": "loaded",
@@ -442,8 +1120,7 @@ async def login_page(request: Request):
     if _is_authenticated(request):
         return RedirectResponse(url="/", status_code=303)
     login_file = Path(__file__).resolve().parent.parent / "static" / "login.html"
-    if login_file.exists():
-        return FileResponse(str(login_file), media_type="text/html")
+    if login_file.exists(): return _page(login_file)
     raise HTTPException(status_code=404, detail=f"Login page not found at {login_file}")
 
 
@@ -477,11 +1154,18 @@ async def logout():
 # Page routes
 # ---------------------------------------------------------------------------
 
+_NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+
+
+def _page(path: Path) -> FileResponse:
+    return FileResponse(str(path), media_type="text/html", headers=_NO_CACHE)
+
+
 @app.get("/")
 async def root():
     landing_page = Path(__file__).resolve().parent.parent / "static" / "landing.html"
     if landing_page.exists():
-        return FileResponse(str(landing_page), media_type="text/html")
+        return _page(landing_page)
     return {
         "message": "Data Platform API",
         "version": "0.2.0",
@@ -495,7 +1179,7 @@ async def root():
 async def dashboard():
     static_index = Path(__file__).resolve().parent.parent / "static" / "index.html"
     if static_index.exists():
-        return FileResponse(str(static_index), media_type="text/html")
+        return _page(static_index)
     raise HTTPException(status_code=404, detail=f"Dashboard not found at {static_index}")
 
 
@@ -503,7 +1187,7 @@ async def dashboard():
 async def generator_page():
     generator_index = Path(__file__).resolve().parent.parent / "static" / "generator.html"
     if generator_index.exists():
-        return FileResponse(str(generator_index), media_type="text/html")
+        return _page(generator_index)
     raise HTTPException(status_code=404, detail=f"Generator page not found at {generator_index}")
 
 
@@ -517,6 +1201,8 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "version": "0.2.0",
+        "execution_mode": _execution_mode(),
+        "observability": _observability_collector_status(),
     }
 
 
@@ -529,8 +1215,324 @@ async def get_info():
         "workspace_exists": workspace_root.exists(),
         "static_dir": str(Path(__file__).parent.parent / "static"),
         "static_exists": (Path(__file__).parent.parent / "static").exists(),
+        "execution_mode": _execution_mode(),
+        "observability": _observability_collector_status(),
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
+
+
+@app.get("/environment-profiles")
+async def list_environment_profiles(request: Request):
+    _require_permission(request, "read")
+    return {
+        "profiles": list_execution_environment_profiles(),
+        "layers": list_execution_layers(),
+        "deployment_targets": list_deployment_targets(),
+    }
+
+
+@app.get("/execution-fabric")
+async def get_execution_fabric_catalog(request: Request):
+    _require_permission(request, "read")
+    return {
+        "layers": list_execution_layers(),
+        "deployment_targets": list_deployment_targets(),
+        "profiles": list_execution_environment_profiles(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Deployment control plane
+# ---------------------------------------------------------------------------
+
+@app.get("/deployment-connections")
+async def list_deployment_connections_endpoint(
+    request: Request,
+    target_id: Optional[str] = None,
+    status: Optional[str] = None,
+    connected_only: bool = False,
+):
+    """Return selectable target instances such as cloud accounts or Kubernetes clusters."""
+    _require_permission(request, "read")
+    init_db()
+    ensure_default_deployment_connections()
+    connections = db_list_deployment_connections(
+        target_id=target_id,
+        status=status,
+        connected_only=connected_only,
+    )
+    return {"connections": connections, "total": len(connections)}
+
+
+@app.post("/deployment-connections", status_code=201)
+async def create_deployment_connection_endpoint(
+    request_body: DeploymentConnectionCreateRequest,
+    request: Request,
+):
+    """Register a deployment target instance."""
+    _require_permission(request, "save")
+    try:
+        init_db()
+        payload = _normalize_connection_payload(request_body.model_dump(), partial=False)
+        payload.pop("connection_id", None)
+        connection_id = (request_body.connection_id or str(_uuid.uuid4())).strip()
+        if db_get_deployment_connection(connection_id):
+            raise HTTPException(status_code=409, detail=f"Deployment connection '{connection_id}' already exists")
+        connection = db_create_deployment_connection(connection_id=connection_id, **payload)
+        return {"connection": connection}
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to create deployment connection: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.patch("/deployment-connections/{connection_id}")
+async def update_deployment_connection_endpoint(
+    connection_id: str,
+    request_body: DeploymentConnectionUpdateRequest,
+    request: Request,
+):
+    """Patch a deployment target instance."""
+    _require_permission(request, "save")
+    try:
+        init_db()
+        payload = _normalize_connection_payload(request_body.model_dump(), partial=True)
+        connection = db_update_deployment_connection(connection_id, payload)
+        if connection is None:
+            raise HTTPException(status_code=404, detail=f"Deployment connection '{connection_id}' not found")
+        return {"connection": connection}
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to update deployment connection '%s': %s", connection_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/deployment-connections/{connection_id}")
+async def delete_deployment_connection_endpoint(connection_id: str, request: Request):
+    """Delete a deployment target instance."""
+    _require_permission(request, "save")
+    init_db()
+    if not db_delete_deployment_connection(connection_id):
+        raise HTTPException(status_code=404, detail=f"Deployment connection '{connection_id}' not found")
+    return {"deleted": True, "connection_id": connection_id}
+
+
+@app.post("/deployments/validate")
+async def validate_deployment_endpoint(request_body: DeploymentValidateRequest, request: Request):
+    """Validate a pipeline for deployment to a selected profile/target."""
+    _require_permission(request, "validate")
+    payload = _pipeline_validation_payload(
+        request_body.config_path,
+        request_body.environment_profile,
+        request_body.target_id,
+        request_body.connection_id,
+    )
+    manifest = _build_deployment_manifest(payload, version_id=None)
+    return {
+        "pipeline_name": payload["pipeline_name"],
+        "config_path": payload["config_path"],
+        "profile": payload["profile"],
+        "target": payload["target"],
+        "connection": payload["connection"],
+        "validation": payload["validation"],
+        "execution_fabric": payload["execution_fabric"],
+        "manifest": manifest,
+    }
+
+
+@app.post("/deployments/deploy", status_code=201)
+async def create_deployment_endpoint(request_body: DeploymentCreateRequest, request: Request):
+    """Create a validated deployment record for a pipeline artifact."""
+    user = _require_permission(request, "save")
+    actor = user.get("username")
+    init_db()
+    payload = _pipeline_validation_payload(
+        request_body.config_path,
+        request_body.environment_profile,
+        request_body.target_id,
+        request_body.connection_id,
+    )
+
+    version_id = request_body.version_id
+    if version_id:
+        version_content = get_version_content(payload["pipeline_name"], version_id)
+        if version_content is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version '{version_id}' not found for pipeline '{payload['pipeline_name']}'",
+            )
+        version_hash = hashlib.sha256(version_content.encode("utf-8")).hexdigest()
+        if version_hash != payload["version_hash"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Selected version does not match the current config snapshot",
+            )
+
+    manifest = _build_deployment_manifest(payload, version_id=version_id)
+    deployment_id = str(_uuid.uuid4())
+
+    if not payload["validation"]["is_valid"]:
+        deployment = db_create_deployment(
+            deployment_id=deployment_id,
+            pipeline_name=payload["pipeline_name"],
+            config_path=payload["config_path"],
+            version_id=version_id,
+            version_hash=payload["version_hash"],
+            environment_profile=payload["profile"]["id"],
+            target_id=payload["target"]["id"],
+            target_name=payload["target"]["name"],
+            connection_id=(payload.get("connection") or {}).get("connection_id"),
+            connection_name=(payload.get("connection") or {}).get("name"),
+            connection_provider=(payload.get("connection") or {}).get("provider"),
+            status="failed",
+            actor=actor,
+            notes=request_body.notes,
+            validation_summary=payload["validation"],
+            execution_fabric=payload["execution_fabric"],
+            manifest=manifest,
+            active=False,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Deployment validation failed",
+                "deployment": deployment,
+                "validation": payload["validation"],
+            },
+        )
+
+    if not version_id:
+        try:
+            version_id = save_version(payload["pipeline_name"], payload["snapshot"], saved_by=actor)
+        except Exception as exc:
+            logger.warning("Deployment version snapshot failed for '%s': %s", payload["pipeline_name"], exc)
+            version_id = None
+        if not version_id:
+            version_id = _version_id_for_hash(payload["pipeline_name"], payload["version_hash"])
+        manifest = _build_deployment_manifest(payload, version_id=version_id)
+
+    deployment = db_create_deployment(
+        deployment_id=deployment_id,
+        pipeline_name=payload["pipeline_name"],
+        config_path=payload["config_path"],
+        version_id=version_id,
+        version_hash=payload["version_hash"],
+        environment_profile=payload["profile"]["id"],
+        target_id=payload["target"]["id"],
+        target_name=payload["target"]["name"],
+        connection_id=(payload.get("connection") or {}).get("connection_id"),
+        connection_name=(payload.get("connection") or {}).get("name"),
+        connection_provider=(payload.get("connection") or {}).get("provider"),
+        status="deployed",
+        actor=actor,
+        notes=request_body.notes,
+        validation_summary=payload["validation"],
+        execution_fabric=payload["execution_fabric"],
+        manifest=manifest,
+        active=True,
+    )
+
+    try:
+        append_audit_event(
+            "deployment",
+            "deployed",
+            actor=actor,
+            resource=payload["pipeline_name"],
+            details={
+                "deployment_id": deployment_id,
+                "environment_profile": payload["profile"]["id"],
+                "target_id": payload["target"]["id"],
+                "connection_id": (payload.get("connection") or {}).get("connection_id"),
+                "version_id": version_id,
+            },
+        )
+    except Exception as _ae:
+        logger.warning("Audit log failed (deployment deployed): %s", _ae)
+
+    return {
+        "deployment": deployment,
+        "validation": payload["validation"],
+        "manifest": manifest,
+    }
+
+
+@app.get("/deployments/records")
+async def list_deployments_endpoint(
+    request: Request,
+    pipeline_name: Optional[str] = None,
+    environment_profile: Optional[str] = None,
+    target_id: Optional[str] = None,
+    connection_id: Optional[str] = None,
+    status: Optional[str] = None,
+    active_only: bool = False,
+    limit: int = 100,
+):
+    """Return deployment history."""
+    _require_permission(request, "read")
+    init_db()
+    safe_limit = max(1, min(limit, 500))
+    deployments = db_list_deployments(
+        pipeline_name=pipeline_name,
+        environment_profile=environment_profile,
+        target_id=target_id,
+        connection_id=connection_id,
+        status=status,
+        active_only=active_only,
+        limit=safe_limit,
+    )
+    return {"deployments": deployments, "total": len(deployments)}
+
+
+@app.get("/deployments/records/{deployment_id}")
+async def get_deployment_endpoint(deployment_id: str, request: Request):
+    """Return one deployment record."""
+    _require_permission(request, "read")
+    init_db()
+    deployment = db_get_deployment(deployment_id)
+    if deployment is None:
+        raise HTTPException(status_code=404, detail=f"Deployment '{deployment_id}' not found")
+    return {"deployment": deployment}
+
+
+@app.post("/deployments/records/{deployment_id}/rollback")
+async def rollback_deployment_endpoint(
+    deployment_id: str,
+    request_body: DeploymentRollbackRequest,
+    request: Request,
+):
+    """Roll back an active deployment to the previous successful deployment."""
+    user = _require_permission(request, "save")
+    actor = user.get("username")
+    init_db()
+    try:
+        result = db_rollback_deployment(deployment_id, actor=actor)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Deployment '{deployment_id}' not found")
+
+    try:
+        append_audit_event(
+            "deployment",
+            "rolled_back",
+            actor=actor,
+            resource=(result.get("rolled_back") or {}).get("pipeline_name"),
+            details={
+                "deployment_id": deployment_id,
+                "restored_deployment_id": (result.get("restored") or {}).get("deployment_id"),
+                "reason": request_body.reason,
+            },
+        )
+    except Exception as _ae:
+        logger.warning("Audit log failed (deployment rolled_back): %s", _ae)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -615,55 +1617,18 @@ async def save_pipeline(request_body: PipelineSaveRequest, request: Request):
 async def validate_pipeline(request_body: PipelineValidationRequest, request: Request):
     _require_permission(request, "validate")
 
-    errors: List[str] = []
-    warnings: List[str] = []
-    task_results: List[TaskValidationResult] = []
-    pipeline_name = "unknown"
-
-    try:
-        config = load_config(request_body.config_path)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Config not found: {request_body.config_path}")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid config: {exc}")
-
-    pipeline_name = config.pipeline_name
-
-    try:
-        dag_builder = DAGBuilder(config.tasks)
-        dag_builder.build()
-    except ValueError as exc:
-        errors.append(f"DAG error: {exc}")
-
-    task_executor = TaskExecutor()
-    for task in config.tasks:
-        try:
-            task_executor.load_plugin(task.plugin, task.type)
-            task_results.append(TaskValidationResult(
-                task_name=task.name,
-                plugin=task.plugin,
-                plugin_type=task.type,
-                plugin_loadable=True,
-            ))
-        except Exception as exc:
-            error_msg = str(exc)
-            errors.append(f"Task '{task.name}': {error_msg}")
-            task_results.append(TaskValidationResult(
-                task_name=task.name,
-                plugin=task.plugin,
-                plugin_type=task.type,
-                plugin_loadable=False,
-                error=error_msg,
-            ))
+    payload = _pipeline_validation_payload(request_body.config_path)
+    validation = payload["validation"]
 
     return PipelineValidationResponse(
         config_path=request_body.config_path,
-        pipeline_name=pipeline_name,
-        is_valid=len(errors) == 0,
-        task_count=len(config.tasks),
-        task_results=task_results,
-        errors=errors,
-        warnings=warnings,
+        pipeline_name=payload["pipeline_name"],
+        is_valid=validation["is_valid"],
+        task_count=validation["task_count"],
+        task_results=[TaskValidationResult(**result) for result in validation["task_results"]],
+        errors=validation["errors"],
+        warnings=validation["warnings"],
+        execution_fabric=payload["execution_fabric"],
     )
 
 
@@ -714,6 +1679,11 @@ async def dry_run_pipeline(request_body: PipelineRunRequest, request: Request):
             "task_count": len(config.tasks),
             "execution_order": execution_order,
             "execution_waves": execution_waves,
+            "execution_fabric": build_execution_fabric(
+                config,
+                _select_environment_profile(config, request_body.environment_profile)["id"],
+                execution_waves,
+            ),
             "tasks": task_previews,
             "plugin_errors": plugin_errors,
         }
@@ -730,16 +1700,26 @@ async def run_pipeline(request_body: PipelineRunRequest, request: Request):
         dag_builder = DAGBuilder(config.tasks)
         dag_builder.build()
         execution_order = dag_builder.get_execution_order()
+        execution_waves = dag_builder.get_execution_waves()
 
         run_id = str(_uuid.uuid4())
         actor = _get_request_username(request)
+        environment = _select_environment_profile(config, request_body.environment_profile)
+        parameters = request_body.parameters or {}
 
         # Write to both run history (legacy) and persistent queue
         update_pipeline_status(
             config.pipeline_name,
             "queued",
             "Pipeline queued for execution",
-            {"execution_order": execution_order},
+            _run_detail_context(
+                execution_order=execution_order,
+                task_runs=_pending_task_runs(config, execution_order),
+                parameters=parameters,
+                environment_profile=environment["id"],
+                config=config,
+                execution_waves=execution_waves,
+            ),
             run_id=run_id,
         )
         enqueue_run(run_id, config.pipeline_name, request_body.config_path, actor=actor)
@@ -749,17 +1729,36 @@ async def run_pipeline(request_body: PipelineRunRequest, request: Request):
                 "pipeline", "run_queued",
                 actor=actor,
                 resource=config.pipeline_name,
-                details={"run_id": run_id},
+                details={
+                    "run_id": run_id,
+                    "environment_profile": environment["id"],
+                    "runtime_parameters": parameters,
+                },
             )
         except Exception as _ae:
             logger.warning("Audit log failed (run_queued): %s", _ae)
 
-        get_worker_pool().submit(run_id, execute_pipeline_background, config, run_id)
+        if _uses_embedded_worker():
+            get_worker_pool().submit(
+                run_id,
+                execute_pipeline_background,
+                config,
+                run_id,
+                runtime_parameters=parameters,
+                environment_profile=environment["id"],
+            )
+        else:
+            logger.info(
+                "Run %s queued for external worker execution (pipeline=%s)",
+                run_id,
+                config.pipeline_name,
+            )
 
         return PipelineResponse(
             pipeline_name=config.pipeline_name,
             status="queued",
             message="Pipeline queued for execution",
+            run_id=run_id,
             execution_order=execution_order,
         )
     except Exception as e:
@@ -791,14 +1790,23 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
         execution_order = [t for wave in execution_waves for t in wave]
 
         run_id = str(_uuid.uuid4())
+        environment = _select_environment_profile(config, request_body.environment_profile)
+        parameters = request_body.parameters or {}
         t0 = time.time()
         executor = PipelineExecutor()
-        success, task_results, errors = executor.execute_pipeline_parallel(
-            tasks={task.name: task for task in config.tasks},
+        tasks_by_name = {task.name: task for task in config.tasks}
+        success, task_results, errors, task_runs = _execute_parallel_with_task_runs(
+            executor,
+            tasks=tasks_by_name,
             execution_waves=execution_waves,
-            config={"file_path": config.file_path},
+            config=_runtime_context(
+                config=config,
+                parameters=parameters,
+                environment_profile=environment["id"],
+            ),
             pipeline_name=config.pipeline_name,
             run_id=run_id,
+            max_workers=_max_parallel_tasks(config),
         )
         duration = time.time() - t0
 
@@ -816,11 +1824,26 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
 
         status_value = "completed" if success else "failed"
         message = "Pipeline executed successfully" if success else "Pipeline failed"
+        run_details = _run_detail_context(
+            execution_order=execution_order,
+            task_runs=task_runs,
+            parameters=parameters,
+            environment_profile=environment["id"],
+            config=config,
+            execution_waves=execution_waves,
+        )
+        run_details.update({
+            "success": success,
+            "results": task_results,
+            "errors": errors,
+            "duration_seconds": round(duration, 2),
+            "sla_violated": sla_violated,
+        })
         update_pipeline_status(
             config.pipeline_name,
             status_value,
             message,
-            {"execution_order": execution_order, "success": success, "duration_seconds": round(duration, 2), "sla_violated": sla_violated},
+            run_details,
             run_id=run_id,
         )
 
@@ -832,6 +1855,7 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
             pipeline_name=config.pipeline_name,
             status=status_value,
             message=message,
+            run_id=run_id,
             execution_order=execution_order,
             results=results,
         )
@@ -851,7 +1875,18 @@ async def cancel_run(run_id: str, request: Request):
     existing = get_run_by_id(run_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"No run found with id '{run_id}'")
-    if not get_worker_pool().cancel(run_id):
+    queue_record = get_queue_run(run_id)
+    can_cancel_external = (
+        not _uses_embedded_worker()
+        and queue_record is not None
+        and queue_record.get("status") == "queued"
+    )
+    if _uses_embedded_worker() and not get_worker_pool().cancel(run_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Run cannot be cancelled — it is already running or has completed",
+        )
+    if not _uses_embedded_worker() and not can_cancel_external:
         raise HTTPException(
             status_code=409,
             detail="Run cannot be cancelled — it is already running or has completed",
@@ -859,6 +1894,86 @@ async def cancel_run(run_id: str, request: Request):
     save_run_status(existing["pipeline_name"], run_id, "cancelled", "Cancelled by user")
     set_run_status_in_queue(run_id, "cancelled")
     return {"run_id": run_id, "status": "cancelled"}
+
+
+@app.post("/run/{run_id}/repair", response_model=PipelineResponse)
+async def repair_run(run_id: str, request_body: RepairRunRequest, request: Request):
+    """Queue a repair run from the failed task or a selected task."""
+    _require_permission(request, "run")
+    existing = get_run_by_id(run_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"No run found with id '{run_id}'")
+
+    config_path = _resolve_config_path_for_run(existing)
+    config = load_config(config_path)
+    from_task = request_body.from_task or _first_failed_task(existing)
+    if not from_task:
+        raise HTTPException(
+            status_code=400,
+            detail="No failed task was found for this run. Select a task to repair from.",
+        )
+
+    execution_waves = _repair_execution_waves(config, from_task)
+    execution_order = [task_name for wave in execution_waves for task_name in wave]
+    repair_run_id = str(_uuid.uuid4())
+    actor = _get_request_username(request)
+
+    update_pipeline_status(
+        config.pipeline_name,
+        "queued",
+        f"Repair queued from task {from_task}",
+        _run_detail_context(
+            execution_order=execution_order,
+            task_runs=_pending_task_runs(config, execution_order),
+            config=config,
+            execution_waves=execution_waves,
+            repair={
+                "parent_run_id": run_id,
+                "from_task": from_task,
+            },
+        ),
+        run_id=repair_run_id,
+    )
+    enqueue_run(repair_run_id, config.pipeline_name, config_path, actor=actor)
+
+    try:
+        append_audit_event(
+            "pipeline",
+            "run_repair_queued",
+            actor=actor,
+            resource=config.pipeline_name,
+            details={
+                "run_id": repair_run_id,
+                "parent_run_id": run_id,
+                "from_task": from_task,
+            },
+        )
+    except Exception as _ae:
+        logger.warning("Audit log failed (run_repair_queued): %s", _ae)
+
+    if _uses_embedded_worker():
+        get_worker_pool().submit(
+            repair_run_id,
+            execute_pipeline_background,
+            config,
+            repair_run_id,
+            from_task,
+            run_id,
+        )
+    else:
+        logger.info(
+            "Repair run %s queued for external worker execution (pipeline=%s)",
+            repair_run_id,
+            config.pipeline_name,
+        )
+
+    return PipelineResponse(
+        pipeline_name=config.pipeline_name,
+        status="queued",
+        message=f"Repair queued from task {from_task}",
+        run_id=repair_run_id,
+        execution_order=execution_order,
+    )
 
 
 @app.get("/run/{run_id}/status")
@@ -871,6 +1986,7 @@ async def get_run_status_by_id(run_id: str, request: Request):
     pool = get_worker_pool()
     record["is_running"] = pool.is_running(run_id)
     record["is_pending"] = pool.is_pending(run_id)
+    record["execution_mode"] = _execution_mode()
     return record
 
 
@@ -893,7 +2009,7 @@ async def get_run_queue(
         for r in runs:
             r["in_memory_running"] = pool.is_running(r["run_id"])
             r["in_memory_pending"] = pool.is_pending(r["run_id"])
-        return {"runs": runs, "total": len(runs)}
+        return {"runs": runs, "total": len(runs), "execution_mode": _execution_mode()}
     except Exception as e:
         logger.error("Failed to get queue: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -968,9 +2084,10 @@ async def get_pipeline_status(config_path: Optional[str] = None, pipeline_name: 
 
 
 @app.get("/history/{pipeline_name}")
-async def get_pipeline_history(pipeline_name: str):
+async def get_pipeline_history(pipeline_name: str, limit: int = 12):
     try:
-        runs = get_run_history(pipeline_name, limit=5)
+        safe_limit = min(max(limit, 1), 50)
+        runs = get_run_history(pipeline_name, limit=safe_limit)
         return {
             "pipeline_name": pipeline_name,
             "runs": runs,
@@ -1024,6 +2141,7 @@ async def dashboard_summary():
 
             for run in history:
                 recent_runs.append({
+                    "run_id": run.get("run_id"),
                     "pipeline_name": pipeline_name,
                     "status": run.get("status"),
                     "message": run.get("message"),
@@ -1039,6 +2157,7 @@ async def dashboard_summary():
                 "last_status": latest_status.get("status") if latest_status else "never_run",
                 "last_message": latest_status.get("message") if latest_status else "No runs yet",
                 "last_updated_at": latest_status.get("updated_at") if latest_status else None,
+                "last_run_id": latest_status.get("run_id") if latest_status else None,
                 "run_count": len(history),
                 "is_scheduled": schedule_info is not None,
                 "next_run": schedule_info.get("next_run") if schedule_info else None,
@@ -1239,7 +2358,14 @@ def _dispatch_error_handlers(
 # Background execution helper
 # ---------------------------------------------------------------------------
 
-def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
+def execute_pipeline_background(
+    config: PipelineConfig,
+    run_id: str,
+    repair_from_task: Optional[str] = None,
+    parent_run_id: Optional[str] = None,
+    runtime_parameters: Optional[Dict[str, Any]] = None,
+    environment_profile: str = "local",
+) -> None:
     """Run a pipeline synchronously inside a worker thread."""
     # ------------------------------------------------------------------
     # Per-run log file setup
@@ -1264,27 +2390,53 @@ def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
 
     dag_builder = DAGBuilder(config.tasks)
     dag_builder.build()
-    execution_waves = dag_builder.get_execution_waves()
+    execution_waves = (
+        _repair_execution_waves(config, repair_from_task)
+        if repair_from_task else dag_builder.get_execution_waves()
+    )
     execution_order = [t for wave in execution_waves for t in wave]
+    task_runs: List[Dict[str, Any]] = _pending_task_runs(config, execution_order)
+    repair_context = None
+    if repair_from_task:
+        repair_context = {
+            "parent_run_id": parent_run_id,
+            "from_task": repair_from_task,
+        }
+    run_context = _run_detail_context(
+        execution_order=execution_order,
+        task_runs=task_runs,
+        parameters=runtime_parameters,
+        environment_profile=environment_profile,
+        config=config,
+        execution_waves=execution_waves,
+        repair=repair_context,
+    )
 
     try:
         set_run_status_in_queue(run_id, "running")
         update_pipeline_status(
             config.pipeline_name,
             "running",
-            "Pipeline is running",
-            {"execution_order": execution_order},
+            "Repair run is running" if repair_from_task else "Pipeline is running",
+            run_context,
             run_id=run_id,
         )
 
         t0 = time.time()
         executor = PipelineExecutor()
-        success, results, errors = executor.execute_pipeline_parallel(
-            tasks={task.name: task for task in config.tasks},
+        tasks_by_name = {task.name: task for task in config.tasks}
+        success, results, errors, task_runs = _execute_parallel_with_task_runs(
+            executor,
+            tasks=tasks_by_name,
             execution_waves=execution_waves,
-            config={"file_path": config.file_path},
+            config=_runtime_context(
+                config=config,
+                parameters=runtime_parameters,
+                environment_profile=environment_profile,
+            ),
             pipeline_name=config.pipeline_name,
             run_id=run_id,
+            max_workers=_max_parallel_tasks(config),
         )
         duration = time.time() - t0
 
@@ -1303,12 +2455,28 @@ def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
             run_id, status,
             error="; ".join(f"{k}: {v}" for k, v in errors.items()) if errors and not success else None,
         )
+        environment = _select_environment_profile(config, environment_profile)
+        run_details = _run_detail_context(
+            execution_order=execution_order,
+            task_runs=task_runs,
+            parameters=runtime_parameters,
+            environment_profile=environment["id"],
+            config=config,
+            execution_waves=execution_waves,
+            repair=repair_context,
+        )
+        run_details.update({
+            "success": success,
+            "results": results,
+            "errors": errors,
+            "duration_seconds": round(duration, 2),
+            "sla_violated": sla_violated,
+        })
         update_pipeline_status(
             config.pipeline_name,
             status,
-            f"Pipeline {status}",
-            {"execution_order": execution_order, "success": success, "results": results,
-             "errors": errors, "duration_seconds": round(duration, 2), "sla_violated": sla_violated},
+            f"Repair run {status}" if repair_from_task else f"Pipeline {status}",
+            run_details,
             run_id=run_id,
         )
         if not success:
@@ -1323,8 +2491,16 @@ def execute_pipeline_background(config: PipelineConfig, run_id: str) -> None:
         update_pipeline_status(
             config.pipeline_name,
             "failed",
-            f"Pipeline failed: {e}",
-            {"execution_order": execution_order},
+            f"Repair run failed: {e}" if repair_from_task else f"Pipeline failed: {e}",
+            _run_detail_context(
+                execution_order=execution_order,
+                task_runs=task_runs,
+                parameters=runtime_parameters,
+                environment_profile=environment_profile,
+                config=config,
+                execution_waves=execution_waves,
+                repair=repair_context,
+            ),
             run_id=run_id,
         )
         _dispatch_error_handlers(config, run_id, str(e))
@@ -1401,6 +2577,74 @@ async def stream_run_logs(run_id: str, request: Request):
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard SSE — real-time run-status push
+# ---------------------------------------------------------------------------
+
+_SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+async def _dashboard_event_generator(request: Request):
+    """Push run-status changes to the browser without polling from the client.
+
+    Protocol:
+      event: snapshot        — sent once on connect; full queue state as JSON array
+      event: queue_update    — sent when any run changes status; array of changed runs
+      event: stats_update    — sent alongside queue_update; current summary counts
+      event: heartbeat       — sent every 30 s to keep the connection alive
+    """
+    import json as _json
+    loop = asyncio.get_event_loop()
+
+    def _fetch_queue():
+        return get_queue_runs(limit=100)
+
+    def _make_stats(runs: list) -> dict:
+        statuses = [r["status"] for r in runs]
+        return {
+            "active":    statuses.count("running") + statuses.count("queued"),
+            "running":   statuses.count("running"),
+            "queued":    statuses.count("queued"),
+            "completed": statuses.count("completed"),
+            "failed":    statuses.count("failed"),
+        }
+
+    # Initial snapshot
+    runs = await loop.run_in_executor(None, _fetch_queue)
+    last_states: dict[str, str] = {r["run_id"]: r["status"] for r in runs}
+    yield f"event: snapshot\ndata: {_json.dumps(runs)}\n\n"
+
+    tick = 0
+    while True:
+        if await request.is_disconnected():
+            break
+        await asyncio.sleep(2)
+        tick += 1
+
+        # Heartbeat every 30 s (15 × 2 s ticks)
+        if tick % 15 == 0:
+            yield "event: heartbeat\ndata: {}\n\n"
+
+        runs = await loop.run_in_executor(None, _fetch_queue)
+        current_states: dict[str, str] = {r["run_id"]: r["status"] for r in runs}
+
+        changed = [r for r in runs if last_states.get(r["run_id"]) != r["status"]]
+        if changed:
+            last_states = current_states
+            yield f"event: queue_update\ndata: {_json.dumps(changed)}\n\n"
+            yield f"event: stats_update\ndata: {_json.dumps(_make_stats(runs))}\n\n"
+
+
+@app.get("/events/stream")
+async def dashboard_events_stream(request: Request):
+    """Real-time run-status push stream for dashboard pages."""
+    return StreamingResponse(
+        _dashboard_event_generator(request),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
     )
 
 
@@ -1484,6 +2728,20 @@ async def prometheus_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/metrics/timeseries")
+async def metrics_timeseries(range: str = "24h"):
+    """Return bucketed time-series data for monitoring charts."""
+    range_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168}
+    hours = range_map.get(range, 24)
+    try:
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: get_run_timeseries(range_hours=hours))
+        return data
+    except Exception as e:
+        logger.error(f"Failed to get timeseries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ---------------------------------------------------------------------------
 # Phase 3 — request / response models
 # ---------------------------------------------------------------------------
@@ -1526,6 +2784,304 @@ class MetricComputeResponse(BaseModel):
     value: Optional[float] = None
     error: Optional[str] = None
     computed_at: str
+
+
+class ObservabilityCollectRequest(BaseModel):
+    range_hours: int = 24
+    store: bool = True
+    evaluate: bool = True
+    notify: bool = True
+
+
+class AlertRuleCreateRequest(BaseModel):
+    rule_id: Optional[str] = None
+    name: str
+    metric_name: str
+    comparator: str
+    threshold: float
+    severity: str = "warning"
+    window_minutes: int = 60
+    pipeline_name: Optional[str] = None
+    enabled: bool = True
+    destination_type: Optional[str] = None
+    destination: Optional[str] = None
+
+
+class AlertRuleUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    metric_name: Optional[str] = None
+    comparator: Optional[str] = None
+    threshold: Optional[float] = None
+    severity: Optional[str] = None
+    window_minutes: Optional[int] = None
+    pipeline_name: Optional[str] = None
+    enabled: Optional[bool] = None
+    destination_type: Optional[str] = None
+    destination: Optional[str] = None
+
+
+class AlertIncidentActionRequest(BaseModel):
+    actor: Optional[str] = None
+
+
+class NotificationChannelCreateRequest(BaseModel):
+    channel_id: Optional[str] = None
+    name: str
+    channel_type: str
+    destination: str
+    severities: Optional[List[str]] = None
+    enabled: bool = True
+
+
+class NotificationChannelUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    channel_type: Optional[str] = None
+    destination: Optional[str] = None
+    severities: Optional[List[str]] = None
+    enabled: Optional[bool] = None
+
+
+def _range_label_to_hours(range_label: str, default: int = 24) -> int:
+    range_map = {"1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
+    return range_map.get(range_label, default)
+
+
+# ---------------------------------------------------------------------------
+# Observability — collected metrics, rules, and incidents
+# ---------------------------------------------------------------------------
+
+@app.get("/metrics/catalog")
+async def metric_catalog_endpoint(request: Request):
+    """Return operational metric names supported by the built-in collector."""
+    _require_permission(request, "read")
+    return {"metrics": list_metric_catalog()}
+
+
+@app.get("/observability/dashboard")
+async def observability_dashboard(request: Request, range: str = "24h"):
+    """Return live operational metrics, rules, and recent alert incidents."""
+    _require_permission(request, "read")
+    hours = _range_label_to_hours(range)
+    try:
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: build_observability_dashboard(hours))
+        data["collector"] = _observability_collector_status()
+        return data
+    except Exception as exc:
+        logger.error("Failed to build observability dashboard: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/observability/collect")
+async def collect_observability_metrics(request_body: ObservabilityCollectRequest, request: Request):
+    """Collect/store operational metrics and evaluate alert rules."""
+    _require_permission(request, "read")
+    try:
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(
+            None,
+            lambda: collect_platform_metrics(
+                range_hours=request_body.range_hours,
+                store=request_body.store,
+                evaluate=request_body.evaluate,
+                notify=request_body.notify,
+            ),
+        )
+        data["collector"] = _observability_collector_status()
+        return data
+    except Exception as exc:
+        logger.error("Failed to collect observability metrics: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/alert-rules")
+async def list_alert_rules_endpoint(request: Request, enabled_only: bool = False):
+    """Return metric alert rules."""
+    _require_permission(request, "read")
+    init_db()
+    return {"rules": db_list_alert_rules(enabled_only=enabled_only)}
+
+
+@app.post("/alert-rules", status_code=201)
+async def create_alert_rule_endpoint(request_body: AlertRuleCreateRequest, request: Request):
+    """Create a metric alert rule."""
+    _require_permission(request, "save")
+    try:
+        init_db()
+        payload = validate_alert_rule_fields(request_body.model_dump(), partial=False)
+        rule_id = (request_body.rule_id or str(_uuid.uuid4())).strip()
+        if db_get_alert_rule(rule_id):
+            raise HTTPException(status_code=409, detail=f"Alert rule '{rule_id}' already exists")
+        rule = db_create_alert_rule(rule_id=rule_id, **payload)
+        return {"rule": rule}
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to create alert rule: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.patch("/alert-rules/{rule_id}")
+async def update_alert_rule_endpoint(rule_id: str, request_body: AlertRuleUpdateRequest, request: Request):
+    """Patch a metric alert rule."""
+    _require_permission(request, "save")
+    try:
+        init_db()
+        payload = validate_alert_rule_fields(request_body.model_dump(), partial=True)
+        rule = db_update_alert_rule(rule_id, payload)
+        if rule is None:
+            raise HTTPException(status_code=404, detail=f"Alert rule '{rule_id}' not found")
+        return {"rule": rule}
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to update alert rule '%s': %s", rule_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/alert-rules/{rule_id}")
+async def delete_alert_rule_endpoint(rule_id: str, request: Request):
+    """Delete a metric alert rule."""
+    _require_permission(request, "save")
+    init_db()
+    if not db_delete_alert_rule(rule_id):
+        raise HTTPException(status_code=404, detail=f"Alert rule '{rule_id}' not found")
+    return {"deleted": True, "rule_id": rule_id}
+
+
+@app.get("/alerts/incidents")
+async def list_alert_incidents_endpoint(request: Request, status: Optional[str] = None, limit: int = 100):
+    """Return alert incidents."""
+    _require_permission(request, "read")
+    init_db()
+    safe_limit = max(1, min(limit, 500))
+    incidents = db_list_alert_incidents(status=status, limit=safe_limit)
+    return {"incidents": incidents, "total": len(incidents)}
+
+
+@app.post("/alerts/incidents/{incident_id}/ack")
+async def acknowledge_alert_incident(
+    incident_id: str,
+    request_body: AlertIncidentActionRequest,
+    request: Request,
+):
+    """Acknowledge an alert incident."""
+    user = _require_permission(request, "save")
+    init_db()
+    actor = request_body.actor or user.get("username")
+    incident = update_alert_incident_status(incident_id, "acknowledged", actor=actor)
+    if incident is None:
+        raise HTTPException(status_code=404, detail=f"Alert incident '{incident_id}' not found")
+    return {"incident": incident}
+
+
+@app.post("/alerts/incidents/{incident_id}/resolve")
+async def resolve_alert_incident(
+    incident_id: str,
+    request_body: AlertIncidentActionRequest,
+    request: Request,
+):
+    """Resolve an alert incident."""
+    _require_permission(request, "save")
+    init_db()
+    incident = update_alert_incident_status(incident_id, "resolved", actor=request_body.actor)
+    if incident is None:
+        raise HTTPException(status_code=404, detail=f"Alert incident '{incident_id}' not found")
+    return {"incident": incident}
+
+
+@app.get("/notification-channels")
+async def list_notification_channels_endpoint(
+    request: Request,
+    enabled_only: bool = False,
+    severity: Optional[str] = None,
+):
+    """Return reusable alert notification channels."""
+    _require_permission(request, "read")
+    init_db()
+    channels = db_list_notification_channels(enabled_only=enabled_only, severity=severity)
+    return {"channels": channels, "total": len(channels)}
+
+
+@app.post("/notification-channels", status_code=201)
+async def create_notification_channel_endpoint(
+    request_body: NotificationChannelCreateRequest,
+    request: Request,
+):
+    """Create a reusable alert notification channel."""
+    _require_permission(request, "save")
+    try:
+        init_db()
+        payload = validate_notification_channel_fields(request_body.model_dump(), partial=False)
+        channel_id = (request_body.channel_id or str(_uuid.uuid4())).strip()
+        if db_get_notification_channel(channel_id):
+            raise HTTPException(status_code=409, detail=f"Notification channel '{channel_id}' already exists")
+        channel = db_create_notification_channel(channel_id=channel_id, **payload)
+        return {"channel": channel}
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to create notification channel: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.patch("/notification-channels/{channel_id}")
+async def update_notification_channel_endpoint(
+    channel_id: str,
+    request_body: NotificationChannelUpdateRequest,
+    request: Request,
+):
+    """Patch a reusable alert notification channel."""
+    _require_permission(request, "save")
+    try:
+        init_db()
+        payload = validate_notification_channel_fields(request_body.model_dump(), partial=True)
+        channel = db_update_notification_channel(channel_id, payload)
+        if channel is None:
+            raise HTTPException(status_code=404, detail=f"Notification channel '{channel_id}' not found")
+        return {"channel": channel}
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to update notification channel '%s': %s", channel_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/notification-channels/{channel_id}")
+async def delete_notification_channel_endpoint(channel_id: str, request: Request):
+    """Delete a reusable alert notification channel."""
+    _require_permission(request, "save")
+    init_db()
+    if not db_delete_notification_channel(channel_id):
+        raise HTTPException(status_code=404, detail=f"Notification channel '{channel_id}' not found")
+    return {"deleted": True, "channel_id": channel_id}
+
+
+@app.get("/notification-deliveries")
+async def list_notification_deliveries_endpoint(
+    request: Request,
+    incident_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 100,
+):
+    """Return alert notification delivery attempts."""
+    _require_permission(request, "read")
+    init_db()
+    safe_limit = max(1, min(limit, 500))
+    deliveries = db_list_notification_deliveries(
+        incident_id=incident_id,
+        status=status,
+        limit=safe_limit,
+    )
+    return {"deliveries": deliveries, "total": len(deliveries)}
 
 
 # ---------------------------------------------------------------------------
@@ -1684,6 +3240,97 @@ async def diff_pipeline_versions_endpoint(pipeline_name: str, version_id_a: str,
     }
 
 
+@app.post("/versions/{pipeline_name}/{version_id}/restore")
+async def restore_pipeline_version_endpoint(
+    pipeline_name: str,
+    version_id: str,
+    request_body: VersionRestoreRequest,
+    request: Request,
+):
+    """Restore a saved YAML version onto the active pipeline file."""
+    user = _require_permission(request, "save")
+    content = get_version_content(pipeline_name, version_id)
+    if content is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version '{version_id}' not found for pipeline '{pipeline_name}'",
+        )
+
+    tmp_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+        restored_config = load_config(str(tmp_path))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Saved version is invalid: {exc}")
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+
+    if restored_config.pipeline_name != pipeline_name:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Saved version belongs to "
+                f"'{restored_config.pipeline_name}', not '{pipeline_name}'"
+            ),
+        )
+
+    target_path: Optional[Path] = None
+    if request_body.config_path:
+        candidate = Path(request_body.config_path)
+        if not candidate.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Config file not found: {request_body.config_path}",
+            )
+        target_path = candidate
+    else:
+        pipelines, _, _, _ = _discover_pipeline_files()
+        for pipeline in pipelines:
+            if pipeline.get("display_name") == pipeline_name:
+                target_path = Path(pipeline["file_path"])
+                break
+
+    if target_path is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not locate active config for pipeline '{pipeline_name}'",
+        )
+    if target_path.suffix.lower() not in {".yaml", ".yml"}:
+        raise HTTPException(status_code=400, detail="Target config must be a YAML file")
+
+    target_path.write_text(content, encoding="utf-8")
+    validated_config = load_config(str(target_path))
+    if validated_config.pipeline_name != pipeline_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Restored file did not validate as the requested pipeline",
+        )
+
+    try:
+        save_version(pipeline_name, content, saved_by=user.get("username"))
+        append_audit_event(
+            "pipeline",
+            "version_restore",
+            actor=user.get("username"),
+            resource=pipeline_name,
+            details={"version_id": version_id, "config_path": str(target_path)},
+        )
+    except Exception as exc:
+        logger.warning("Version restore audit/snapshot failed for '%s': %s", pipeline_name, exc)
+
+    return {
+        "pipeline_name": pipeline_name,
+        "version_id": version_id,
+        "config_path": str(target_path),
+        "message": "Pipeline version restored successfully",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Phase 3 — semantic metrics layer
 # ---------------------------------------------------------------------------
@@ -1746,32 +3393,28 @@ async def get_metric_history_endpoint(metric_name: str, limit: int = 50):
 @app.get("/catalog")
 async def catalog_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "catalog.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Catalog page not found")
 
 
 @app.get("/lineage-viz")
 async def lineage_viz_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "lineage.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Lineage page not found")
 
 
 @app.get("/costs")
 async def costs_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "costs.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Costs page not found")
 
 
 @app.get("/templates-ui")
 async def templates_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "templates.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Templates page not found")
 
 
@@ -1779,33 +3422,36 @@ async def templates_page(request: Request):
 async def admin_page(request: Request):
     _require_permission(request, "*")
     page = Path(__file__).resolve().parent.parent / "static" / "admin.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Admin page not found")
 
 
 @app.get("/alerts")
 async def alerts_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "alerts.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Alerts page not found")
 
 
 @app.get("/monitoring")
 async def monitoring_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "monitoring.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Monitoring page not found")
 
 
 @app.get("/job-builder")
 async def job_builder_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "job_builder.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Job Builder page not found")
+
+
+@app.get("/deployments")
+async def deployments_page(request: Request):
+    page = Path(__file__).resolve().parent.parent / "static" / "deployments.html"
+    if page.exists(): return _page(page)
+    raise HTTPException(status_code=404, detail="Deployments page not found")
 
 
 # ---------------------------------------------------------------------------
@@ -1934,8 +3580,7 @@ async def use_template_endpoint(template_id: str, request_body: UseTemplateReque
 @app.get("/git-integration")
 async def git_integration_page(request: Request):
     page = Path(__file__).resolve().parent.parent / "static" / "git_integration.html"
-    if page.exists():
-        return FileResponse(str(page), media_type="text/html")
+    if page.exists(): return _page(page)
     raise HTTPException(status_code=404, detail="Git Integration page not found")
 
 
@@ -1955,6 +3600,16 @@ class GitRemoteCreate(BaseModel):
 class GitPushRequest(BaseModel):
     pipeline_name: str
     commit_message: Optional[str] = None
+
+
+class GitFileSaveRequest(BaseModel):
+    content: str
+
+
+class GitCommitRequest(BaseModel):
+    message: str
+    paths: Optional[List[str]] = None
+    push: bool = False
 
 
 @app.post("/git/remotes", status_code=201)
@@ -2056,6 +3711,98 @@ async def git_push_log_endpoint(remote_id: str, limit: int = 30, request: Reques
     if request:
         _require_permission(request, "read")
     return {"log": git_get_push_log(remote_id, limit=limit)}
+
+
+@app.get("/git/remotes/{remote_id}/workspace/tree")
+async def git_workspace_tree(remote_id: str, request: Request, path: str = ""):
+    """Return a browsable tree for the cloned repository."""
+    _require_permission(request, "read")
+    result = git_list_repo_tree(remote_id, path=path)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not load repo tree"))
+    return result
+
+
+@app.get("/git/remotes/{remote_id}/workspace/file")
+async def git_workspace_read_file(remote_id: str, path: str, request: Request):
+    """Read a text file from the cloned repository."""
+    _require_permission(request, "read")
+    result = git_read_repo_file(remote_id, path)
+    if not result.get("ok"):
+        status_code = 404 if result.get("error") == "File not found" else 400
+        raise HTTPException(status_code=status_code, detail=result.get("error", "Could not read file"))
+    return result
+
+
+@app.put("/git/remotes/{remote_id}/workspace/file")
+async def git_workspace_write_file(
+    remote_id: str,
+    path: str,
+    body: GitFileSaveRequest,
+    request: Request,
+):
+    """Write a text file into the cloned repository."""
+    _require_permission(request, "save")
+    result = git_write_repo_file(remote_id, path, body.content)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not save file"))
+    return result
+
+
+@app.get("/git/remotes/{remote_id}/workspace/status")
+async def git_workspace_status(remote_id: str, request: Request):
+    """Return branch and changed-file status for the cloned repository."""
+    _require_permission(request, "read")
+    result = git_get_repo_status(remote_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not get repo status"))
+    return result
+
+
+@app.get("/git/remotes/{remote_id}/workspace/diff")
+async def git_workspace_diff(remote_id: str, request: Request, path: Optional[str] = None):
+    """Return a workspace diff for the repository or one file."""
+    _require_permission(request, "read")
+    result = git_get_repo_diff(remote_id, path=path)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not get diff"))
+    return result
+
+
+@app.post("/git/remotes/{remote_id}/workspace/pull")
+async def git_workspace_pull(remote_id: str, request: Request):
+    """Pull the configured branch into the clone when the workspace is clean."""
+    _require_permission(request, "save")
+    result = git_pull_repo(remote_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not pull repo"))
+    return result
+
+
+@app.post("/git/remotes/{remote_id}/workspace/commit")
+async def git_workspace_commit(remote_id: str, body: GitCommitRequest, request: Request):
+    """Commit workspace changes and optionally push them."""
+    user = _require_permission(request, "save")
+    result = git_commit_repo_changes(
+        remote_id,
+        message=body.message,
+        paths=body.paths,
+        push=body.push,
+        actor=user.get("username"),
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not commit repo changes"))
+    return result
+
+
+@app.post("/git/remotes/{remote_id}/workspace/push")
+async def git_workspace_push(remote_id: str, request: Request):
+    """Push committed workspace changes to the configured branch."""
+    user = _require_permission(request, "save")
+    result = git_push_repo(remote_id, pushed_by=user.get("username"))
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Could not push repo"))
+    return result
 
 
 # ---------------------------------------------------------------------------

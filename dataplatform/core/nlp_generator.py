@@ -184,6 +184,7 @@ _STOP = frozenset({
     "will", "should", "need", "also", "then", "data", "result", "results",
     "records", "rows", "row", "file", "files", "table", "tables", "database",
     "db", "source", "target", "into", "from", "to", "using", "via",
+    "first", "second", "third", "fourth", "fifth", "next", "finally", "lastly",
 })
 
 # Schedule enrichments
@@ -457,6 +458,18 @@ def _parse_intent(sentence: str) -> ParsedIntent:
     intent.subjects = _subject_words(sentence, intent.verb, src_phrase, tgt_phrase)
 
     return intent
+
+
+def _is_pipeline_header_intent(intent: ParsedIntent) -> bool:
+    """Return True for naming/header sentences that should not become tasks."""
+    raw = intent.raw_text.lower()
+    if "pipeline" not in raw:
+        return False
+    if intent.source_plugin or intent.target_plugin or intent.using_plugin:
+        return False
+    if intent.file_path or intent.tables or intent.dbt_models:
+        return False
+    return intent.verb in {"build", "create", "generate", "schedule"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -753,6 +766,8 @@ def generate_from_text(input_text: str) -> Dict[str, Any]:
     # ── Remove schedule-only sentences that produced no meaningful intent ──
     meaningful: List[ParsedIntent] = []
     for intent in intents:
+        if _is_pipeline_header_intent(intent):
+            continue
         # Skip if the raw sentence is purely a schedule description
         if not intent.verb and not intent.source_plugin and not intent.target_plugin:
             if re.search(r"\b(?:daily|hourly|weekly|schedule|cron)\b", intent.raw_text, re.I):

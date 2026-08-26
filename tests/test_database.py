@@ -1,6 +1,7 @@
 """Tests for the SQLite-backed metadata store (database.py)."""
 import os
 import pytest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -172,7 +173,7 @@ class TestPipelineQueue:
         db.enqueue_run("run-orphan1", "pipe_b", "p.yaml")
         db.enqueue_run("run-orphan2", "pipe_c", "p.yaml")
         db.set_run_status_in_queue("run-orphan2", "running")
-        recovered = db.recover_orphaned_runs()
+        recovered = db.recover_orphaned_runs(stale_after_seconds=0)
         assert recovered == 2
         runs = db.get_queue_runs(status="failed")
         ids = [r["run_id"] for r in runs]
@@ -181,6 +182,40 @@ class TestPipelineQueue:
         for r in runs:
             if r["run_id"] in ("run-orphan1", "run-orphan2"):
                 assert r["error"] == "Server restarted"
+
+    def test_recover_orphaned_runs_skips_fresh_runs(self):
+        db.enqueue_run("run-fresh1", "pipe_b", "p.yaml")
+        db.enqueue_run("run-fresh2", "pipe_c", "p.yaml")
+        db.set_run_status_in_queue("run-fresh2", "running")
+
+        recovered = db.recover_orphaned_runs()
+
+        assert recovered == 0
+        assert db.get_queue_run("run-fresh1")["status"] == "queued"
+        assert db.get_queue_run("run-fresh2")["status"] == "running"
+
+    def test_recover_orphaned_runs_recovers_only_stale_runs(self):
+        stale = (datetime.utcnow() - timedelta(hours=2)).isoformat() + "Z"
+        db.enqueue_run("run-stale", "pipe_old", "old.yaml")
+        db.enqueue_run("run-fresh", "pipe_new", "new.yaml")
+        with db._get_conn() as conn:
+            conn.execute(
+                db.text(
+                    """
+                    UPDATE pipeline_queue
+                    SET queued_at = :stale
+                    WHERE run_id = 'run-stale'
+                    """
+                ),
+                {"stale": stale},
+            )
+            conn.commit()
+
+        recovered = db.recover_orphaned_runs(stale_after_seconds=3600)
+
+        assert recovered == 1
+        assert db.get_queue_run("run-stale")["status"] == "failed"
+        assert db.get_queue_run("run-fresh")["status"] == "queued"
 
     def test_get_queue_runs_filtered_by_status(self):
         db.enqueue_run("run-filt1", "pipe_d", "p.yaml")
@@ -191,12 +226,28 @@ class TestPipelineQueue:
         assert any(r["run_id"] == "run-filt1" for r in queued)
         assert any(r["run_id"] == "run-filt2" for r in running)
 
+    def test_claim_next_queued_run_claims_oldest_and_marks_running(self):
+        db.enqueue_run("run-claim1", "pipe_old", "old.yaml")
+        db.enqueue_run("run-claim2", "pipe_new", "new.yaml")
+
+        claimed = db.claim_next_queued_run()
+
+        assert claimed is not None
+        assert claimed["run_id"] == "run-claim1"
+        assert claimed["status"] == "running"
+        assert claimed["started_at"] is not None
+        remaining = db.get_queue_run("run-claim2")
+        assert remaining["status"] == "queued"
+
+    def test_claim_next_queued_run_returns_none_when_empty(self):
+        assert db.claim_next_queued_run() is None
+
     def test_recover_skips_completed_and_failed(self):
         db.enqueue_run("run-done1", "pipe_f", "p.yaml")
         db.set_run_status_in_queue("run-done1", "completed")
         db.enqueue_run("run-done2", "pipe_g", "p.yaml")
         db.set_run_status_in_queue("run-done2", "failed", error="already failed")
-        recovered = db.recover_orphaned_runs()
+        recovered = db.recover_orphaned_runs(stale_after_seconds=0)
         assert recovered == 0
 
 

@@ -1,14 +1,34 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dataplatform}
+      POSTGRES_USER: ${POSTGRES_USER:-dataplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dataplatform_change_me}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dataplatform} -d ${POSTGRES_DB:-dataplatform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   dataplatform:
     build: .
     ports:
       - "${DATAPLATFORM_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
+      DATAPLATFORM_ENV: ${DATAPLATFORM_ENV:-development}
       # Auth — CHANGE THESE before any non-local deployment
       DATAPLATFORM_USERNAME: ${DATAPLATFORM_USERNAME:-admin}
       DATAPLATFORM_PASSWORD: ${DATAPLATFORM_PASSWORD:-admin}
       DATAPLATFORM_SESSION_SECRET: ${DATAPLATFORM_SESSION_SECRET:-change-me-in-production}
+      DATAPLATFORM_EXECUTION_MODE: external
       # Storage paths inside the container
+      POSTGRES_URL: postgresql+psycopg2://${POSTGRES_USER:-dataplatform}:${POSTGRES_PASSWORD:-dataplatform_change_me}@postgres:5432/${POSTGRES_DB:-dataplatform}
       DATABASE_PATH: /app/data/platform.db
       PIPELINES_PATH: /app/pipelines
       GIT_CLONES_PATH: /app/data/git-clones
@@ -28,7 +48,44 @@ services:
       retries: 3
       start_period: 15s
 
+  dataplatform-worker:
+    build: .
+    command: ["python3", "-m", "dataplatform.cli.main", "worker", "--poll-interval", "2"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dataplatform:
+        condition: service_healthy
+    environment:
+      DATAPLATFORM_ENV: ${DATAPLATFORM_ENV:-development}
+      DATAPLATFORM_USERNAME: ${DATAPLATFORM_USERNAME:-admin}
+      DATAPLATFORM_PASSWORD: ${DATAPLATFORM_PASSWORD:-admin}
+      DATAPLATFORM_SESSION_SECRET: ${DATAPLATFORM_SESSION_SECRET:-change-me-in-production}
+      DATAPLATFORM_EXECUTION_MODE: external
+      POSTGRES_URL: postgresql+psycopg2://${POSTGRES_USER:-dataplatform}:${POSTGRES_PASSWORD:-dataplatform_change_me}@postgres:5432/${POSTGRES_DB:-dataplatform}
+      PIPELINES_PATH: /app/pipelines
+      GIT_CLONES_PATH: /app/data/git-clones
+      LOG_FILE: /app/logs/pipeline.log
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON: ${LOG_JSON:-false}
+    volumes:
+      - dp_data:/app/data
+      - dp_logs:/app/logs
+      - dp_pipelines:/app/pipelines
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"from pathlib import Path; from dataplatform.core.database import init_db; init_db(); cmd=Path('/proc/1/cmdline').read_bytes().decode(); raise SystemExit(0 if 'worker' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
 volumes:
+  pg_data:
   dp_data:
   dp_logs:
   dp_pipelines:

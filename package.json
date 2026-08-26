@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "css:build": "tailwindcss -i tailwind.input.css -o dataplatform/static/tailwind-static.css --minify",
+    "css:watch": "tailwindcss -i tailwind.input.css -o dataplatform/static/tailwind-static.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

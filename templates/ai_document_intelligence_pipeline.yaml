@@ -1,0 +1,169 @@
+pipeline_name: ai_document_intelligence_pipeline
+description: AI document processing pipeline for OCR, parsing, extraction, validation, and review routing
+tags:
+  - ai
+  - document-intelligence
+  - ocr
+  - extraction
+  - human-review
+
+execution:
+  profile: dev
+  deployment_target: docker
+  default_layer: ingest
+  max_parallel_tasks: 5
+
+tasks:
+  - name: collect_document_batch
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: ingest
+    config:
+      code: |
+        from pathlib import Path
+        import json
+
+        Path(input_directory).mkdir(parents=True, exist_ok=True)
+        Path("data/ai").mkdir(parents=True, exist_ok=True)
+        batch = {
+            "input_directory": input_directory,
+            "accepted_formats": accepted_formats,
+            "status": "ready_for_document_parsing"
+        }
+        Path(output_manifest).write_text(json.dumps(batch, indent=2), encoding="utf-8")
+        print(f"Document batch contract prepared for {input_directory}")
+      parameters:
+        input_directory: data/incoming_documents
+        accepted_formats:
+          - pdf
+          - docx
+          - png
+          - jpg
+          - tiff
+        output_manifest: data/ai/document_batch_manifest.json
+    lineage:
+      reads_from:
+        - file://data/incoming_documents
+      writes_to:
+        - file://data/ai/document_batch_manifest.json
+
+  - name: parse_documents_with_layout
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: transform
+    depends_on:
+      - collect_document_batch
+    config:
+      code: |
+        from pathlib import Path
+        import json
+
+        Path("data/ai").mkdir(parents=True, exist_ok=True)
+        parse_plan = {
+            "parser": parser,
+            "extract_tables": extract_tables,
+            "extract_images": extract_images,
+            "output_format": output_format
+        }
+        Path(output_manifest).write_text(json.dumps(parse_plan, indent=2), encoding="utf-8")
+        print(f"Document parsing plan prepared with {parser}")
+      parameters:
+        parser: llama_parse_or_docling
+        extract_tables: true
+        extract_images: true
+        output_format: markdown_plus_json
+        output_manifest: data/ai/document_parse_manifest.json
+    lineage:
+      reads_from:
+        - file://data/incoming_documents
+      writes_to:
+        - file://data/ai/document_parse_manifest.json
+
+  - name: extract_entities_tables_and_claims
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: transform
+    depends_on:
+      - parse_documents_with_layout
+    config:
+      code: |
+        extraction_schema = {
+            "entities": entities,
+            "tables": tables,
+            "claims": claims,
+            "confidence_threshold": confidence_threshold
+        }
+        print(f"Extraction schema ready: {extraction_schema}")
+      parameters:
+        entities:
+          - customer_name
+          - invoice_id
+          - effective_date
+          - total_amount
+        tables:
+          - line_items
+          - payment_schedule
+        claims:
+          - policy_exclusion
+          - compliance_exception
+        confidence_threshold: 0.82
+
+  - name: validate_extraction_quality
+    type: executor
+    plugin: python
+    operation: execute_code
+    execution_layer: quality
+    depends_on:
+      - extract_entities_tables_and_claims
+    config:
+      code: |
+        gates = {
+            "required_fields": required_fields,
+            "min_field_confidence": min_field_confidence,
+            "route_low_confidence_to_review": route_low_confidence_to_review
+        }
+        print(f"Document intelligence gates: {gates}")
+      parameters:
+        required_fields:
+          - invoice_id
+          - total_amount
+        min_field_confidence: 0.82
+        route_low_confidence_to_review: true
+
+  - name: create_human_review_queue
+    type: executor
+    plugin: file
+    operation: create
+    execution_layer: operate
+    depends_on:
+      - validate_extraction_quality
+    config:
+      file_path: data/ai/document_review_queue.json
+      content: |
+        {
+          "queue": "document_intelligence_review",
+          "routing_rule": "confidence_below_threshold_or_missing_required_field",
+          "owner": "operations"
+        }
+
+  - name: publish_structured_outputs
+    type: executor
+    plugin: file
+    operation: create
+    execution_layer: serve
+    depends_on:
+      - create_human_review_queue
+    config:
+      file_path: data/ai/document_outputs_contract.json
+      content: |
+        {
+          "dataset": "document_extractions",
+          "format": "jsonl",
+          "consumers": ["catalog", "warehouse", "search"]
+        }
+    lineage:
+      writes_to:
+        - file://data/ai/document_outputs_contract.json
