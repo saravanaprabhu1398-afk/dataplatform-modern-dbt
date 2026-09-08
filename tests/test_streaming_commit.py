@@ -283,3 +283,106 @@ class TestKilledProcessRecovers:
         stale = self._run(workspace, attempt=6)
 
         assert stale.returncode == 2
+
+
+class TestTransientSinkFailures:
+    """A sink that is briefly away should cost latency, not records."""
+
+    class FlakySink:
+        """Wraps a real sink and fails the first N calls of each kind."""
+
+        def __init__(self, inner, fail_commits=0, fail_reads=0):
+            self.inner = inner
+            self.fail_commits = fail_commits
+            self.fail_reads = fail_reads
+            self.commit_calls = 0
+            self.read_calls = 0
+
+        @staticmethod
+        def _outage():
+            from sqlalchemy.exc import OperationalError
+
+            return OperationalError("SELECT 1", {}, Exception("database is unavailable"))
+
+        def read_offsets(self, stream=None):
+            self.read_calls += 1
+            if self.read_calls <= self.fail_reads:
+                raise self._outage()
+            return self.inner.read_offsets(stream)
+
+        def committed_attempt(self, stream=None):
+            return self.inner.committed_attempt(stream)
+
+        def commit(self, records, offsets, fence):
+            self.commit_calls += 1
+            if self.commit_calls <= self.fail_commits:
+                raise self._outage()
+            return self.inner.commit(records, offsets, fence)
+
+    def test_commit_is_retried_until_the_sink_returns(self, workspace):
+        sink = self.FlakySink(_sink(), fail_commits=2)
+        slept = []
+
+        stats = run_stream(
+            _source(workspace), sink, Fence(STREAM, 1), batch_size=50,
+            retry_backoff_seconds=0.01, sleep_fn=slept.append,
+        )
+
+        assert stats.retries == 2
+        assert stats.records == workspace["total"]
+        assert slept == [0.01, 0.02], "backoff should grow"
+        assert self._verify_ok(workspace)
+
+    def test_startup_offset_read_is_retried(self, workspace):
+        # A runner starting while the database is down should wait for it, not
+        # die before it has read a single offset.
+        sink = self.FlakySink(_sink(), fail_reads=3)
+
+        stats = run_stream(
+            _source(workspace), sink, Fence(STREAM, 1), batch_size=50,
+            retry_backoff_seconds=0.01, sleep_fn=lambda _: None,
+        )
+
+        assert stats.retries == 3
+        assert stats.records == workspace["total"]
+
+    def test_persistent_outage_gives_up_without_writing(self, workspace):
+        from sqlalchemy.exc import OperationalError
+
+        sink = self.FlakySink(_sink(), fail_commits=99)
+
+        with pytest.raises(OperationalError):
+            run_stream(
+                _source(workspace), sink, Fence(STREAM, 1), batch_size=50,
+                retry_attempts=3, retry_backoff_seconds=0.01, sleep_fn=lambda _: None,
+            )
+
+        assert _sink().rows() == []
+        assert _sink().read_offsets().total() == 0
+
+    def test_being_fenced_out_is_not_retried(self, workspace):
+        # Fencing is a decision, not an outage. Retrying it would be waiting
+        # for someone else's run to finish so we could corrupt it.
+        source, sink = _source(workspace), _sink()
+        batch, offsets = source.poll(10)
+        sink.commit(batch, offsets, Fence(STREAM, 9))
+
+        stats = run_stream(
+            _source(workspace), _sink(), Fence(STREAM, 8), batch_size=10,
+            retry_backoff_seconds=0.01, sleep_fn=lambda _: None,
+        )
+
+        assert stats.fenced_out
+        assert stats.retries == 0
+
+    def test_latency_is_recorded_per_batch(self, workspace):
+        stats = run_stream(_source(workspace), _sink(), Fence(STREAM, 1), batch_size=50)
+
+        assert len(stats.commit_ms) == stats.batches
+        assert stats.p99_commit_ms >= stats.p50_commit_ms > 0
+
+    def _verify_ok(self, workspace):
+        sink = _sink()
+        return verify(
+            workspace["manifest"], sink.rows(), committed_offset=sink.read_offsets().total()
+        ).ok

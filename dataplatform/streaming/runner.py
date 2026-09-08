@@ -19,14 +19,31 @@ import argparse
 import logging
 import os
 import sys
-from dataclasses import dataclass
-from typing import Optional
+import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from dataplatform.core.chaos import CrashPoint, maybe_crash
 from dataplatform.plugins.base import Fence, StaleFence, StreamingSource, TransactionalSink
 from dataplatform.streaming.windows import WindowPolicy
 
 logger = logging.getLogger(__name__)
+
+
+#: Sink failures worth waiting out rather than dying on: the database went
+#: away, not the data.
+TRANSIENT_ERRORS = (OperationalError, DBAPIError)
+
+
+def _percentile(values: List[float], pct: float) -> float:
+    """Nearest-rank percentile; 0.0 for an empty sample."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = max(1, int(round(pct / 100.0 * len(ordered))))
+    return ordered[min(rank, len(ordered)) - 1]
 
 
 @dataclass
@@ -39,15 +56,27 @@ class RunStats:
     records: int = 0
     resumed_from: int = 0
     fenced_out: bool = False
+    retries: int = 0
+    commit_ms: List[float] = field(default_factory=list)
+
+    @property
+    def p99_commit_ms(self) -> float:
+        return _percentile(self.commit_ms, 99)
+
+    @property
+    def p50_commit_ms(self) -> float:
+        return _percentile(self.commit_ms, 50)
 
     def summary(self) -> str:
         return (
-            "stream={0} attempt={1} resumed_from={2} batches={3} records={4}{5}".format(
+            "stream={0} attempt={1} resumed_from={2} batches={3} records={4} "
+            "retries={5}{6}".format(
                 self.stream,
                 self.attempt,
                 self.resumed_from,
                 self.batches,
                 self.records,
+                self.retries,
                 " FENCED OUT" if self.fenced_out else "",
             )
         )
@@ -59,18 +88,35 @@ def run_stream(
     fence: Fence,
     batch_size: int = 100,
     max_batches: Optional[int] = None,
+    retry_attempts: int = 5,
+    retry_backoff_seconds: float = 0.2,
+    sleep_fn: Optional[Any] = None,
 ) -> RunStats:
-    """Drain *source* into *sink* under *fence*. Returns what happened."""
-    offsets = sink.read_offsets(fence.stream)
-    source.seek(offsets)
+    """Drain *source* into *sink* under *fence*. Returns what happened.
 
-    stats = RunStats(stream=fence.stream, attempt=fence.attempt, resumed_from=offsets.total())
+    A sink that is temporarily unavailable is waited out with bounded
+    exponential backoff rather than crashed on: the records are still in the
+    source, and the offsets have not moved, so waiting costs nothing but
+    latency.  Being fenced out is not transient and is never retried.
+    """
+    stats = RunStats(stream=fence.stream, attempt=fence.attempt)
+    sleep = sleep_fn or time.sleep
+
+    offsets = _with_retry(
+        lambda: sink.read_offsets(fence.stream),
+        "offset read", stats, retry_attempts, retry_backoff_seconds, sleep,
+    )
+    source.seek(offsets)
+    stats.resumed_from = offsets.total()
 
     # Fail fast: the commit is fenced anyway, but a writer that has already
     # been replaced should not spend a poll finding that out -- and a stale
     # writer with an empty backlog would otherwise exit as though it had
     # succeeded.
-    committed = sink.committed_attempt(fence.stream)
+    committed = _with_retry(
+        lambda: sink.committed_attempt(fence.stream),
+        "fence check", stats, retry_attempts, retry_backoff_seconds, sleep,
+    )
     if committed > fence.attempt:
         logger.error(
             "refusing to run stream %s: committed attempt %s supersedes ours (%s)",
@@ -95,7 +141,10 @@ def run_stream(
         maybe_crash(CrashPoint.AFTER_POLL)
 
         try:
-            written = sink.commit(records, next_offsets, fence)
+            written = _commit_with_retry(
+                sink, records, next_offsets, fence, stats,
+                retry_attempts, retry_backoff_seconds, sleep,
+            )
         except StaleFence as exc:
             logger.error("%s", exc)
             stats.fenced_out = True
@@ -108,6 +157,58 @@ def run_stream(
 
     logger.info("runner finished: %s", stats.summary())
     return stats
+
+
+def _with_retry(
+    call: Any,
+    what: str,
+    stats: RunStats,
+    attempts: int,
+    backoff: float,
+    sleep_fn: Any,
+) -> Any:
+    """Run *call*, waiting out transient sink failures.
+
+    Every sink interaction goes through here, not just the commit: a runner
+    that starts while the database is down should wait for it like any other
+    outage, rather than dying on the first offset read.
+    """
+    for attempt in range(1, max(attempts, 1) + 1):
+        try:
+            return call()
+        except TRANSIENT_ERRORS as exc:
+            if attempt >= attempts:
+                logger.error("%s still failing after %d attempts: %s", what, attempt, exc)
+                raise
+            delay = backoff * (2 ** (attempt - 1))
+            stats.retries += 1
+            logger.warning(
+                "%s unavailable (attempt %d/%d), retrying in %.2fs: %s",
+                what, attempt, attempts, delay, exc,
+            )
+            sleep_fn(delay)
+
+    raise RuntimeError("unreachable: retry loop exited without a result")
+
+
+def _commit_with_retry(
+    sink: TransactionalSink,
+    records: List[Dict[str, Any]],
+    offsets: Any,
+    fence: Fence,
+    stats: RunStats,
+    attempts: int,
+    backoff: float,
+    sleep_fn: Any,
+) -> int:
+    """Commit, waiting out transient sink failures. Raises when they persist."""
+    started = time.perf_counter()
+    written = _with_retry(
+        lambda: sink.commit(records, offsets, fence),
+        "sink commit", stats, attempts, backoff, sleep_fn,
+    )
+    stats.commit_ms.append((time.perf_counter() - started) * 1000)
+    return written
 
 
 def build_and_run(
