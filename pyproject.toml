@@ -22,6 +22,9 @@ dependencies = [
     "pandas",
     "requests",
     "bcrypt>=4.0.0",
+    # SQL lineage is parsed, not pattern-matched. Pinned to a major: parser
+    # behaviour is the contract here, and it can change across majors.
+    "sqlglot>=30,<31",
 ]
 authors = [
     {name = "Prabhu Saravanan", email = "prabhu@example.com"},

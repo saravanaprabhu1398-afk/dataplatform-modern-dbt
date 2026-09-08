@@ -1,0 +1,115 @@
+{
+  "_comment": "Hand-written expectations for SQL lineage extraction (DuckDB dialect). Used by tests/test_sql_lineage.py and demo/scripts/lineage_parser_scorecard.py. 'reads' and 'writes' are asset names, order-insensitive.",
+  "cases": [
+    {"id": "plain_select", "why": "the simplest thing that must work",
+     "sql": "SELECT id, amount FROM orders", "reads": ["orders"], "writes": []},
+
+    {"id": "cte_is_not_a_table", "why": "a CTE name is scope, not an asset",
+     "sql": "WITH recent AS (SELECT * FROM orders) SELECT id FROM recent",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "nested_ctes", "why": "CTEs referring to CTEs",
+     "sql": "WITH a AS (SELECT * FROM orders), b AS (SELECT * FROM a JOIN customers c ON c.id = a.cid) SELECT * FROM b",
+     "reads": ["orders", "customers"], "writes": []},
+
+    {"id": "cte_shadowing_a_real_table", "why": "a qualified name is never a CTE reference",
+     "sql": "WITH orders AS (SELECT 1 AS id) SELECT * FROM orders UNION ALL SELECT id FROM public.orders",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "string_literal_containing_from", "why": "text matching invents a table here",
+     "sql": "SELECT 'shipped from warehouse' AS note FROM orders",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "comment_containing_from", "why": "comments must not contribute assets",
+     "sql": "-- reload FROM nowhere\nSELECT * FROM orders",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "block_comment_containing_join", "why": "block comments too",
+     "sql": "/* JOIN legacy_orders here one day */ SELECT * FROM orders",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "file_source_single_quoted", "why": "this query is in multi_source_pipeline.yaml",
+     "sql": "SELECT * FROM 'data/raw_data.json'",
+     "reads": ["data/raw_data.json"], "writes": []},
+
+    {"id": "read_csv_function", "why": "DuckDB table functions name files",
+     "sql": "SELECT * FROM read_csv('data/orders.csv')",
+     "reads": ["data/orders.csv"], "writes": []},
+
+    {"id": "read_parquet_joined", "why": "a file and a table in one query",
+     "sql": "SELECT * FROM read_parquet('data/x.parquet') p JOIN orders o ON o.id = p.id",
+     "reads": ["data/x.parquet", "orders"], "writes": []},
+
+    {"id": "merge_statement", "why": "invisible to the regex entirely",
+     "sql": "MERGE INTO dim_customer d USING stg_customer s ON d.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name",
+     "reads": ["stg_customer"], "writes": ["dim_customer"]},
+
+    {"id": "update_target_is_a_write", "why": "UPDATE writes to its target",
+     "sql": "UPDATE orders SET status = 'x' WHERE id IN (SELECT id FROM cancellations)",
+     "reads": ["cancellations"], "writes": ["orders"]},
+
+    {"id": "delete_target_is_a_write", "why": "so does DELETE",
+     "sql": "DELETE FROM orders WHERE id < 5",
+     "reads": [], "writes": ["orders"]},
+
+    {"id": "create_view", "why": "a view is an asset the pipeline produces",
+     "sql": "CREATE VIEW daily AS SELECT day, SUM(amount) FROM orders GROUP BY day",
+     "reads": ["orders"], "writes": ["daily"]},
+
+    {"id": "create_table_as", "why": "CTAS, with a schema on the source",
+     "sql": "CREATE OR REPLACE TABLE t AS SELECT * FROM public.orders",
+     "reads": ["orders"], "writes": ["t"]},
+
+    {"id": "create_table_if_not_exists_as", "why": "the guarded form",
+     "sql": "CREATE TABLE IF NOT EXISTS t AS SELECT * FROM orders",
+     "reads": ["orders"], "writes": ["t"]},
+
+    {"id": "insert_select", "why": "the ordinary load",
+     "sql": "INSERT INTO fact_orders SELECT * FROM stg_orders",
+     "reads": ["stg_orders"], "writes": ["fact_orders"]},
+
+    {"id": "insert_from_itself", "why": "a table can be both read and written",
+     "sql": "INSERT INTO t SELECT * FROM t WHERE x > 1",
+     "reads": ["t"], "writes": ["t"]},
+
+    {"id": "schema_qualification_collapses", "why": "public.orders and orders are one asset",
+     "sql": "SELECT * FROM public.orders o JOIN orders x ON x.id = o.id",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "quoted_identifier_keeps_case", "why": "quoting is meaningful in a case-sensitive catalog",
+     "sql": "SELECT * FROM \"Weird Name\"",
+     "reads": ["Weird Name"], "writes": []},
+
+    {"id": "mixed_case_unquoted_folds", "why": "unquoted identifiers are case-insensitive",
+     "sql": "SELECT * FROM ORDERS",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "subquery_in_from", "why": "a derived table is scope, its source is the asset",
+     "sql": "SELECT * FROM (SELECT id FROM orders WHERE amount > 0) x",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "self_join_counts_once", "why": "one asset, two aliases",
+     "sql": "SELECT a.id FROM orders a JOIN orders b ON b.parent_id = a.id",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "union_branches", "why": "every branch contributes",
+     "sql": "SELECT id FROM orders UNION ALL SELECT id FROM archived_orders",
+     "reads": ["orders", "archived_orders"], "writes": []},
+
+    {"id": "except_branches", "why": "set operations other than UNION",
+     "sql": "SELECT id FROM orders EXCEPT SELECT id FROM cancellations",
+     "reads": ["orders", "cancellations"], "writes": []},
+
+    {"id": "window_function", "why": "window syntax must not confuse source detection",
+     "sql": "SELECT id, ROW_NUMBER() OVER (PARTITION BY cid ORDER BY created_at) AS rn FROM orders",
+     "reads": ["orders"], "writes": []},
+
+    {"id": "multi_statement", "why": "one config field can hold several statements",
+     "sql": "CREATE TABLE stg AS SELECT * FROM raw_orders; INSERT INTO fact SELECT * FROM stg;",
+     "reads": ["raw_orders", "stg"], "writes": ["stg", "fact"]},
+
+    {"id": "values_clause_has_no_source", "why": "constant rows read nothing",
+     "sql": "INSERT INTO t (id) VALUES (1), (2)",
+     "reads": [], "writes": ["t"]}
+  ]
+}
