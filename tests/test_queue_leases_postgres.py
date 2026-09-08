@@ -200,3 +200,55 @@ class TestPostgresTransactionalSink:
         sink.commit(batch, offsets, Fence("pg-events", 1))
 
         assert len(sink.rows()) == 30
+
+
+class TestPostgresWindowing:
+    """Window aggregates use arithmetic in ON CONFLICT DO UPDATE."""
+
+    @pytest.fixture(autouse=True)
+    def clean(self, pg_db):
+        for table in ("pg_win_sink",):
+            with pg_db._get_conn() as conn:
+                conn.execute(pg_db.text("DROP TABLE IF EXISTS {0}".format(table)))
+                conn.commit()
+        with pg_db._get_conn() as conn:
+            for table in ("stream_state", "stream_windows", "window_corrections", "late_events"):
+                conn.execute(pg_db.text("DELETE FROM {0} WHERE stream = 'pg-win'".format(table)))
+            conn.commit()
+        yield
+
+    def test_accounting_closes_on_postgres(self, pg_db, tmp_path):
+        from dataplatform.plugins.base import Fence
+        from dataplatform.streaming.generator import GeneratorConfig, generate
+        from dataplatform.streaming.runner import run_stream
+        from dataplatform.streaming.sinks import SqlTransactionalSink
+        from dataplatform.streaming.sources import JsonlSource, partition_for
+        from dataplatform.streaming.verifier import verify, verify_window_accounting
+        from dataplatform.streaming.windows import WindowPolicy
+
+        stream = generate(
+            GeneratorConfig(
+                keys=6, events_per_key=300, seed=13, event_interval_seconds=144,
+                late_fraction=0.1, late_delay_seconds=5400,
+                very_late_fraction=0.03, very_late_delay_seconds=172800,
+            )
+        )
+        stream.write(str(tmp_path / "events.jsonl"), str(tmp_path / "manifest.json"))
+
+        source = JsonlSource(str(tmp_path / "events.jsonl"), partitions=4)
+        sink = SqlTransactionalSink(
+            table="pg_win_sink", stream="pg-win", windowing=WindowPolicy(),
+            partition_of=lambda record: partition_for(str(record["key"]), 4),
+        )
+        run_stream(source, sink, Fence("pg-win", 1), batch_size=200)
+
+        rows = sink.rows()
+        accounting = verify_window_accounting(
+            stream.manifest, sink.window_rows(), sink.late_rows(), sink_rows=rows
+        )
+
+        assert verify(stream.manifest, rows).ok
+        assert accounting.ok, accounting.summary()
+        assert accounting.late_counted > 0 and accounting.late_side_output > 0
+        assert any(row["revision"] > 0 for row in sink.window_rows())
+        assert any(row["closed_at"] for row in sink.window_rows())

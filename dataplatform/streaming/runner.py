@@ -24,6 +24,7 @@ from typing import Optional
 
 from dataplatform.core.chaos import CrashPoint, maybe_crash
 from dataplatform.plugins.base import Fence, StaleFence, StreamingSource, TransactionalSink
+from dataplatform.streaming.windows import WindowPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -117,15 +118,23 @@ def build_and_run(
     batch_size: int = 100,
     attempt: int = 1,
     max_batches: Optional[int] = None,
+    windowing: Optional["WindowPolicy"] = None,
 ) -> RunStats:
     """Wire a JSONL source to a SQL sink and drain it."""
     from dataplatform.core.database import init_db
     from dataplatform.streaming.sinks import SqlTransactionalSink
-    from dataplatform.streaming.sources import JsonlSource
+    from dataplatform.streaming.sources import JsonlSource, partition_for
 
     init_db()
     source = JsonlSource(os.path.join(stream_dir, "events.jsonl"), partitions=partitions)
-    sink = SqlTransactionalSink(table=table, stream=stream_name)
+    sink = SqlTransactionalSink(
+        table=table,
+        stream=stream_name,
+        windowing=windowing,
+        # The sink must partition records exactly as the source did, or the
+        # watermark would be computed over the wrong frontier.
+        partition_of=lambda record: partition_for(str(record["key"]), partitions),
+    )
     return run_stream(
         source,
         sink,
@@ -144,9 +153,24 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--batch-size", type=int, default=100)
     parser.add_argument("--attempt", type=int, default=1, help="Fencing token")
     parser.add_argument("--max-batches", type=int, default=None)
+    parser.add_argument("--window", default="1h", help="Tumbling window size")
+    parser.add_argument("--out-of-orderness", default="5m", help="Watermark lag")
+    parser.add_argument("--allowed-lateness", default="6h", help="Window retention after firing")
+    parser.add_argument("--idle-timeout", default="60s", help="Idle partition timeout")
+    parser.add_argument("--on-late", default="side_output", choices=["side_output", "update"])
+    parser.add_argument("--no-windowing", action="store_true", help="Skip event-time windowing")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s - %(message)s")
+    from dataplatform.core.durations import parse_duration
+
+    windowing = None if args.no_windowing else WindowPolicy(
+        window_seconds=parse_duration(args.window),
+        out_of_orderness_seconds=parse_duration(args.out_of_orderness),
+        allowed_lateness_seconds=parse_duration(args.allowed_lateness),
+        idle_partition_timeout_seconds=parse_duration(args.idle_timeout),
+        on_late=args.on_late,
+    )
     stats = build_and_run(
         stream_dir=args.stream,
         table=args.table,
@@ -155,6 +179,7 @@ def main(argv: Optional[list] = None) -> int:
         batch_size=args.batch_size,
         attempt=args.attempt,
         max_batches=args.max_batches,
+        windowing=windowing,
     )
     print(stats.summary())
     return 2 if stats.fenced_out else 0

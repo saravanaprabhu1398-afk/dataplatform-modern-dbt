@@ -32,7 +32,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional
 
 from dataplatform.streaming.generator import Manifest
-from dataplatform.streaming.model import StreamEvent, compute_checksum, window_start
+from dataplatform.streaming.model import (
+    StreamEvent,
+    compute_checksum,
+    identity_str,
+    window_start,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -287,3 +292,114 @@ def _compare_windows(
                 )
             )
     return mismatches
+
+
+# ---------------------------------------------------------------------------
+# Window accounting
+# ---------------------------------------------------------------------------
+
+@dataclass
+class WindowAccounting:
+    """Whether every record is accounted for once, in a window or beside it.
+
+    A windowed pipeline is allowed to leave a very-late record out of its
+    aggregate -- that is what allowed lateness *means* -- but it is never
+    allowed to lose one.  So the test is not "windows equal the manifest"; it
+    is "windows plus side output equal the manifest, and nothing is counted
+    twice".
+    """
+
+    windows_checked: int = 0
+    matched: int = 0
+    mismatches: List[WindowMismatch] = field(default_factory=list)
+    late_counted: int = 0
+    late_side_output: int = 0
+    missing_from_both: int = 0
+
+    @property
+    def ok(self) -> bool:
+        return not self.mismatches and self.missing_from_both == 0
+
+    def summary(self) -> str:
+        lines = [
+            "window accounting: {0}".format("PASS" if self.ok else "FAIL"),
+            "  windows           {0} ({1} matched)".format(
+                self.windows_checked, self.matched
+            ),
+            "  late, corrected   {0}".format(self.late_counted),
+            "  late, side output {0}".format(self.late_side_output),
+            "  unaccounted       {0}".format(self.missing_from_both),
+        ]
+        for mismatch in self.mismatches[:5]:
+            lines.append(
+                "    window {0}: count {1}->{2}, sum {3}->{4}".format(
+                    mismatch.window_start,
+                    mismatch.expected_count,
+                    mismatch.actual_count,
+                    mismatch.expected_sum_cents,
+                    mismatch.actual_sum_cents,
+                )
+            )
+        return "\n".join(lines)
+
+
+def verify_window_accounting(
+    manifest: Manifest,
+    window_rows: Iterable[Dict[str, Any]],
+    late_rows: Iterable[Dict[str, Any]],
+    sink_rows: Optional[Iterable[Dict[str, Any]]] = None,
+) -> WindowAccounting:
+    """Check that window aggregates plus side output reconcile to the manifest.
+
+    ``sink_rows`` is optional and only used to price the side output: a late
+    record's amount lives with the record, not in the ``late_events`` row.
+    """
+    report = WindowAccounting()
+
+    amounts: Dict[str, int] = {}
+    for row in sink_rows or []:
+        amounts[identity_str(str(row["key"]), int(row["seq"]))] = int(row["amount_cents"])
+
+    windows = {
+        str(row["window_start"]): (
+            int(row["event_count"]),
+            int(row["sum_amount_cents"]),
+        )
+        for row in window_rows
+    }
+
+    side_output: Dict[str, List[str]] = defaultdict(list)
+    for row in late_rows:
+        ident = identity_str(str(row["key"]), int(row["seq"]))
+        if int(row.get("counted", 0)):
+            report.late_counted += 1
+        else:
+            report.late_side_output += 1
+            side_output[str(row["window_start"])].append(ident)
+
+    for window, expected in sorted(manifest.windows.items()):
+        report.windows_checked += 1
+        actual_count, actual_sum = windows.get(window, (0, 0))
+
+        excluded = side_output.get(window, [])
+        actual_count += len(excluded)
+        if amounts:
+            actual_sum += sum(amounts.get(ident, 0) for ident in excluded)
+
+        if actual_count == expected["count"] and (
+            not amounts or actual_sum == expected["sum_amount_cents"]
+        ):
+            report.matched += 1
+        else:
+            report.mismatches.append(
+                WindowMismatch(
+                    window_start=window,
+                    expected_count=expected["count"],
+                    actual_count=actual_count,
+                    expected_sum_cents=expected["sum_amount_cents"],
+                    actual_sum_cents=actual_sum,
+                )
+            )
+            report.missing_from_both += max(expected["count"] - actual_count, 0)
+
+    return report

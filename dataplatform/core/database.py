@@ -249,6 +249,48 @@ _stream_state = Table(
     Column("updated_at", String, nullable=False),
 )
 
+_stream_windows = Table(
+    "stream_windows",
+    _metadata,
+    Column("stream", String, primary_key=True),
+    Column("window_start", String, primary_key=True),
+    Column("event_count", Integer, nullable=False),
+    Column("sum_amount_cents", Integer, nullable=False),
+    # Bumped every time a late arrival restates the window.
+    Column("revision", Integer, nullable=False, server_default="0"),
+    Column("closed_at", String),
+    Column("updated_at", String, nullable=False),
+)
+
+_window_corrections = Table(
+    "window_corrections",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("stream", String, nullable=False),
+    Column("window_start", String, nullable=False),
+    Column("revision", Integer, nullable=False),
+    Column("delta_count", Integer, nullable=False),
+    Column("delta_amount_cents", Integer, nullable=False),
+    Column("reason", String, nullable=False),
+    Column("emitted_at", String, nullable=False),
+)
+
+_late_events = Table(
+    "late_events",
+    _metadata,
+    Column("stream", String, primary_key=True),
+    Column("key", String, primary_key=True),
+    Column("seq", Integer, primary_key=True),
+    Column("event_time", String, nullable=False),
+    Column("window_start", String, nullable=False),
+    Column("watermark", String),
+    Column("lateness_seconds", Integer, nullable=False),
+    Column("reason", String, nullable=False),
+    # Whether the record still made it into its window's aggregate.
+    Column("counted", Integer, nullable=False),
+    Column("recorded_at", String, nullable=False),
+)
+
 _metric_samples = Table(
     "metric_samples",
     _metadata,
@@ -398,6 +440,8 @@ Index("idx_audit_actor", _audit_log.c.actor, _audit_log.c.occurred_at)
 Index("idx_queue_status", _pipeline_queue.c.status, _pipeline_queue.c.queued_at)
 Index("idx_queue_pipeline", _pipeline_queue.c.pipeline_name, _pipeline_queue.c.queued_at)
 Index("idx_queue_lease", _pipeline_queue.c.status, _pipeline_queue.c.lease_expires_at)
+Index("idx_late_events_stream", _late_events.c.stream, _late_events.c.window_start)
+Index("idx_window_corrections_stream", _window_corrections.c.stream, _window_corrections.c.window_start)
 Index("idx_metric_samples_name_time", _metric_samples.c.metric_name, _metric_samples.c.collected_at)
 Index("idx_metric_samples_pipeline_time", _metric_samples.c.pipeline_name, _metric_samples.c.collected_at)
 Index("idx_alert_rules_enabled", _alert_rules.c.enabled, _alert_rules.c.metric_name)

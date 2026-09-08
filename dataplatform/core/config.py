@@ -3,6 +3,8 @@ from typing import List, Literal, Optional, Dict, Any, Union
 from pathlib import Path
 import networkx as _nx
 
+from dataplatform.core.durations import parse_duration
+
 
 # ---------------------------------------------------------------------------
 # Lineage
@@ -126,6 +128,60 @@ class TriggerDefinition(BaseModel):
 # Task
 # ---------------------------------------------------------------------------
 
+class StreamingWindows(BaseModel):
+    """Event-time windowing policy for a streaming task.
+
+    Two knobs decide what "late" means, and they are not the same thing:
+
+    ``out_of_orderness`` is how far the watermark trails the highest event time
+    seen -- the routine disorder a stream always has.  ``allowed_lateness`` is
+    how long a window keeps accepting updates *after* it has fired; arrivals in
+    that period produce a correction rather than a wrong answer.
+
+    Records later than both are written to the side output, never dropped.
+    There is deliberately no "drop" policy: silently losing records is the
+    failure this whole subsystem exists to detect.
+
+    Example YAML::
+
+        tasks:
+          - name: sessionize_events
+            plugin: kafka_stream
+            streaming:
+              event_time_field: occurred_at
+              window: 1h
+              out_of_orderness: 5m
+              allowed_lateness: 6h
+              idle_partition_timeout: 60s
+              on_late: side_output
+    """
+
+    event_time_field: str = "event_time"
+    window: int = 3600
+    out_of_orderness: int = 300
+    allowed_lateness: int = 21600
+    idle_partition_timeout: int = 60
+    on_late: Literal["side_output", "update"] = "side_output"
+
+    @field_validator(
+        "window", "out_of_orderness", "allowed_lateness", "idle_partition_timeout",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_duration(cls, value: Any) -> Any:
+        """Accept 6h / 90m / 30s as well as a plain number of seconds."""
+        if value is None:
+            return value
+        return parse_duration(value)
+
+    @field_validator("window")
+    @classmethod
+    def _window_must_be_positive(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("window must be a positive duration")
+        return value
+
+
 class Task(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -143,6 +199,7 @@ class Task(BaseModel):
     # Phase 2 — observability
     lineage: Optional[TaskLineage] = None
     quality: Optional[TaskQuality] = None
+    streaming: Optional[StreamingWindows] = None
 
     @field_validator("name", "plugin")
     @classmethod
