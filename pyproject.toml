@@ -58,6 +58,10 @@ dev = [
     "black",
     "flake8",
     "mypy",
+    # Needed for tests/test_queue_leases_postgres.py, which exercises the
+    # FOR UPDATE SKIP LOCKED claim path. Skipped unless
+    # DATAPLATFORM_TEST_POSTGRES_URL is set.
+    "psycopg2-binary",
 ]
 ui = [
     "react",

@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import threading
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -29,6 +30,8 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.exc import IntegrityError
+
+from dataplatform.core.leases import Lease, current_lease
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +228,25 @@ _pipeline_queue = Table(
     Column("started_at", String),
     Column("completed_at", String),
     Column("error", Text),
+    # Lease + fencing: who holds this run, until when, and on which attempt.
+    # ``attempt`` only ever increases for a run_id, so it doubles as a fencing
+    # token -- a worker whose lease expired can be rejected on write.
+    Column("worker_id", String),
+    Column("lease_expires_at", String),
+    Column("heartbeat_at", String),
+    Column("attempt", Integer, nullable=False, server_default="0"),
+)
+
+_stream_state = Table(
+    "stream_state",
+    _metadata,
+    Column("stream", String, primary_key=True),
+    Column("partition", String, primary_key=True),
+    Column("next_offset", Integer, nullable=False),
+    # The fencing token of the writer that last advanced this partition.
+    Column("attempt", Integer, nullable=False, server_default="0"),
+    Column("watermark", String),
+    Column("updated_at", String, nullable=False),
 )
 
 _metric_samples = Table(
@@ -375,6 +397,7 @@ Index("idx_audit_event_type", _audit_log.c.event_type, _audit_log.c.occurred_at)
 Index("idx_audit_actor", _audit_log.c.actor, _audit_log.c.occurred_at)
 Index("idx_queue_status", _pipeline_queue.c.status, _pipeline_queue.c.queued_at)
 Index("idx_queue_pipeline", _pipeline_queue.c.pipeline_name, _pipeline_queue.c.queued_at)
+Index("idx_queue_lease", _pipeline_queue.c.status, _pipeline_queue.c.lease_expires_at)
 Index("idx_metric_samples_name_time", _metric_samples.c.metric_name, _metric_samples.c.collected_at)
 Index("idx_metric_samples_pipeline_time", _metric_samples.c.pipeline_name, _metric_samples.c.collected_at)
 Index("idx_alert_rules_enabled", _alert_rules.c.enabled, _alert_rules.c.metric_name)
@@ -456,19 +479,37 @@ def _ensure_schema_migrations(engine: Any) -> None:
     """Apply additive schema changes for existing metadata stores."""
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
-    if "deployments" not in table_names:
-        return
 
-    deployment_columns = {column["name"] for column in inspector.get_columns("deployments")}
-    optional_columns = {
-        "connection_id": "VARCHAR",
-        "connection_name": "VARCHAR",
-        "connection_provider": "VARCHAR",
-    }
-    with engine.begin() as conn:
-        for column_name, column_type in optional_columns.items():
-            if column_name not in deployment_columns:
-                conn.execute(text(f"ALTER TABLE deployments ADD COLUMN {column_name} {column_type}"))
+    if "deployments" in table_names:
+        deployment_columns = {column["name"] for column in inspector.get_columns("deployments")}
+        optional_columns = {
+            "connection_id": "VARCHAR",
+            "connection_name": "VARCHAR",
+            "connection_provider": "VARCHAR",
+        }
+        with engine.begin() as conn:
+            for column_name, column_type in optional_columns.items():
+                if column_name not in deployment_columns:
+                    conn.execute(text(f"ALTER TABLE deployments ADD COLUMN {column_name} {column_type}"))
+
+    if "pipeline_queue" in table_names:
+        queue_columns = {column["name"] for column in inspector.get_columns("pipeline_queue")}
+        lease_columns = {
+            "worker_id": "VARCHAR",
+            "lease_expires_at": "VARCHAR",
+            "heartbeat_at": "VARCHAR",
+            "attempt": "INTEGER DEFAULT 0",
+        }
+        with engine.begin() as conn:
+            for column_name, column_type in lease_columns.items():
+                if column_name not in queue_columns:
+                    conn.execute(
+                        text(f"ALTER TABLE pipeline_queue ADD COLUMN {column_name} {column_type}")
+                    )
+            # Rows written before the migration have a NULL attempt; the
+            # fencing comparison needs a number, not a NULL.
+            if "attempt" not in queue_columns:
+                conn.execute(text("UPDATE pipeline_queue SET attempt = 0 WHERE attempt IS NULL"))
 
 
 def _row_to_dict(row: Any) -> Dict[str, Any]:
@@ -2689,8 +2730,18 @@ def set_run_status_in_queue(
     run_id: str,
     status: str,
     error: Optional[str] = None,
-) -> None:
-    """Transition a queued run to running / completed / failed / cancelled."""
+) -> bool:
+    """Transition a queued run to running / completed / failed / cancelled.
+
+    When the calling thread holds a lease on this run (see
+    :mod:`dataplatform.core.leases`), the transition is fenced: it applies only
+    while the lease is still ours.  Returns False when the write was fenced
+    out, meaning another attempt now owns the run and this one must stop.
+    """
+    lease = current_lease(run_id)
+    if lease is not None:
+        return _set_run_status_fenced(run_id, status, error, lease)
+
     now = datetime.utcnow().isoformat() + "Z"
     with _get_conn() as conn:
         if status == "running":
@@ -2705,13 +2756,66 @@ def set_run_status_in_queue(
                 text(
                     """
                     UPDATE pipeline_queue
-                    SET status = :status, completed_at = :now, error = :error
+                    SET status = :status,
+                        completed_at = :now,
+                        error = :error,
+                        lease_expires_at = NULL
                     WHERE run_id = :run_id
                     """
                 ),
                 {"status": status, "now": now, "error": error, "run_id": run_id},
             )
         conn.commit()
+    return True
+
+
+def _set_run_status_fenced(
+    run_id: str,
+    status: str,
+    error: Optional[str],
+    lease: Lease,
+) -> bool:
+    """Apply a status transition only while *lease* is still the live attempt."""
+    now = datetime.utcnow().isoformat() + "Z"
+    terminal = status != "running"
+    sql = """
+        UPDATE pipeline_queue
+           SET status = :status,
+               {assignment}
+         WHERE run_id = :run_id
+           AND worker_id = :worker_id
+           AND attempt = :attempt
+    """.format(
+        assignment=(
+            "completed_at = :now, error = :error, lease_expires_at = NULL"
+            if terminal
+            else "started_at = :now"
+        )
+    )
+    with _get_conn() as conn:
+        result = conn.execute(
+            text(sql),
+            {
+                "status": status,
+                "now": now,
+                "error": error,
+                "run_id": run_id,
+                "worker_id": lease.worker_id,
+                "attempt": lease.attempt,
+            },
+        )
+        conn.commit()
+
+    if result.rowcount != 1:
+        logger.warning(
+            "Fenced out: worker=%s attempt=%s could not set run_id=%s to %s",
+            lease.worker_id,
+            lease.attempt,
+            run_id,
+            status,
+        )
+        return False
+    return True
 
 
 def get_queue_runs(
@@ -2766,48 +2870,278 @@ def get_queue_counts_by_status() -> List[Dict[str, Any]]:
     return [dict(row._mapping) for row in rows]
 
 
-def claim_next_queued_run() -> Optional[Dict[str, Any]]:
-    """Atomically claim the oldest queued run for an external worker."""
-    now = datetime.utcnow().isoformat() + "Z"
-    with _get_conn() as conn:
-        trans = conn.begin()
-        try:
+DEFAULT_LEASE_SECONDS = 60
+DEFAULT_MAX_ATTEMPTS = 3
+
+#: How many queued rows a claim will walk past before giving up.  Only used on
+#: backends without ``SKIP LOCKED``; it bounds the work a losing racer does.
+_CLAIM_SCAN_LIMIT = 20
+
+
+def _now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _iso_in(seconds: float) -> str:
+    return (datetime.utcnow() + timedelta(seconds=seconds)).isoformat() + "Z"
+
+
+def _is_postgres() -> bool:
+    return _get_engine().dialect.name == "postgresql"
+
+
+def generate_worker_id(prefix: str = "worker") -> str:
+    """Return an id unique to one worker process."""
+    return "{0}-{1}-{2}".format(prefix, os.getpid(), uuid.uuid4().hex[:8])
+
+
+def claim_next_queued_run(
+    worker_id: Optional[str] = None,
+    lease_seconds: float = DEFAULT_LEASE_SECONDS,
+) -> Optional[Dict[str, Any]]:
+    """Atomically claim the oldest queued run and take a lease on it.
+
+    The claim stamps the run with the claiming ``worker_id``, a lease deadline,
+    and an incremented ``attempt``.  ``attempt`` is monotonic per run and acts
+    as the fencing token: a worker that loses its lease can be rejected at
+    write time by comparing attempts, rather than merely being unlikely to
+    still be running.
+
+    On PostgreSQL the claim is a single statement using ``FOR UPDATE SKIP
+    LOCKED``, so concurrent workers take *different* rows instead of contending
+    on the head of the queue.  Other backends (SQLite in development) have no
+    ``SKIP LOCKED``; there the claim walks candidates and retries on a lost
+    race, which is slower but never returns ``None`` while work is available.
+    """
+    worker = worker_id or generate_worker_id()
+    now = _now_iso()
+    lease = _iso_in(lease_seconds)
+    params = {"worker_id": worker, "now": now, "lease": lease}
+
+    if _is_postgres():
+        with _get_conn() as conn:
             row = conn.execute(
                 text(
                     """
-                    SELECT * FROM pipeline_queue
-                    WHERE status = 'queued'
-                    ORDER BY queued_at ASC
-                    LIMIT 1
+                    UPDATE pipeline_queue
+                       SET status = 'running',
+                           worker_id = :worker_id,
+                           attempt = attempt + 1,
+                           started_at = :now,
+                           heartbeat_at = :now,
+                           lease_expires_at = :lease
+                     WHERE run_id = (
+                           SELECT run_id FROM pipeline_queue
+                            WHERE status = 'queued'
+                            ORDER BY queued_at
+                              FOR UPDATE SKIP LOCKED
+                            LIMIT 1)
+                 RETURNING *
                     """
-                )
+                ),
+                params,
             ).fetchone()
-            if row is None:
-                trans.commit()
-                return None
+            conn.commit()
+        return dict(row._mapping) if row is not None else None
 
-            run = dict(row._mapping)
+    # Backends without SKIP LOCKED: walk candidates, skipping rows another
+    # worker claimed between our SELECT and our UPDATE.
+    with _get_conn() as conn:
+        candidates = conn.execute(
+            text(
+                """
+                SELECT run_id FROM pipeline_queue
+                 WHERE status = 'queued'
+                 ORDER BY queued_at ASC
+                 LIMIT :limit
+                """
+            ),
+            {"limit": _CLAIM_SCAN_LIMIT},
+        ).fetchall()
+
+        for candidate in candidates:
+            run_id = candidate._mapping["run_id"]
             result = conn.execute(
                 text(
                     """
                     UPDATE pipeline_queue
-                    SET status = 'running', started_at = :now
-                    WHERE run_id = :run_id AND status = 'queued'
+                       SET status = 'running',
+                           worker_id = :worker_id,
+                           attempt = attempt + 1,
+                           started_at = :now,
+                           heartbeat_at = :now,
+                           lease_expires_at = :lease
+                     WHERE run_id = :run_id AND status = 'queued'
                     """
                 ),
-                {"now": now, "run_id": run["run_id"]},
+                dict(params, run_id=run_id),
             )
-            trans.commit()
-        except Exception:
-            trans.rollback()
-            raise
+            if result.rowcount != 1:
+                continue  # lost the race for this row -- try the next one
+
+            conn.commit()
+            row = conn.execute(
+                text("SELECT * FROM pipeline_queue WHERE run_id = :run_id"),
+                {"run_id": run_id},
+            ).fetchone()
+            return dict(row._mapping) if row is not None else None
+
+        conn.commit()
+    return None
+
+
+def renew_lease(
+    run_id: str,
+    worker_id: str,
+    attempt: int,
+    lease_seconds: float = DEFAULT_LEASE_SECONDS,
+) -> bool:
+    """Extend a lease. False means the caller no longer holds it.
+
+    A worker that gets False here must stop working: the run has been reaped
+    and possibly reclaimed by someone else.
+    """
+    with _get_conn() as conn:
+        result = conn.execute(
+            text(
+                """
+                UPDATE pipeline_queue
+                   SET lease_expires_at = :lease, heartbeat_at = :now
+                 WHERE run_id = :run_id
+                   AND worker_id = :worker_id
+                   AND attempt = :attempt
+                   AND status = 'running'
+                """
+            ),
+            {
+                "run_id": run_id,
+                "worker_id": worker_id,
+                "attempt": attempt,
+                "now": _now_iso(),
+                "lease": _iso_in(lease_seconds),
+            },
+        )
+        conn.commit()
+    return result.rowcount == 1
+
+
+def holds_lease(run_id: str, worker_id: str, attempt: int) -> bool:
+    """True when this worker still holds an unexpired lease on the run."""
+    run = get_queue_run(run_id)
+    if run is None or run["status"] != "running":
+        return False
+    if run.get("worker_id") != worker_id or int(run.get("attempt") or 0) != attempt:
+        return False
+    expires = run.get("lease_expires_at")
+    return bool(expires) and expires > _now_iso()
+
+
+def complete_run_with_lease(
+    run_id: str,
+    worker_id: str,
+    attempt: int,
+    status: str,
+    error: Optional[str] = None,
+) -> bool:
+    """Finish a run, but only if the caller still holds the lease.
+
+    This is the fence: a worker that stalled past its lease and woke up cannot
+    overwrite the outcome of the attempt that replaced it.
+    """
+    with _get_conn() as conn:
+        result = conn.execute(
+            text(
+                """
+                UPDATE pipeline_queue
+                   SET status = :status,
+                       completed_at = :now,
+                       error = :error,
+                       lease_expires_at = NULL
+                 WHERE run_id = :run_id
+                   AND worker_id = :worker_id
+                   AND attempt = :attempt
+                   AND status = 'running'
+                """
+            ),
+            {
+                "run_id": run_id,
+                "worker_id": worker_id,
+                "attempt": attempt,
+                "status": status,
+                "error": error,
+                "now": _now_iso(),
+            },
+        )
+        conn.commit()
 
     if result.rowcount != 1:
-        return None
+        logger.warning(
+            "Fenced out: worker=%s attempt=%s could not finish run_id=%s",
+            worker_id,
+            attempt,
+            run_id,
+        )
+    return result.rowcount == 1
 
-    run["status"] = "running"
-    run["started_at"] = now
-    return run
+
+def reap_expired_leases(
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+) -> Dict[str, int]:
+    """Requeue runs whose lease expired; dead-letter the ones that keep dying.
+
+    This replaces "a run is dead if it started a while ago" with "a run is dead
+    if nobody is renewing its lease", which is the difference between killing a
+    slow job and detecting a lost worker.  Returns counts per action.
+    """
+    now = _now_iso()
+    with _get_conn() as conn:
+        dead = conn.execute(
+            text(
+                """
+                UPDATE pipeline_queue
+                   SET status = 'dead_letter',
+                       completed_at = :now,
+                       error = :error,
+                       worker_id = NULL,
+                       lease_expires_at = NULL
+                 WHERE status = 'running'
+                   AND lease_expires_at IS NOT NULL
+                   AND lease_expires_at <= :now
+                   AND attempt >= :max_attempts
+                """
+            ),
+            {
+                "now": now,
+                "error": "Lease expired after {0} attempt(s)".format(max_attempts),
+                "max_attempts": max_attempts,
+            },
+        )
+        requeued = conn.execute(
+            text(
+                """
+                UPDATE pipeline_queue
+                   SET status = 'queued',
+                       worker_id = NULL,
+                       lease_expires_at = NULL,
+                       started_at = NULL
+                 WHERE status = 'running'
+                   AND lease_expires_at IS NOT NULL
+                   AND lease_expires_at <= :now
+                   AND attempt < :max_attempts
+                """
+            ),
+            {"now": now, "max_attempts": max_attempts},
+        )
+        conn.commit()
+
+    counts = {"requeued": requeued.rowcount, "dead_lettered": dead.rowcount}
+    if counts["requeued"] or counts["dead_lettered"]:
+        logger.warning(
+            "Reaped expired leases: %d requeued, %d dead-lettered",
+            counts["requeued"],
+            counts["dead_lettered"],
+        )
+    return counts
 
 
 def get_queue_run(run_id: str) -> Optional[Dict[str, Any]]:
@@ -2823,6 +3157,16 @@ def get_queue_run(run_id: str) -> Optional[Dict[str, Any]]:
 def recover_orphaned_runs(stale_after_seconds: int = 3600) -> int:
     """Mark stale queued/running runs as failed on restart.
 
+    This is the embedded-worker path: when the API process itself restarts, the
+    runs it was executing in-process really are gone.
+
+    Runs carrying a ``worker_id`` are skipped entirely, whether or not their
+    lease is still live.  Those belong to an external worker, and their
+    lifecycle is :func:`reap_expired_leases`'s job -- which *requeues* them
+    instead of failing them.  Sweeping them here would both cause the
+    split-brain this module exists to avoid and, for an already-expired lease,
+    race the reaper and turn a recoverable run into a failed one.
+
     Returns the number of runs recovered.
     """
     now = datetime.utcnow().isoformat() + "Z"
@@ -2835,6 +3179,7 @@ def recover_orphaned_runs(stale_after_seconds: int = 3600) -> int:
                 SET status = 'failed', completed_at = :now, error = 'Server restarted'
                 WHERE status IN ('queued', 'running')
                   AND COALESCE(started_at, queued_at) <= :cutoff
+                  AND worker_id IS NULL
                 """
             ),
             {"now": now, "cutoff": cutoff_iso},
