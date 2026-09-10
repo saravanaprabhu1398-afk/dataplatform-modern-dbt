@@ -2,6 +2,7 @@
 
 A self-hosted data orchestration platform built in Python. Define pipelines in YAML, run them via web UI or REST API, and manage everything from a single dashboard — without Airflow's complexity.
 
+[![tests](https://github.com/saravanaprabhu1398-afk/dataplatform-modern-dbt/actions/workflows/tests.yml/badge.svg)](https://github.com/saravanaprabhu1398-afk/dataplatform-modern-dbt/actions/workflows/tests.yml)
 ![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![Plugins: 13](https://img.shields.io/badge/Plugins-13-orange)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)

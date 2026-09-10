@@ -1,0 +1,73 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: pytest (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest tests/ -q
+
+  postgres:
+    # The run queue's claim path (FOR UPDATE SKIP LOCKED) and the streaming
+    # sink's row-locked fence only execute on PostgreSQL. Without this job those
+    # tests skip, and the concurrency guarantees the README advertises go
+    # unverified on every push.
+    name: pytest against PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dp
+          POSTGRES_PASSWORD: dp
+          POSTGRES_DB: dp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATAPLATFORM_TEST_POSTGRES_URL: postgresql+psycopg2://dp:dp@localhost:5432/dp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: The PostgreSQL-only tests must actually run
+        # These tests skip themselves when the database is unreachable, so a
+        # misconfigured service would produce a green job that verified nothing.
+        # Fail loudly instead.
+        run: |
+          pytest tests/test_queue_leases_postgres.py -q | tee pg-tests.log
+          if grep -q "skipped" pg-tests.log; then
+            echo "::error::PostgreSQL tests skipped - the service was not reachable"
+            exit 1
+          fi
+      - name: Run the full suite against PostgreSQL
+        run: pytest tests/ -q
