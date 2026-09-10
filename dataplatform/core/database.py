@@ -291,6 +291,23 @@ _late_events = Table(
     Column("recorded_at", String, nullable=False),
 )
 
+_column_lineage = Table(
+    "column_lineage",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("run_id", String),
+    Column("pipeline_name", String),
+    Column("task_name", String),
+    Column("target_asset", String, nullable=False),
+    Column("target_column", String, nullable=False),
+    Column("source_asset", String, nullable=False),
+    Column("source_column", String, nullable=False),
+    # direct / derived / aggregate / join_key / unresolved_star / ambiguous
+    Column("kind", String, nullable=False),
+    Column("expression", Text),
+    Column("recorded_at", String, nullable=False),
+)
+
 _metric_samples = Table(
     "metric_samples",
     _metadata,
@@ -440,6 +457,8 @@ Index("idx_audit_actor", _audit_log.c.actor, _audit_log.c.occurred_at)
 Index("idx_queue_status", _pipeline_queue.c.status, _pipeline_queue.c.queued_at)
 Index("idx_queue_pipeline", _pipeline_queue.c.pipeline_name, _pipeline_queue.c.queued_at)
 Index("idx_queue_lease", _pipeline_queue.c.status, _pipeline_queue.c.lease_expires_at)
+Index("idx_column_lineage_target", _column_lineage.c.target_asset, _column_lineage.c.target_column)
+Index("idx_column_lineage_source", _column_lineage.c.source_asset, _column_lineage.c.source_column)
 Index("idx_late_events_stream", _late_events.c.stream, _late_events.c.window_start)
 Index("idx_window_corrections_stream", _window_corrections.c.stream, _window_corrections.c.window_start)
 Index("idx_metric_samples_name_time", _metric_samples.c.metric_name, _metric_samples.c.collected_at)
@@ -800,6 +819,82 @@ def save_lineage_record(
             },
         )
         conn.commit()
+
+
+def replace_column_lineage(
+    target_asset: str,
+    edges: List[Dict[str, Any]],
+    run_id: str = "",
+    pipeline_name: str = "",
+    task_name: str = "",
+) -> int:
+    """Replace the recorded column edges for one target asset.
+
+    Re-running a pipeline must not accumulate duplicate edges, and a column
+    that stopped being produced must stop appearing.  Both mean the write is a
+    replace, scoped to the asset the statement writes.
+    """
+    now = datetime.utcnow().isoformat() + "Z"
+    with _get_conn() as conn:
+        conn.execute(
+            text("DELETE FROM column_lineage WHERE target_asset = :asset"),
+            {"asset": target_asset},
+        )
+        for edge in edges:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO column_lineage
+                        (run_id, pipeline_name, task_name, target_asset, target_column,
+                         source_asset, source_column, kind, expression, recorded_at)
+                    VALUES
+                        (:run_id, :pipeline_name, :task_name, :target_asset, :target_column,
+                         :source_asset, :source_column, :kind, :expression, :now)
+                    """
+                ),
+                {
+                    "run_id": run_id,
+                    "pipeline_name": pipeline_name,
+                    "task_name": task_name,
+                    "target_asset": target_asset,
+                    "target_column": edge["target_column"],
+                    "source_asset": edge["source_asset"],
+                    "source_column": edge["source_column"],
+                    "kind": edge["kind"],
+                    "expression": edge.get("expression", ""),
+                    "now": now,
+                },
+            )
+        conn.commit()
+    return len(edges)
+
+
+def get_column_edges(
+    target_asset: Optional[str] = None,
+    source_asset: Optional[str] = None,
+    limit: int = 10000,
+) -> List[Dict[str, Any]]:
+    """Recorded column edges, optionally filtered by either end."""
+    clauses = []
+    params: Dict[str, Any] = {"lim": limit}
+    if target_asset:
+        clauses.append("target_asset = :target_asset")
+        params["target_asset"] = target_asset
+    if source_asset:
+        clauses.append("source_asset = :source_asset")
+        params["source_asset"] = source_asset
+    where = "WHERE {0}".format(" AND ".join(clauses)) if clauses else ""
+
+    with _get_conn() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT target_asset, target_column, source_asset, source_column, "
+                "kind, expression, pipeline_name, task_name FROM column_lineage "
+                "{0} ORDER BY target_asset, target_column LIMIT :lim".format(where)
+            ),
+            params,
+        ).fetchall()
+    return [dict(row._mapping) for row in rows]
 
 
 def get_lineage_for_asset(asset_uri: str) -> List[Dict[str, Any]]:
