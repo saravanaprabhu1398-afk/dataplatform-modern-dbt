@@ -575,6 +575,26 @@ def _normalize_environment_profile(profile_id: Optional[str]) -> Dict[str, Any]:
     return normalize_environment_profile(profile_id)
 
 
+def _resolve_config_path(config_path: str) -> str:
+    """Resolve a pipeline path and keep it inside the configured pipeline root."""
+    configured_root = Path(os.getenv("PIPELINES_PATH", "pipelines"))
+    if not configured_root.is_absolute():
+        configured_root = Path.cwd() / configured_root
+
+    resolved_root = configured_root.resolve()
+    resolved_path = Path(config_path).expanduser().resolve()
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError:
+        if not resolved_path.exists():
+            return str(resolved_path)
+        raise HTTPException(
+            status_code=400,
+            detail="config_path must point to a file inside the configured pipelines directory",
+        )
+    return str(resolved_path)
+
+
 def _select_environment_profile(config: PipelineConfig, requested_profile: Optional[str]) -> Dict[str, Any]:
     configured = config.execution.profile if config.execution and config.execution.profile else None
     return _normalize_environment_profile(requested_profile or configured or "local")
@@ -674,6 +694,7 @@ def _pipeline_validation_payload(
     warnings: List[str] = []
     task_results: List[Dict[str, Any]] = []
 
+    config_path = _resolve_config_path(config_path)
     try:
         config = load_config(config_path)
     except FileNotFoundError:
@@ -1547,7 +1568,7 @@ async def rollback_deployment_endpoint(
 @app.get("/pipeline-config")
 async def get_pipeline_config(config_path: str):
     try:
-        config_file = Path(config_path)
+        config_file = Path(_resolve_config_path(config_path))
         if not config_file.exists():
             raise HTTPException(status_code=404, detail=f"Config file not found: {config_path}")
         raw_content = config_file.read_text(encoding="utf-8")
@@ -1646,7 +1667,8 @@ async def dry_run_pipeline(request_body: PipelineRunRequest, request: Request):
     """Validate config and preview execution without running any tasks."""
     _require_permission(request, "run")
     try:
-        config = load_config(request_body.config_path)
+        config_path = _resolve_config_path(request_body.config_path)
+        config = load_config(config_path)
         dag_builder = DAGBuilder(config.tasks)
         dag_builder.build()
         execution_waves = dag_builder.get_execution_waves()
@@ -1701,7 +1723,8 @@ async def dry_run_pipeline(request_body: PipelineRunRequest, request: Request):
 async def run_pipeline(request_body: PipelineRunRequest, request: Request):
     _require_permission(request, "run")
     try:
-        config = load_config(request_body.config_path)
+        config_path = _resolve_config_path(request_body.config_path)
+        config = load_config(config_path)
         dag_builder = DAGBuilder(config.tasks)
         dag_builder.build()
         execution_order = dag_builder.get_execution_order()
@@ -1727,7 +1750,7 @@ async def run_pipeline(request_body: PipelineRunRequest, request: Request):
             ),
             run_id=run_id,
         )
-        enqueue_run(run_id, config.pipeline_name, request_body.config_path, actor=actor)
+        enqueue_run(run_id, config.pipeline_name, config_path, actor=actor)
 
         try:
             append_audit_event(
@@ -1776,7 +1799,8 @@ async def run_pipeline_sync(request_body: PipelineRunRequest, request: Request =
     if request is not None:
         _require_permission(request, "run")
     try:
-        config = load_config(request_body.config_path)
+        config_path = _resolve_config_path(request_body.config_path)
+        config = load_config(config_path)
         if request_body.dry_run:
             # Redirect to the dry-run handler — just preview, don't execute
             dag_builder = DAGBuilder(config.tasks)
@@ -2028,9 +2052,10 @@ async def get_run_queue(
 async def schedule_pipeline(request_body: PipelineScheduleRequest, request: Request):
     _require_permission(request, "schedule")
     try:
+        config_path = _resolve_config_path(request_body.config_path)
         scheduler = get_scheduler()
         scheduler.start()
-        if scheduler.schedule_pipeline(request_body.config_path, custom_schedule=request_body.schedule):
+        if scheduler.schedule_pipeline(config_path, custom_schedule=request_body.schedule):
             return {"message": "Pipeline scheduled successfully"}
         raise HTTPException(status_code=400, detail="Failed to schedule pipeline")
     except HTTPException:
@@ -2073,7 +2098,7 @@ async def list_scheduled_pipelines():
 async def get_pipeline_status(config_path: Optional[str] = None, pipeline_name: Optional[str] = None):
     try:
         if config_path:
-            config = load_config(config_path)
+            config = load_config(_resolve_config_path(config_path))
             pipeline_name = config.pipeline_name
         if not pipeline_name:
             raise HTTPException(status_code=400, detail="config_path or pipeline_name is required")
@@ -2110,7 +2135,7 @@ async def get_pipeline_history(pipeline_name: str, limit: int = 12):
 @app.get("/dag")
 async def get_pipeline_dag(config_path: str):
     try:
-        config = load_config(config_path)
+        config = load_config(_resolve_config_path(config_path))
         dag_builder = DAGBuilder(config.tasks)
         dag = dag_builder.build()
         return {
@@ -3119,6 +3144,7 @@ async def list_notification_deliveries_endpoint(
 async def register_trigger(request_body: TriggerRegisterRequest, request: Request):
     """Register an event-driven trigger. Requires editor+ role."""
     _require_permission(request, "schedule")
+    config_path = _resolve_config_path(request_body.config_path)
 
     valid_types = {"file_sensor", "pipeline_completion"}
     if request_body.trigger_type not in valid_types:
@@ -3144,7 +3170,7 @@ async def register_trigger(request_body: TriggerRegisterRequest, request: Reques
         trigger_id,
         request_body.trigger_type,
         request_body.pipeline_name,
-        request_body.config_path,
+        config_path,
         trigger_config,
     )
     if not ok:
@@ -3156,14 +3182,14 @@ async def register_trigger(request_body: TriggerRegisterRequest, request: Reques
         tm.register_file_sensor(
             trigger_id,
             request_body.watch_path,
-            _make_pipeline_runner(request_body.config_path, trigger_id),
+            _make_pipeline_runner(config_path, trigger_id),
             request_body.poll_interval_seconds,
         )
     elif request_body.trigger_type == "pipeline_completion":
         tm.register_completion_trigger(
             trigger_id,
             request_body.upstream_pipeline,
-            lambda pname, rid, _cp=request_body.config_path, _tid=trigger_id: _make_pipeline_runner(_cp, _tid)(),
+            lambda pname, rid, _cp=config_path, _tid=trigger_id: _make_pipeline_runner(_cp, _tid)(),
         )
 
     now = datetime.utcnow().isoformat() + "Z"
@@ -3171,7 +3197,7 @@ async def register_trigger(request_body: TriggerRegisterRequest, request: Reques
         trigger_id=trigger_id,
         trigger_type=request_body.trigger_type,
         pipeline_name=request_body.pipeline_name,
-        config_path=request_body.config_path,
+        config_path=config_path,
         enabled=True,
         created_at=now,
         last_fired_at=None,
@@ -3308,7 +3334,7 @@ async def restore_pipeline_version_endpoint(
 
     target_path: Optional[Path] = None
     if request_body.config_path:
-        candidate = Path(request_body.config_path)
+        candidate = Path(_resolve_config_path(request_body.config_path))
         if not candidate.exists():
             raise HTTPException(
                 status_code=404,

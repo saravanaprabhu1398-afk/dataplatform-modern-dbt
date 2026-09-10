@@ -8,15 +8,116 @@ A self-hosted data orchestration platform built in Python. Define pipelines in Y
 
 ---
 
+## What it guarantees
+
+Every number here was produced by running the code, not estimated. The script
+that produces each one is named beside it.
+
+**Exactly-once ingestion under process death.** Records and the offsets that
+produced them commit in a single database transaction, under a fencing token,
+so a crash before the commit replays and a crash after it moves on. There is no
+window where one landed without the other.
+
+| | duplicates | loss |
+|---|---|---|
+| at-least-once (write, then commit offsets) | 5.00% | 0 |
+| at-most-once (commit offsets, then write) | 0 | 5.00% |
+| this pipeline | **0** | **0** |
+
+Killed with `SIGKILL` mid-transaction and again just after a commit, then
+restarted: 10,000 of 10,000 records, zero duplicates, zero loss, offsets
+agreeing with the data. Verified on both SQLite and PostgreSQL. Eight failure
+injections run for real — seven handled, one recorded as a known limitation.
+`demo/scripts/failure_matrix.py`
+
+**Event time, not arrival time.** Windows are cut by when a record happened,
+with a watermark, corrections for late arrivals, and a side output for records
+past the allowed lateness. Nothing is dropped silently. Over 12,000 records with
+1,443 arriving out of order:
+
+| | windows correct | records misplaced |
+|---|---|---|
+| event time | 12 / 12 | 0 — 803 corrections, 58 set aside, all recorded |
+| processing time | 0 / 12 | 530, plus 30 phantom buckets it never reports |
+
+`demo/scripts/event_time_vs_processing_time.py`
+
+**Multiple workers, safely.** Runs are claimed with `FOR UPDATE SKIP LOCKED`
+and held under a lease with a monotonic fencing token, so a stalled worker
+cannot report an outcome for the attempt that replaced it. Twelve workers
+released simultaneously against twelve queued runs:
+
+| claim | work picked up | idle workers |
+|---|---|---|
+| `SELECT` then conditional `UPDATE` | 3–5 of 12 | 7–9 |
+| `FOR UPDATE SKIP LOCKED` | **12 of 12** | 0 |
+
+`demo/scripts/claim_contention.py`
+
+**Column-level lineage, enforced in CI.** SQL is parsed rather than
+pattern-matched, and a change that stops producing a column fails the build with
+the downstream columns it would break — including join keys, which decide which
+rows exist rather than which values they take.
+
+| lineage extraction | correct on a 28-query hand-checked corpus |
+|---|---|
+| regex | 11 / 28, every wrong answer silent |
+| parser | **28 / 28** |
+
+`demo/scripts/lineage_parser_scorecard.py`
+
+**Throughput.** 36,494 records/second, or 24,269 with event-time aggregation
+enabled; p99 commit 29 ms and 47 ms at batch 1000. Measured over 12,000 records,
+4 partitions, SQLite on local disk, with every run verified to have committed
+every record. `demo/scripts/throughput.py`
+
+What is deliberately **not** guaranteed — the sinks that cannot share the
+transaction, clock skew, cross-partition ordering — is stated just as plainly in
+[docs/STREAMING.md](docs/STREAMING.md).
+
+### Reproduce any of it
+
+```bash
+dataplatform stream generate --out data/stream --keys 50 --per-key 200 --seed 7
+dataplatform stream baseline --stream data/stream          # the naive consumers
+dataplatform stream run --stream data/stream --table events_sink
+dataplatform stream verify --stream data/stream --table events_sink
+
+python demo/scripts/failure_matrix.py                      # eight injections
+python demo/scripts/throughput.py
+python demo/scripts/event_time_vs_processing_time.py
+
+dataplatform lineage scan --models demo/fixtures/models --schema demo/fixtures/catalog.json
+dataplatform lineage impact --column orders.amount         # what breaks if this changes
+dataplatform lineage check --models demo/fixtures/models --git-ref main
+```
+
+Crash points can be injected anywhere in the streaming loop, and the exit is
+`os._exit(137)` — no `finally` blocks, no flushes — because a clean shutdown
+proves nothing:
+
+```bash
+DATAPLATFORM_CHAOS="after_write:3" python -m dataplatform.streaming.runner \
+    --stream data/stream --table events_sink
+```
+
+---
+
 ## What it does
 
 - **Run data pipelines** defined in YAML with task dependencies (DAG execution)
+- **Ingest streams exactly-once** with watermarked event-time windowing, late-data
+  corrections, and a verifier that checks a sink against a known-correct manifest
+- **Execute across multiple workers** with lease-based claiming, heartbeats, fencing
+  tokens, and automatic requeue of runs whose worker died
+- **Trace lineage down to the column** with a SQL parser, and fail a pull request
+  that would break a downstream column
 - **Deploy pipelines** through a governed control plane with validation, targets, history, and rollback
 - **Generate pipelines from plain English** using the built-in NLP generator
 - **Monitor runs** in real time with a metrics collector, Grafana-style dashboard, alert rules, and incidents
 - **Schedule pipelines** with cron expressions
 - **Trigger pipelines** via webhooks or API events
-- **Track lineage, costs, and data quality** per pipeline and asset
+- **Track costs and data quality** per pipeline and asset
 - **Manage users** with role-based access control (viewer / editor / admin)
 
 ---
@@ -87,8 +188,62 @@ Docker Compose now starts PostgreSQL, the API, and a separate queue worker:
 ```bash
 cp .env.example .env
 # Set strong DATAPLATFORM_* and POSTGRES_* values before production use.
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
+
+The production override requires `DATAPLATFORM_USERNAME`,
+`DATAPLATFORM_PASSWORD`, `DATAPLATFORM_SESSION_SECRET`, `POSTGRES_DB`,
+`POSTGRES_USER`, and `POSTGRES_PASSWORD`. Put them in `.env` or provide them
+through the deployment platform; do not commit `.env`.
+
+### Docker on another host
+
+Build and publish the image to a registry, then run the same image with the
+production environment variables and persistent mounts. The API and worker
+must share the pipeline and data directories when using external execution:
+
+```bash
+docker build -t registry.example.com/dataplatform:VERSION .
+docker push registry.example.com/dataplatform:VERSION
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Use a reverse proxy or cloud load balancer for TLS. Do not expose PostgreSQL
+publicly.
+
+### Kubernetes
+
+The baseline manifests in `deploy/kubernetes/` assume a registry image and a
+storage class that supports `ReadWriteMany`, because the API and worker share
+pipeline files and runtime data. Create the namespace, secret, and workloads:
+
+```bash
+kubectl create namespace dataplatform
+kubectl -n dataplatform create secret generic dataplatform-secrets \
+  --from-literal=DATAPLATFORM_USERNAME="$DATAPLATFORM_USERNAME" \
+  --from-literal=DATAPLATFORM_PASSWORD="$DATAPLATFORM_PASSWORD" \
+  --from-literal=DATAPLATFORM_SESSION_SECRET="$DATAPLATFORM_SESSION_SECRET" \
+  --from-literal=POSTGRES_DB=dataplatform \
+  --from-literal=POSTGRES_USER=dataplatform \
+  --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  --from-literal=POSTGRES_URL="postgresql+psycopg2://dataplatform:${POSTGRES_PASSWORD}@postgres:5432/dataplatform"
+kubectl -n dataplatform apply -k deploy/kubernetes
+kubectl -n dataplatform rollout status statefulset/postgres
+kubectl -n dataplatform rollout status deployment/dataplatform-api
+kubectl -n dataplatform rollout status deployment/dataplatform-worker
+```
+
+Before applying, replace `dataplatform:local` in the two Deployment manifests
+with the immutable image tag pushed to your registry. Expose the Service through
+an Ingress or Gateway with TLS, authentication-aware network policy, and a
+secret manager. For clusters without `ReadWriteMany`, use an external shared
+pipeline store or package immutable pipeline YAML into the image and keep only
+the metadata database on a PVC.
+
+This baseline runs PostgreSQL inside the cluster for small installations. For
+production workloads, use a managed PostgreSQL service when possible so
+backups, replication, upgrades, and failover are handled outside the
+application cluster.
 
 ---
 

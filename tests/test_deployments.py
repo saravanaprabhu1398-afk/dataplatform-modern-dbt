@@ -16,6 +16,7 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setenv("DATAPLATFORM_USERNAME", "admin")
     monkeypatch.setenv("DATAPLATFORM_PASSWORD", "admin")
     monkeypatch.setenv("DATAPLATFORM_OBSERVABILITY_AUTO_COLLECT", "false")
+    monkeypatch.setenv("PIPELINES_PATH", str(tmp_path))
     monkeypatch.delenv("POSTGRES_URL", raising=False)
     import dataplatform.core.database as db_module
     db_module._initialized = False

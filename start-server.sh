@@ -38,14 +38,27 @@ else
     exit 1
 fi
 
+# Use an isolated environment so dependencies can be installed with PEP 668
+# compliant Python distributions such as Homebrew Python.
+VENV_DIR="$SCRIPT_DIR/.venv"
+PYTHON="$VENV_DIR/bin/python"
+if [ ! -x "$PYTHON" ]; then
+    echo -e "${YELLOW}Creating virtual environment...${NC}"
+    python3 -m venv "$VENV_DIR" || {
+        echo -e "${RED}✗ Failed to create virtual environment${NC}"
+        exit 1
+    }
+fi
+echo -e "${GREEN}✓${NC} Using virtual environment: $VENV_DIR"
+
 # Check if dataplatform is installed
 echo -en "${YELLOW}Checking dataplatform package...${NC} "
-if python3 -c "import dataplatform" 2>/dev/null; then
+if "$PYTHON" -c "import dataplatform" 2>/dev/null; then
     echo -e "${GREEN}✓${NC} Package installed"
 else
     echo -e "${RED}✗ Package not installed${NC}"
     echo -e "${YELLOW}Installing dataplatform...${NC}"
-    python3 -m pip install -e . || {
+    "$PYTHON" -m pip install -e . || {
         echo -e "${RED}✗ Failed to install dataplatform${NC}"
         exit 1
     }
@@ -54,17 +67,27 @@ fi
 
 # Check required dependencies
 echo -en "${YELLOW}Checking dependencies...${NC} "
-if python3 -c "import fastapi, uvicorn, duckdb" 2>/dev/null; then
+if "$PYTHON" -c "import fastapi, uvicorn, duckdb, sqlalchemy" 2>/dev/null; then
     echo -e "${GREEN}✓${NC} All dependencies available"
 else
     echo -e "${RED}✗ Missing dependencies${NC}"
-    exit 1
+    echo -e "${YELLOW}Installing project dependencies...${NC}"
+    "$PYTHON" -m pip install -e . || {
+        echo -e "${RED}✗ Failed to install project dependencies${NC}"
+        exit 1
+    }
+
+    if ! "$PYTHON" -c "import fastapi, uvicorn, duckdb, sqlalchemy" 2>/dev/null; then
+        echo -e "${RED}✗ Dependencies are still unavailable after installation${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓${NC} Dependencies installed"
 fi
 
 # Check if port is available
 PORT=${1:-8000}
 echo -en "${YELLOW}Checking if port $PORT is available...${NC} "
-if ! python3 -c "import socket; s = socket.socket(); s.bind(('', $PORT)); s.close()" 2>/dev/null; then
+if ! "$PYTHON" -c "import socket; s = socket.socket(); s.bind(('', $PORT)); s.close()" 2>/dev/null; then
     echo -e "${RED}✗ Port $PORT is in use${NC}"
     echo -e "${YELLOW}Try a different port: $0 8001${NC}"
     exit 1
@@ -85,7 +108,7 @@ echo -e "${YELLOW}Press Ctrl+C to stop the server${NC}"
 echo ""
 
 # Start server
-python3 -m dataplatform.cli.main serve --host 0.0.0.0 --port $PORT || {
+"$PYTHON" -m dataplatform.cli.main serve --host 0.0.0.0 --port "$PORT" || {
     echo ""
     echo -e "${RED}✗ Server failed to start${NC}"
     echo -e "${YELLOW}For troubleshooting, run: python3 diagnose_api.py${NC}"

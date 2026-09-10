@@ -15,7 +15,12 @@ from sqlalchemy import inspect as sa_inspect
 import dataplatform.core.database as db
 from dataplatform.core.leases import clear as clear_lease_context
 from dataplatform.core.leases import lease_context
-from dataplatform.core.queue_worker import LeaseHeartbeat
+from dataplatform.core.queue_worker import (
+    LIVENESS_FILE_ENV,
+    LeaseHeartbeat,
+    run_worker_loop,
+    touch_liveness,
+)
 from dataplatform.core import chaos
 
 
@@ -369,3 +374,60 @@ class TestHeartbeat:
         LeaseHeartbeat("run-25", "w1", claimed["attempt"]).beat_once()
 
         assert exits == [chaos.CRASH_EXIT_CODE]
+
+
+class TestLivenessSignal:
+    """A liveness probe is only as honest as what refreshes it."""
+
+    def setup_method(self):
+        chaos.reset()
+
+    def test_touch_creates_missing_parents(self, tmp_path):
+        target = tmp_path / "run" / "dataplatform" / "worker-liveness"
+        touch_liveness(str(target))
+        assert target.exists()
+
+    def test_touch_is_a_noop_without_a_path(self):
+        touch_liveness(None)
+        touch_liveness("")
+
+    def test_touch_never_raises_on_an_unwritable_path(self):
+        # Liveness reporting must not be able to kill the worker it reports on.
+        touch_liveness("/proc/definitely/not/writable")
+
+    def test_heartbeat_refreshes_liveness_while_a_run_is_held(self, tmp_path):
+        # The poll loop is not running during a task, so if only the loop
+        # refreshed liveness, the longest runs would be killed for being long.
+        target = tmp_path / "worker-liveness"
+        db.enqueue_run("run-live1", "pipe", "p.yaml")
+        claimed = db.claim_next_queued_run(worker_id="w1", lease_seconds=60)
+
+        heartbeat = LeaseHeartbeat(
+            "run-live1", "w1", claimed["attempt"], liveness_file=str(target)
+        )
+        assert heartbeat.beat_once()
+        assert target.exists()
+
+    def test_a_fenced_worker_does_not_refresh_liveness(self, tmp_path):
+        target = tmp_path / "worker-liveness"
+        db.enqueue_run("run-live2", "pipe", "p.yaml")
+        db.claim_next_queued_run(worker_id="w1", lease_seconds=1)
+        _expire_lease("run-live2")
+        db.reap_expired_leases()
+        db.claim_next_queued_run(worker_id="w2")
+
+        heartbeat = LeaseHeartbeat("run-live2", "w1", 1, liveness_file=str(target))
+
+        assert not heartbeat.beat_once()
+        assert not target.exists()
+
+    def test_the_poll_loop_refreshes_liveness(self, tmp_path):
+        target = tmp_path / "worker-liveness"
+        run_worker_loop(once=True, recover_orphans=False, liveness_file=str(target))
+        assert target.exists()
+
+    def test_the_environment_can_supply_the_path(self, tmp_path, monkeypatch):
+        target = tmp_path / "from-env"
+        monkeypatch.setenv(LIVENESS_FILE_ENV, str(target))
+        run_worker_loop(once=True, recover_orphans=False)
+        assert target.exists()

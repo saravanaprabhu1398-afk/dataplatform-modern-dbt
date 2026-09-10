@@ -44,6 +44,7 @@ def validate_runtime_settings(
     session_secret: Optional[str] = None,
     execution_mode: Optional[str] = None,
     allow_embedded_worker: Optional[str] = None,
+    postgres_url: Optional[str] = None,
 ) -> None:
     """Raise RuntimeError when production runtime settings are unsafe."""
     if not is_production_environment(environment):
@@ -62,6 +63,7 @@ def validate_runtime_settings(
         if allow_embedded_worker is not None
         else os.getenv("DATAPLATFORM_ALLOW_EMBEDDED_WORKER")
     )
+    metadata_url = postgres_url if postgres_url is not None else os.getenv("POSTGRES_URL", "")
 
     errors = []
     if username == "admin" and password == "admin":
@@ -72,6 +74,19 @@ def validate_runtime_settings(
         errors.append(
             "DATAPLATFORM_EXECUTION_MODE must be external in production "
             "or DATAPLATFORM_ALLOW_EMBEDDED_WORKER=true must be set explicitly"
+        )
+
+    if mode == "external" and not metadata_url:
+        # The API and its workers coordinate only through the metadata store:
+        # the run queue's leases and fencing tokens are enforced by database
+        # transactions. Falling back to SQLite puts that file on a shared
+        # volume, where locking is not dependable across processes -- so a
+        # missing POSTGRES_URL silently removes the guarantee rather than
+        # failing.
+        errors.append(
+            "POSTGRES_URL must be set when DATAPLATFORM_EXECUTION_MODE=external: "
+            "run leases rely on transactional locking that SQLite cannot provide "
+            "across processes on a shared volume"
         )
 
     if errors:

@@ -19,8 +19,10 @@ Run it with::
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
+from pathlib import Path
 from typing import Optional
 
 from dataplatform.core.config import load_config
@@ -44,6 +46,28 @@ logger = logging.getLogger(__name__)
 #: leave time before another worker can take the run.
 HEARTBEAT_DIVISOR = 3
 
+#: Where the worker records that it is still turning, for an external
+#: supervisor to watch. Per pod, never on shared storage: two workers touching
+#: one file would each vouch for the other.
+LIVENESS_FILE_ENV = "DATAPLATFORM_WORKER_LIVENESS_FILE"
+
+
+def touch_liveness(path: Optional[str]) -> None:
+    """Record that this worker is still alive. Never raises.
+
+    Written from both the poll loop and the lease heartbeat, because a worker
+    inside a long task is not in the poll loop -- a liveness signal that only
+    the poll loop refreshed would kill exactly the runs that take longest.
+    """
+    if not path:
+        return
+    try:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch()
+    except OSError as exc:
+        logger.warning("could not write liveness file %s: %s", path, exc)
+
 
 class LeaseHeartbeat:
     """Renews one run's lease in the background until stopped.
@@ -61,7 +85,9 @@ class LeaseHeartbeat:
         attempt: int,
         lease_seconds: float = DEFAULT_LEASE_SECONDS,
         interval: Optional[float] = None,
+        liveness_file: Optional[str] = None,
     ) -> None:
+        self.liveness_file = liveness_file
         self.run_id = run_id
         self.worker_id = worker_id
         self.attempt = attempt
@@ -93,6 +119,7 @@ class LeaseHeartbeat:
         """Renew the lease once. False means it was lost."""
         maybe_crash(CrashPoint.BEFORE_HEARTBEAT)
         if renew_lease(self.run_id, self.worker_id, self.attempt, self.lease_seconds):
+            touch_liveness(self.liveness_file)
             return True
 
         self._lost.set()
@@ -120,6 +147,7 @@ def run_worker_once(
     worker_id: Optional[str] = None,
     lease_seconds: float = DEFAULT_LEASE_SECONDS,
     heartbeat_interval: Optional[float] = None,
+    liveness_file: Optional[str] = None,
 ) -> bool:
     """Claim and execute one queued run. Returns True when work was processed."""
     worker = worker_id or generate_worker_id()
@@ -140,7 +168,12 @@ def run_worker_once(
     )
 
     heartbeat = LeaseHeartbeat(
-        run_id, worker, attempt, lease_seconds=lease_seconds, interval=heartbeat_interval
+        run_id,
+        worker,
+        attempt,
+        lease_seconds=lease_seconds,
+        interval=heartbeat_interval,
+        liveness_file=liveness_file,
     )
     try:
         with heartbeat, lease_context(run_id, worker, attempt):
@@ -184,9 +217,11 @@ def run_worker_loop(
     worker_id: Optional[str] = None,
     lease_seconds: float = DEFAULT_LEASE_SECONDS,
     max_attempts: Optional[int] = None,
+    liveness_file: Optional[str] = None,
 ) -> None:
     """Poll the persistent queue and execute claimed runs."""
     init_db()
+    liveness_file = liveness_file or os.getenv(LIVENESS_FILE_ENV) or None
     worker = worker_id or generate_worker_id()
     if recover_orphans:
         recover_orphaned_runs()
@@ -201,11 +236,15 @@ def run_worker_loop(
     )
 
     while True:
+        touch_liveness(liveness_file)
+
         # Reap before claiming: a run whose worker died is work available now.
         reap_kwargs = {} if max_attempts is None else {"max_attempts": max_attempts}
         reap_expired_leases(**reap_kwargs)
 
-        processed = run_worker_once(worker_id=worker, lease_seconds=lease_seconds)
+        processed = run_worker_once(
+            worker_id=worker, lease_seconds=lease_seconds, liveness_file=liveness_file
+        )
         if once:
             return
         if not processed:
