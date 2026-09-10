@@ -102,4 +102,5 @@ jobs:
           dataplatform lineage check \
             --models demo/fixtures/models \
             --schema demo/fixtures/catalog.json \
-            --git-ref "$BASE"
+            --git-ref "$BASE" \
+            --annotate

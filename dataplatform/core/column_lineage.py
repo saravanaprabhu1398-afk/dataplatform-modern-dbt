@@ -107,6 +107,9 @@ class ColumnLineage:
     """Every column edge a statement produces, plus what it could not resolve."""
 
     target: Optional[str] = None
+    #: The file this was parsed from, when it came from one. Carried so a CI
+    #: finding can point at the line a reviewer needs to look at.
+    source_path: Optional[str] = None
     edges: List[ColumnEdge] = field(default_factory=list)
     #: Every column the statement produces, including ones with no column
     #: inputs. Kept separately from the edges: a column with no source -- a
