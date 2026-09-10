@@ -65,6 +65,32 @@ rows exist rather than which values they take.
 | regex | 11 / 28, every wrong answer silent |
 | parser | **28 / 28** |
 
+This is what the check says when it fires. One line was removed from a model —
+`SUM(o.amount) AS gross` — and every test still passed:
+
+```
+comparing 5 model(s) against models at 9e183cd
+
+ERROR   daily_revenue.gross: no longer produced, and 1 column(s) read it
+           finance_export.revenue                 direct
+warning customer_summary: 0 of 1 output columns fully resolved
+           SELECT * over crm_extract, whose columns are not in the catalog
+
+1 error(s), 1 warning(s)
+```
+
+Each finding is also emitted as a GitHub annotation against the model file, so
+a reviewer reads it on the pull request instead of opening a job log:
+
+```
+::error file=demo/fixtures/models/daily_revenue.sql::daily_revenue.gross:
+no longer produced, and 1 column(s) read it - finance_export.revenue direct
+```
+
+That output is from [#9](https://github.com/saravanaprabhu1398-afk/dataplatform-modern-dbt/pull/9),
+a throwaway pull request opened to check that the check works. All three test
+jobs passed on it; only `column lineage` failed.
+
 `demo/scripts/lineage_parser_scorecard.py`
 
 **Throughput.** 36,494 records/second, or 24,269 with event-time aggregation
