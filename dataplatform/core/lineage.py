@@ -98,6 +98,77 @@ def build_lineage_graph() -> Dict[str, Any]:
     }
 
 
+def build_column_graph(asset: Optional[str] = None) -> Dict[str, Any]:
+    """Column-level nodes and edges, in the same shape the asset graph uses.
+
+    Node ids are ``asset.column`` so the UI can lay columns out inside their
+    asset. Edge ``kind`` carries how the column was produced -- direct,
+    derived, aggregate, join_key, constant, or one of the two flavours of
+    unknown -- which is what lets a renderer show uncertainty instead of
+    implying the graph is complete.
+    """
+    from dataplatform.core.database import get_column_edges
+
+    rows = get_column_edges(target_asset=asset)
+    nodes: Dict[str, Dict[str, Any]] = {}
+    edges: List[Dict[str, Any]] = []
+
+    def _ensure(asset_name: str, column: str) -> Optional[str]:
+        if not asset_name and not column:
+            return None                      # the empty source of a constant
+        node_id = "{0}.{1}".format(asset_name, column)
+        nodes.setdefault(
+            node_id,
+            {"id": node_id, "type": "column", "asset": asset_name, "column": column},
+        )
+        return node_id
+
+    for row in rows:
+        target = _ensure(row["target_asset"], row["target_column"])
+        source = _ensure(row["source_asset"], row["source_column"])
+        if target is None:
+            continue
+        if source is None:
+            nodes[target]["constant"] = True
+            continue
+        edges.append({
+            "from": source,
+            "to": target,
+            "kind": row["kind"],
+            "expression": row.get("expression") or "",
+            "pipeline": row.get("pipeline_name") or "",
+        })
+
+    return {"nodes": list(nodes.values()), "edges": edges}
+
+
+def get_column_impact(column: str) -> Dict[str, Any]:
+    """Blast radius for one column, as JSON for the UI or a CI comment."""
+    from dataplatform.core.lineage_impact import column_impact
+
+    asset, _, name = column.rpartition(".")
+    if not asset or not name:
+        raise ValueError("expected asset.column, got {0!r}".format(column))
+
+    report = column_impact(asset, name)
+    return {
+        "column": column,
+        "assets": report.assets,
+        "hits": [
+            {
+                "column": str(hit.column),
+                "kind": hit.kind,
+                "hops": hit.hops,
+                "certain": hit.is_certain,
+                "expression": hit.expression,
+            }
+            for hit in report.hits
+        ],
+        "uncertain": len(report.uncertain),
+        "join_keys": len(report.breaks_rows),
+    }
+
+
 def get_asset_lineage(asset_uri: str) -> Dict[str, Any]:
     """Return upstream tasks (that write to this asset) and downstream tasks
     (that read from this asset) for a specific asset URI."""

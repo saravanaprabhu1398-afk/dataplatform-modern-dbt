@@ -63,6 +63,10 @@ KIND_AGGREGATE = "aggregate"
 KIND_JOIN_KEY = "join_key"
 KIND_UNRESOLVED_STAR = "unresolved_star"
 KIND_AMBIGUOUS = "ambiguous"
+#: A column with no column inputs at all: COUNT(*), a literal, NOW().
+#: Recorded explicitly, because "depends on nothing" is knowledge, and a
+#: column missing from the graph cannot be seen to disappear.
+KIND_CONSTANT = "constant"
 
 #: Target column for edges that decide which *rows* exist rather than which
 #: values a column takes.
@@ -109,7 +113,12 @@ class ColumnLineage:
     #: COUNT(*) or a literal -- still exists, and leaving it out of the
     #: denominator would flatter the coverage number.
     output_columns: List[str] = field(default_factory=list)
+    #: Genuine gaps in knowledge: an unexpandable star, an ambiguous column.
     unresolved: List[str] = field(default_factory=list)
+    #: Things worth saying that are not gaps -- a column known to depend on no
+    #: column at all. Kept apart so a report can distinguish "we do not know"
+    #: from "there is nothing to know".
+    notes: List[str] = field(default_factory=list)
     unsupported: List[str] = field(default_factory=list)
 
     @property
@@ -128,8 +137,9 @@ class ColumnLineage:
     def coverage(self) -> Tuple[int, int]:
         """(fully resolved output columns, total output columns).
 
-        A column counts as unresolved when it rests on an assumption *or* when
-        nothing was resolved for it at all.
+        A column counts as unresolved when it rests on an assumption -- an
+        unexpandable star, or an ambiguous reference. A column known to depend
+        on no column at all is *resolved*: "nothing" is an answer.
         """
         assumed = {
             edge.target.column
@@ -393,11 +403,21 @@ def _edges_for_scope(
         before = len(resolver.notes)
         sources = resolver.columns_in(scope, projection)
         if not sources:
-            # COUNT(*), a literal, a function of nothing. It still exists, and
-            # a reader deserves to know why it has no lineage.
+            # COUNT(*), a literal, a function of nothing. Give it an edge with
+            # an empty source: the column exists, depends on no column, and
+            # must still be visible when someone deletes it.
             note = "{0!r} has no column inputs ({1})".format(column_name, expression)
-            if note not in lineage.unresolved:
-                lineage.unresolved.append(note)
+            if note not in lineage.notes:
+                lineage.notes.append(note)
+            _add_edge(
+                lineage,
+                ColumnEdge(
+                    target=ColumnRef(target_name, column_name),
+                    source=ColumnRef("", ""),
+                    kind=KIND_CONSTANT,
+                    expression=expression,
+                ),
+            )
         ambiguous = len(resolver.notes) > before and any(
             "ambiguous" in note for note in resolver.notes[before:]
         )

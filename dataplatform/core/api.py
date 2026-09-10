@@ -73,7 +73,12 @@ from dataplatform.core.database import (
     update_alert_rule as db_update_alert_rule,
     update_alert_incident_status,
 )
-from dataplatform.core.lineage import build_lineage_graph, get_asset_lineage
+from dataplatform.core.lineage import (
+    build_column_graph,
+    build_lineage_graph,
+    get_asset_lineage,
+    get_column_impact,
+)
 from dataplatform.core.metrics import generate_prometheus_text, _CONTENT_TYPE as _METRICS_CONTENT_TYPE
 from dataplatform.core.quality import get_pipeline_quality_history
 from dataplatform.core.alerts import check_sla_and_alert
@@ -2659,6 +2664,28 @@ async def get_lineage_graph():
         return build_lineage_graph()
     except Exception as e:
         logger.error(f"Failed to build lineage graph: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/lineage/columns")
+async def get_column_lineage_graph(asset: Optional[str] = None):
+    """Return the column-level lineage graph, optionally for one asset."""
+    try:
+        return build_column_graph(asset)
+    except Exception as e:
+        logger.error(f"Failed to build column lineage graph: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/lineage/impact")
+async def get_column_impact_endpoint(column: str):
+    """Return what breaks if *column* (asset.column) changes."""
+    try:
+        return get_column_impact(column)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to compute impact for {column}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

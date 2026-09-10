@@ -9,6 +9,7 @@ import pytest
 
 from dataplatform.core.column_lineage import (
     KIND_AGGREGATE,
+    KIND_CONSTANT,
     KIND_AMBIGUOUS,
     KIND_DERIVED,
     KIND_DIRECT,
@@ -236,9 +237,10 @@ class TestNeverRaises:
         assert not lineage.parsed
         assert lineage.edges == []
 
-    def test_constant_projection_has_no_sources(self):
+    def test_constant_projection_records_an_empty_source(self):
         lineage = extract_column_lineage("CREATE TABLE t AS SELECT 1 AS one FROM orders")
-        assert lineage.edges == []
+        assert [edge.kind for edge in lineage.edges] == [KIND_CONSTANT]
+        assert str(lineage.edges[0].source) == "."
 
 
 class TestQuerying:
@@ -260,19 +262,23 @@ class TestColumnsWithoutSources:
         )
         assert "orders" in lineage.target_columns
 
-    def test_count_star_counts_against_coverage(self):
+    def test_count_star_is_resolved_not_unknown(self):
+        # "depends on no column" is knowledge, not a gap. It is recorded as a
+        # constant edge so the column is visible, and it counts as resolved.
         lineage = extract_column_lineage(
             "CREATE TABLE t AS SELECT day, COUNT(*) AS orders FROM stg GROUP BY 1"
         )
-        assert lineage.coverage() == (1, 2)
+        assert lineage.coverage() == (2, 2)
+        assert any(edge.kind == KIND_CONSTANT for edge in lineage.edges)
 
-    def test_the_reason_is_recorded(self):
+    def test_the_reason_is_recorded_as_a_note_not_a_gap(self):
         lineage = extract_column_lineage(
             "CREATE TABLE t AS SELECT COUNT(*) AS orders FROM stg")
-        assert any("no column inputs" in note for note in lineage.unresolved)
+        assert any("no column inputs" in note for note in lineage.notes)
+        assert lineage.unresolved == [], "knowing there is nothing is not a gap"
 
     def test_a_literal_column_is_counted_too(self):
         lineage = extract_column_lineage(
             "CREATE TABLE t AS SELECT 1 AS one, amount FROM orders")
         assert lineage.target_columns == ["one", "amount"]
-        assert lineage.coverage() == (1, 2)
+        assert lineage.coverage() == (2, 2)

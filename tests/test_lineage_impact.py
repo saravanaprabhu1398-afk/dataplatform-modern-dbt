@@ -142,3 +142,70 @@ class TestStorage:
 
     def test_nothing_recorded_for_an_empty_lineage(self, store):
         assert record_column_lineage(extract_column_lineage("not sql ((")) == 0
+
+
+class TestColumnGraph:
+    """The shape the UI and CI comments consume."""
+
+    def _seed(self):
+        from dataplatform.core.lineage_impact import record_column_lineage
+
+        record_column_lineage(extract_column_lineage(
+            "CREATE TABLE daily AS SELECT SUM(amount) AS gross, COUNT(*) AS n FROM orders"))
+        record_column_lineage(extract_column_lineage(
+            "CREATE TABLE export AS SELECT gross AS revenue FROM daily"))
+
+    def test_nodes_cover_both_ends_of_every_edge(self, store):
+        from dataplatform.core.lineage import build_column_graph
+
+        self._seed()
+        graph = build_column_graph()
+        ids = {node["id"] for node in graph["nodes"]}
+
+        assert {"orders.amount", "daily.gross", "export.revenue"} <= ids
+        for edge in graph["edges"]:
+            assert edge["from"] in ids and edge["to"] in ids
+
+    def test_a_constant_column_is_a_node_without_an_edge(self, store):
+        from dataplatform.core.lineage import build_column_graph
+
+        self._seed()
+        graph = build_column_graph()
+        constant = next(node for node in graph["nodes"] if node["id"] == "daily.n")
+
+        assert constant["constant"] is True
+        assert not any(edge["to"] == "daily.n" for edge in graph["edges"])
+
+    def test_edges_carry_the_kind(self, store):
+        from dataplatform.core.lineage import build_column_graph
+
+        self._seed()
+        kinds = {(e["from"], e["to"]): e["kind"] for e in build_column_graph()["edges"]}
+
+        assert kinds[("orders.amount", "daily.gross")] == KIND_AGGREGATE
+        assert kinds[("daily.gross", "export.revenue")] == KIND_DIRECT
+
+    def test_filtering_by_asset(self, store):
+        from dataplatform.core.lineage import build_column_graph
+
+        self._seed()
+        graph = build_column_graph(asset="export")
+
+        assert {node["id"] for node in graph["nodes"]} == {"daily.gross", "export.revenue"}
+
+    def test_impact_json_is_serialisable(self, store):
+        import json
+
+        from dataplatform.core.lineage import get_column_impact
+
+        self._seed()
+        payload = get_column_impact("orders.amount")
+
+        assert json.loads(json.dumps(payload))["assets"] == ["daily", "export"]
+        assert payload["hits"][0]["hops"] == 1
+
+    def test_impact_rejects_a_malformed_column(self, store):
+        from dataplatform.core.lineage import get_column_impact
+
+        with pytest.raises(ValueError):
+            get_column_impact("no_dot_here")

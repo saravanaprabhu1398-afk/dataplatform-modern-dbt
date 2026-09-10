@@ -1,0 +1,5 @@
+{
+  "orders": ["id", "customer_id", "amount", "created_at", "status"],
+  "customers": ["id", "region", "name"],
+  "discounts": ["order_id", "value"]
+}

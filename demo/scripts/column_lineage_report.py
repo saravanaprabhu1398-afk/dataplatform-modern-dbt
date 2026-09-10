@@ -15,11 +15,10 @@ MODELS = Path(__file__).resolve().parents[1] / "fixtures" / "models"
 
 # What the catalog knows. Everything absent from here is a genuine unknown,
 # which is the point: unresolved columns should be visible, not assumed.
-SCHEMA = {
-    "orders": ["id", "customer_id", "amount", "created_at", "status"],
-    "customers": ["id", "region", "name"],
-    "discounts": ["order_id", "value"],
-}
+# Shared with `dataplatform lineage --schema`, so the two cannot disagree.
+import json as _json
+
+SCHEMA = _json.loads((MODELS.parent / "catalog.json").read_text())
 
 
 def main(argv):
@@ -39,6 +38,7 @@ def main(argv):
     all_edges = []
     resolved_total = column_total = 0
     unresolved_notes = []
+    informational = []
 
     print("{0:<24} {1:>8} {2:>10} {3:>10} {4:>10}".format(
         "model", "columns", "resolved", "join keys", "edges"))
@@ -56,6 +56,8 @@ def main(argv):
 
         for note in lineage.unresolved:
             unresolved_notes.append("{0}: {1}".format(path.stem, note))
+        for note in lineage.notes:
+            informational.append("{0}: {1}".format(path.stem, note))
 
         all_edges.extend(
             {
@@ -73,6 +75,10 @@ def main(argv):
         column_total - resolved_total, len(assumed)))
     for note in unresolved_notes:
         print("  - {0}".format(note))
+    if informational:
+        print("\nknown to depend on no column (not a gap):")
+        for note in informational:
+            print("  - {0}".format(note))
 
     target = None
     for index, arg in enumerate(argv):
