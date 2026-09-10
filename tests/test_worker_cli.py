@@ -54,3 +54,14 @@ def test_poll_interval_still_passes_through(monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert captured["poll_interval"] == 7.5
+
+
+def test_liveness_file_reaches_the_worker_loop(monkeypatch):
+    captured = _capture(monkeypatch)
+
+    result = runner.invoke(
+        app, ["worker", "--once", "--liveness-file", "/var/run/dataplatform/worker-liveness"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["liveness_file"] == "/var/run/dataplatform/worker-liveness"

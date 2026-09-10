@@ -134,6 +134,12 @@ def worker(
         help="How many times a run whose lease expired is requeued before it is "
         "dead-lettered. Default 3.",
     ),
+    liveness_file: Optional[str] = typer.Option(
+        None,
+        help="File touched while the worker is turning, for a liveness probe to "
+        "watch. Must be per-worker, never on shared storage. Falls back to "
+        "DATAPLATFORM_WORKER_LIVENESS_FILE.",
+    ),
 ):
     """Start an external queue worker for DATAPLATFORM_EXECUTION_MODE=external."""
     from dataplatform.core.queue_worker import run_worker_loop
@@ -143,6 +149,8 @@ def worker(
         options["lease_seconds"] = lease_seconds
     if max_attempts is not None:
         options["max_attempts"] = max_attempts
+    if liveness_file is not None:
+        options["liveness_file"] = liveness_file
 
     typer.echo(f"Starting external queue worker (poll_interval={poll_interval}s)")
     run_worker_loop(**options)
