@@ -8,15 +8,116 @@ A self-hosted data orchestration platform built in Python. Define pipelines in Y
 
 ---
 
+## What it guarantees
+
+Every number here was produced by running the code, not estimated. The script
+that produces each one is named beside it.
+
+**Exactly-once ingestion under process death.** Records and the offsets that
+produced them commit in a single database transaction, under a fencing token,
+so a crash before the commit replays and a crash after it moves on. There is no
+window where one landed without the other.
+
+| | duplicates | loss |
+|---|---|---|
+| at-least-once (write, then commit offsets) | 5.00% | 0 |
+| at-most-once (commit offsets, then write) | 0 | 5.00% |
+| this pipeline | **0** | **0** |
+
+Killed with `SIGKILL` mid-transaction and again just after a commit, then
+restarted: 10,000 of 10,000 records, zero duplicates, zero loss, offsets
+agreeing with the data. Verified on both SQLite and PostgreSQL. Eight failure
+injections run for real — seven handled, one recorded as a known limitation.
+`demo/scripts/failure_matrix.py`
+
+**Event time, not arrival time.** Windows are cut by when a record happened,
+with a watermark, corrections for late arrivals, and a side output for records
+past the allowed lateness. Nothing is dropped silently. Over 12,000 records with
+1,443 arriving out of order:
+
+| | windows correct | records misplaced |
+|---|---|---|
+| event time | 12 / 12 | 0 — 803 corrections, 58 set aside, all recorded |
+| processing time | 0 / 12 | 530, plus 30 phantom buckets it never reports |
+
+`demo/scripts/event_time_vs_processing_time.py`
+
+**Multiple workers, safely.** Runs are claimed with `FOR UPDATE SKIP LOCKED`
+and held under a lease with a monotonic fencing token, so a stalled worker
+cannot report an outcome for the attempt that replaced it. Twelve workers
+released simultaneously against twelve queued runs:
+
+| claim | work picked up | idle workers |
+|---|---|---|
+| `SELECT` then conditional `UPDATE` | 3–5 of 12 | 7–9 |
+| `FOR UPDATE SKIP LOCKED` | **12 of 12** | 0 |
+
+`demo/scripts/claim_contention.py`
+
+**Column-level lineage, enforced in CI.** SQL is parsed rather than
+pattern-matched, and a change that stops producing a column fails the build with
+the downstream columns it would break — including join keys, which decide which
+rows exist rather than which values they take.
+
+| lineage extraction | correct on a 28-query hand-checked corpus |
+|---|---|
+| regex | 11 / 28, every wrong answer silent |
+| parser | **28 / 28** |
+
+`demo/scripts/lineage_parser_scorecard.py`
+
+**Throughput.** 36,494 records/second, or 24,269 with event-time aggregation
+enabled; p99 commit 29 ms and 47 ms at batch 1000. Measured over 12,000 records,
+4 partitions, SQLite on local disk, with every run verified to have committed
+every record. `demo/scripts/throughput.py`
+
+What is deliberately **not** guaranteed — the sinks that cannot share the
+transaction, clock skew, cross-partition ordering — is stated just as plainly in
+[docs/STREAMING.md](docs/STREAMING.md).
+
+### Reproduce any of it
+
+```bash
+dataplatform stream generate --out data/stream --keys 50 --per-key 200 --seed 7
+dataplatform stream baseline --stream data/stream          # the naive consumers
+dataplatform stream run --stream data/stream --table events_sink
+dataplatform stream verify --stream data/stream --table events_sink
+
+python demo/scripts/failure_matrix.py                      # eight injections
+python demo/scripts/throughput.py
+python demo/scripts/event_time_vs_processing_time.py
+
+dataplatform lineage scan --models demo/fixtures/models --schema demo/fixtures/catalog.json
+dataplatform lineage impact --column orders.amount         # what breaks if this changes
+dataplatform lineage check --models demo/fixtures/models --git-ref main
+```
+
+Crash points can be injected anywhere in the streaming loop, and the exit is
+`os._exit(137)` — no `finally` blocks, no flushes — because a clean shutdown
+proves nothing:
+
+```bash
+DATAPLATFORM_CHAOS="after_write:3" python -m dataplatform.streaming.runner \
+    --stream data/stream --table events_sink
+```
+
+---
+
 ## What it does
 
 - **Run data pipelines** defined in YAML with task dependencies (DAG execution)
+- **Ingest streams exactly-once** with watermarked event-time windowing, late-data
+  corrections, and a verifier that checks a sink against a known-correct manifest
+- **Execute across multiple workers** with lease-based claiming, heartbeats, fencing
+  tokens, and automatic requeue of runs whose worker died
+- **Trace lineage down to the column** with a SQL parser, and fail a pull request
+  that would break a downstream column
 - **Deploy pipelines** through a governed control plane with validation, targets, history, and rollback
 - **Generate pipelines from plain English** using the built-in NLP generator
 - **Monitor runs** in real time with a metrics collector, Grafana-style dashboard, alert rules, and incidents
 - **Schedule pipelines** with cron expressions
 - **Trigger pipelines** via webhooks or API events
-- **Track lineage, costs, and data quality** per pipeline and asset
+- **Track costs and data quality** per pipeline and asset
 - **Manage users** with role-based access control (viewer / editor / admin)
 
 ---
