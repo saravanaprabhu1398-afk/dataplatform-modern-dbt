@@ -71,3 +71,35 @@ jobs:
           fi
       - name: Run the full suite against PostgreSQL
         run: pytest tests/ -q
+
+  lineage:
+    # The lineage graph is only worth building if something queries it. This is
+    # the query: parse the models as this branch has them, compare against the
+    # models at the base commit, and fail when a column that something reads
+    # stops being produced.
+    name: column lineage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # --git-ref reads the models as they were at the base commit, so the
+          # comparison needs history rather than a shallow clone.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Blast radius of any removed column
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$BASE" ]; then BASE="${{ github.event.before }}"; fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            BASE="HEAD~1"
+          fi
+          echo "comparing against $BASE"
+          dataplatform lineage check \
+            --models demo/fixtures/models \
+            --schema demo/fixtures/catalog.json \
+            --git-ref "$BASE"
