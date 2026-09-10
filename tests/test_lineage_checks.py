@@ -246,3 +246,48 @@ class TestReport:
             Finding(SEVERITY_WARNING, CODE_UNRESOLVED, "b", "y"),
         ])
         assert "1 error(s), 1 warning(s)" in report.render()
+
+
+class TestGitHubAnnotations:
+    """A failing check that says only "exit code 1" has told the reader nothing."""
+
+    def test_an_error_renders_as_an_error_annotation(self, models):
+        before = edges_of(parse_models(sorted(models.glob("*.sql"))))
+        write(models, "daily.sql",
+              "CREATE TABLE daily AS SELECT day, COUNT(*) AS n FROM orders GROUP BY day")
+        after = parse_models([models / "daily.sql"])
+
+        line = check_removed_columns(before, after)[0].as_github_annotation()
+
+        assert line.startswith("::error ")
+        assert "daily.gross" in line
+        assert "export.revenue" in line
+
+    def test_the_annotation_points_at_the_file(self, models):
+        before = edges_of(parse_models(sorted(models.glob("*.sql"))))
+        write(models, "daily.sql", "CREATE TABLE daily AS SELECT day FROM orders")
+        after = parse_models([models / "daily.sql"])
+
+        line = check_removed_columns(before, after)[0].as_github_annotation()
+
+        assert "file={0}".format(models / "daily.sql") in line
+
+    def test_a_warning_renders_as_a_warning(self, tmp_path):
+        write(tmp_path, "copy.sql", "CREATE TABLE copy AS SELECT * FROM mystery")
+        line = check_unresolved(parse_models([tmp_path / "copy.sql"]))[0].as_github_annotation()
+
+        assert line.startswith("::warning ")
+
+    def test_a_finding_without_a_file_still_renders(self):
+        line = Finding(SEVERITY_ERROR, CODE_COLUMN_REMOVED, "a.b", "gone").as_github_annotation()
+
+        assert line == "::error ::a.b: gone"
+
+    def test_annotations_are_single_line(self, models):
+        # A workflow command spanning lines is silently ignored by the runner.
+        before = edges_of(parse_models(sorted(models.glob("*.sql"))))
+        write(models, "daily.sql", "CREATE TABLE daily AS SELECT day FROM orders")
+        after = parse_models([models / "daily.sql"])
+
+        for finding in check_removed_columns(before, after):
+            assert "\n" not in finding.as_github_annotation()

@@ -154,6 +154,12 @@ def check(
     ),
     schema: Optional[str] = typer.Option(None, help="JSON catalog: {asset: [columns]}."),
     strict: bool = typer.Option(False, "--strict", help="Fail on warnings too."),
+    annotate: bool = typer.Option(
+        False,
+        "--annotate",
+        help="Also emit GitHub Actions annotations, so the finding appears on the "
+        "pull request instead of only in the job log.",
+    ),
 ):
     """Fail when a change removes a column something downstream reads."""
     from dataplatform.core.database import get_column_edges, init_db
@@ -183,6 +189,10 @@ def check(
 
     typer.echo("comparing {0} model(s) against {1}\n".format(len(after), source))
     typer.echo(report.render())
+
+    if annotate:
+        for finding in report.findings:
+            typer.echo(finding.as_github_annotation())
 
     if report.errors or (strict and report.warnings):
         raise typer.Exit(1)
