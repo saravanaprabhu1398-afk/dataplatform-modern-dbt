@@ -22,6 +22,9 @@ dependencies = [
     "pandas",
     "requests",
     "bcrypt>=4.0.0",
+    # SQL lineage is parsed, not pattern-matched. Pinned to a major: parser
+    # behaviour is the contract here, and it can change across majors.
+    "sqlglot>=30,<31",
 ]
 authors = [
     {name = "Prabhu Saravanan", email = "prabhu@example.com"},
@@ -58,6 +61,10 @@ dev = [
     "black",
     "flake8",
     "mypy",
+    # Needed for tests/test_queue_leases_postgres.py, which exercises the
+    # FOR UPDATE SKIP LOCKED claim path. Skipped unless
+    # DATAPLATFORM_TEST_POSTGRES_URL is set.
+    "psycopg2-binary",
 ]
 ui = [
     "react",

@@ -4,11 +4,15 @@ import shutil
 import time
 from pathlib import Path
 from dataplatform.core.logging_config import setup_logging, log_pipeline_start, log_pipeline_success, log_pipeline_failure
+from dataplatform.cli.lineage_cli import lineage_app
+from dataplatform.streaming.cli import stream_app
 
 # Set up enhanced logging
 logger = setup_logging()
 
 app = typer.Typer()
+app.add_typer(stream_app, name="stream")
+app.add_typer(lineage_app, name="lineage")
 
 
 @app.command()

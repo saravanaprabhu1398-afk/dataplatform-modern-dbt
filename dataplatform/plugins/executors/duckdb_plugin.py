@@ -7,9 +7,17 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_sql_lineage(sql: str) -> dict[str, list[str]]:
-    """Parse SQL text and return tables read from and written to.
+    """Regex lineage extraction. SUPERSEDED — kept only for comparison.
 
-    Uses lightweight regex — no external SQL parser required.
+    Replaced by :func:`dataplatform.core.sql_lineage.extract_lineage`, which
+    parses the statement instead of matching text. This version is retained,
+    and still exercised by ``demo/scripts/lineage_parser_scorecard.py``, so the
+    improvement stays a measurement rather than a claim about deleted code.
+
+    It scores 11 of 28 on the hand-checked corpus. Among the things it gets
+    wrong, silently: a CTE name is reported as a table, the word ``from``
+    inside a string literal invents one, ``MERGE`` and ``UPDATE`` targets are
+    invisible, and ``SELECT * FROM 'data/raw.json'`` yields nothing at all.
 
     Returns:
         {"reads_from": [...], "writes_to": [...]}
@@ -122,7 +130,15 @@ class DuckdbExecutor(ExecutorPlugin):
         never blocked by missing metadata.
         """
         try:
-            lineage = _extract_sql_lineage(sql)
+            from dataplatform.core.sql_lineage import extract_lineage
+
+            parsed = extract_lineage(sql)
+            if parsed.unsupported:
+                logger.debug(
+                    "SQL could not be parsed for lineage; recording nothing: %s",
+                    parsed.unsupported[0],
+                )
+            lineage = parsed.as_uris()
             if not lineage["reads_from"] and not lineage["writes_to"]:
                 return
 
