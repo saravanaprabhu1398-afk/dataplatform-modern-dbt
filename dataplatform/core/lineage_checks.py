@@ -54,6 +54,21 @@ class Finding:
     asset: str
     message: str
     details: List[str] = field(default_factory=list)
+    path: Optional[str] = None
+
+    def as_github_annotation(self) -> str:
+        """A GitHub Actions workflow command, so the failure shows in the PR.
+
+        Without this the check surfaces as "Process completed with exit code 1"
+        and the reader has to open the log to learn what broke -- which is the
+        same as not telling them.
+        """
+        level = "error" if self.severity == SEVERITY_ERROR else "warning"
+        location = "file={0}::".format(self.path) if self.path else "::"
+        body = " ".join(
+            [self.asset + ": " + self.message] + ["- " + d.strip() for d in self.details]
+        )
+        return "::{0} {1}{2}".format(level, location, body.replace("\n", " "))
 
     def render(self) -> str:
         marker = "ERROR  " if self.severity == SEVERITY_ERROR else "warning"
@@ -112,6 +127,7 @@ def parse_models(
 
         lineage = extract_column_lineage(sql, schema=schema)
         if lineage.target and lineage.target != "(query)":
+            lineage.source_path = str(path)
             models[lineage.target] = lineage
     return models
 
@@ -179,6 +195,7 @@ def check_removed_columns(
                         message="no longer produced, and {0} column(s) read it".format(
                             len(impact.hits)
                         ),
+                        path=lineage.source_path,
                         details=[
                             "{0:<38} {1}".format(str(hit.column), hit.kind)
                             for hit in impact.hits
@@ -197,6 +214,7 @@ def check_removed_columns(
                         code=CODE_COLUMN_ORPHANED,
                         asset="{0}.{1}".format(asset, column),
                         message="no longer produced; nothing recorded reads it",
+                        path=lineage.source_path,
                     )
                 )
 
@@ -224,6 +242,7 @@ def check_unresolved(after_models: Dict[str, ColumnLineage]) -> List[Finding]:
                 asset=asset,
                 message="{0} of {1} output columns fully resolved".format(resolved, total),
                 details=list(lineage.unresolved),
+                path=lineage.source_path,
             )
         )
     return findings
