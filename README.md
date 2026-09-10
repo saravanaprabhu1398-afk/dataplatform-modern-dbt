@@ -87,8 +87,62 @@ Docker Compose now starts PostgreSQL, the API, and a separate queue worker:
 ```bash
 cp .env.example .env
 # Set strong DATAPLATFORM_* and POSTGRES_* values before production use.
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
+
+The production override requires `DATAPLATFORM_USERNAME`,
+`DATAPLATFORM_PASSWORD`, `DATAPLATFORM_SESSION_SECRET`, `POSTGRES_DB`,
+`POSTGRES_USER`, and `POSTGRES_PASSWORD`. Put them in `.env` or provide them
+through the deployment platform; do not commit `.env`.
+
+### Docker on another host
+
+Build and publish the image to a registry, then run the same image with the
+production environment variables and persistent mounts. The API and worker
+must share the pipeline and data directories when using external execution:
+
+```bash
+docker build -t registry.example.com/dataplatform:VERSION .
+docker push registry.example.com/dataplatform:VERSION
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Use a reverse proxy or cloud load balancer for TLS. Do not expose PostgreSQL
+publicly.
+
+### Kubernetes
+
+The baseline manifests in `deploy/kubernetes/` assume a registry image and a
+storage class that supports `ReadWriteMany`, because the API and worker share
+pipeline files and runtime data. Create the namespace, secret, and workloads:
+
+```bash
+kubectl create namespace dataplatform
+kubectl -n dataplatform create secret generic dataplatform-secrets \
+  --from-literal=DATAPLATFORM_USERNAME="$DATAPLATFORM_USERNAME" \
+  --from-literal=DATAPLATFORM_PASSWORD="$DATAPLATFORM_PASSWORD" \
+  --from-literal=DATAPLATFORM_SESSION_SECRET="$DATAPLATFORM_SESSION_SECRET" \
+  --from-literal=POSTGRES_DB=dataplatform \
+  --from-literal=POSTGRES_USER=dataplatform \
+  --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  --from-literal=POSTGRES_URL="postgresql+psycopg2://dataplatform:${POSTGRES_PASSWORD}@postgres:5432/dataplatform"
+kubectl -n dataplatform apply -k deploy/kubernetes
+kubectl -n dataplatform rollout status statefulset/postgres
+kubectl -n dataplatform rollout status deployment/dataplatform-api
+kubectl -n dataplatform rollout status deployment/dataplatform-worker
+```
+
+Before applying, replace `dataplatform:local` in the two Deployment manifests
+with the immutable image tag pushed to your registry. Expose the Service through
+an Ingress or Gateway with TLS, authentication-aware network policy, and a
+secret manager. For clusters without `ReadWriteMany`, use an external shared
+pipeline store or package immutable pipeline YAML into the image and keep only
+the metadata database on a PVC.
+
+This baseline runs PostgreSQL inside the cluster for small installations. For
+production workloads, use a managed PostgreSQL service when possible so
+backups, replication, upgrades, and failover are handled outside the
+application cluster.
 
 ---
 

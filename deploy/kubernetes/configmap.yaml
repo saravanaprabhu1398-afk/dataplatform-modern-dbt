@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dataplatform-config
+data:
+  DATAPLATFORM_ENV: production
+  DATAPLATFORM_EXECUTION_MODE: external
+  PIPELINES_PATH: /app/pipelines
+  GIT_CLONES_PATH: /app/data/git-clones
+  LOG_FILE: /app/logs/pipeline.log
+  LOG_LEVEL: INFO
+  LOG_JSON: "true"
+  DATAPLATFORM_OBSERVABILITY_AUTO_COLLECT: "true"

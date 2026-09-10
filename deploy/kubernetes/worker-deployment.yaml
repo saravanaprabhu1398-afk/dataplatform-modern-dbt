@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataplatform-worker
+spec:
+  # Workers claim runs with FOR UPDATE SKIP LOCKED and hold a lease with a
+  # fencing token, so more than one is safe: two workers take different runs,
+  # and a worker that stalls past its lease cannot report an outcome for the
+  # attempt that replaced it. Scale on queue depth.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dataplatform-worker
+  template:
+    metadata:
+      labels:
+        app: dataplatform-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      initContainers:
+        - name: initialize-storage
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /storage/logs /storage/pipelines /storage/git-clones"]
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+          volumeMounts:
+            - name: data
+              mountPath: /storage
+      containers:
+        - name: worker
+          image: dataplatform:local
+          imagePullPolicy: IfNotPresent
+          command:
+            - python3
+            - -m
+            - dataplatform.cli.main
+            - worker
+            - --poll-interval
+            - "2"
+            - --liveness-file
+            - /var/run/dataplatform/worker-liveness
+          envFrom:
+            - configMapRef:
+                name: dataplatform-config
+            - secretRef:
+                name: dataplatform-secrets
+          # A queue worker serves no traffic, so it has no readiness to
+          # report; liveness is whether its loop is still turning. The file is
+          # touched by the poll loop and by the lease heartbeat, so a worker
+          # inside a long task keeps proving liveness instead of being killed
+          # for being slow.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - find /var/run/dataplatform/worker-liveness -mmin -2 | grep -q .
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: data
+              mountPath: /app/logs
+              subPath: logs
+            - name: data
+              mountPath: /app/pipelines
+              subPath: pipelines
+            - name: runtime
+              mountPath: /var/run/dataplatform
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: dataplatform-data
+        # Per-pod, deliberately not the shared claim: two workers touching one
+        # liveness file would each vouch for the other.
+        - name: runtime
+          emptyDir: {}

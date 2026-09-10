@@ -21,6 +21,7 @@ dependencies = [
     "snowflake-connector-python",
     "pandas",
     "requests",
+    "sqlalchemy",
     "bcrypt>=4.0.0",
     # SQL lineage is parsed, not pattern-matched. Pinned to a major: parser
     # behaviour is the contract here, and it can change across majors.
