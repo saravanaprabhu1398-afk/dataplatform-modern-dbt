@@ -597,13 +597,25 @@ def _normalize_environment_profile(profile_id: Optional[str]) -> Dict[str, Any]:
     return normalize_environment_profile(profile_id)
 
 
+def _pipelines_root() -> Path:
+    """The one directory that decides which pipelines exist.
+
+    Discovery and path validation have to agree on this. They did not: listing
+    walked the installed package's sibling ``pipelines`` directory while
+    validation enforced PIPELINES_PATH, so pointing that variable anywhere else
+    made the UI offer pipelines the API then refused as outside the root, and
+    every run, schedule or deploy on them failed with a 400.
+    """
+    configured = os.getenv("PIPELINES_PATH", "").strip()
+    if configured:
+        root = Path(configured).expanduser()
+        return root if root.is_absolute() else (Path.cwd() / root)
+    return Path(__file__).resolve().parent.parent.parent / "pipelines"
+
+
 def _resolve_config_path(config_path: str) -> str:
     """Resolve a pipeline path and keep it inside the configured pipeline root."""
-    configured_root = Path(os.getenv("PIPELINES_PATH", "pipelines"))
-    if not configured_root.is_absolute():
-        configured_root = Path.cwd() / configured_root
-
-    resolved_root = configured_root.resolve()
+    resolved_root = _pipelines_root().resolve()
     resolved_path = Path(config_path).expanduser().resolve()
     try:
         resolved_path.relative_to(resolved_root)
@@ -1118,13 +1130,19 @@ class UserResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _discover_pipeline_files():
-    workspace_root = Path(__file__).parent.parent.parent
-    pipelines_dir = workspace_root / "pipelines"
+    workspace_root = Path(__file__).resolve().parent.parent.parent
+    # The same root path validation enforces, so a listed pipeline is always
+    # one the API will accept.
+    pipelines_dir = _pipelines_root()
 
     search_dirs: List[Path] = []
     if pipelines_dir.exists():
         search_dirs.append(pipelines_dir)
-    search_dirs.append(workspace_root)
+    # The workspace root is only swept when no root was configured. With
+    # PIPELINES_PATH set, sweeping it would surface files that live outside the
+    # root path validation enforces -- listed in the UI, refused by the API.
+    if not os.getenv("PIPELINES_PATH", "").strip():
+        search_dirs.append(workspace_root)
 
     yaml_files_set = set()
     for search_dir in search_dirs:

@@ -257,3 +257,70 @@ def test_rollback_restores_previous_deployment(client, monkeypatch, tmp_path):
     active = active_resp.json()["deployments"]
     assert len(active) == 1
     assert active[0]["deployment_id"] == first["deployment_id"]
+
+
+def _pipeline_yaml(name: str) -> str:
+    """A pipeline the config model actually accepts: tasks cannot be empty."""
+    return (
+        "pipeline_name: {0}\n"
+        "tasks:\n"
+        "  - name: noop\n"
+        "    id: noop\n"
+        "    type: executor\n"
+        "    plugin: python\n"
+        "    config:\n"
+        "      operation: execute_code\n"
+        "      code: result = 1\n"
+    ).format(name)
+
+
+class TestPipelineRootIsSingular:
+    """Discovery and path validation must agree on where pipelines live.
+
+    They did not: listing walked the installed package's sibling `pipelines`
+    directory while validation enforced PIPELINES_PATH. Pointing that variable
+    anywhere else made the UI offer pipelines the API refused, and every run,
+    schedule or deploy on them failed with a 400.
+    """
+
+    def test_discovery_follows_the_configured_root(self, tmp_path, monkeypatch):
+        from dataplatform.core.api import _discover_pipeline_files, _pipelines_root
+
+        root = tmp_path / "my-pipelines"
+        root.mkdir()
+        (root / "only_here.yaml").write_text(_pipeline_yaml("only_here"))
+        monkeypatch.setenv("PIPELINES_PATH", str(root))
+
+        assert _pipelines_root() == root
+        pipelines, _failed, _root, _dir = _discover_pipeline_files()
+        assert [p["name"] for p in pipelines] == ["only_here.yaml"]
+
+    def test_a_discovered_pipeline_survives_path_validation(self, tmp_path, monkeypatch):
+        # The actual regression: listed, then refused.
+        from dataplatform.core.api import _discover_pipeline_files, _resolve_config_path
+
+        root = tmp_path / "pipes"
+        root.mkdir()
+        (root / "listed.yaml").write_text(_pipeline_yaml("listed"))
+        monkeypatch.setenv("PIPELINES_PATH", str(root))
+
+        pipelines, _failed, _root, _dir = _discover_pipeline_files()
+        assert pipelines, "the seeded pipeline should have been discovered"
+        for discovered in pipelines:
+            # Listed by the UI, so the API must accept it.
+            assert _resolve_config_path(discovered["file_path"])
+
+    def test_traversal_is_still_refused(self, tmp_path, monkeypatch):
+        import pytest as _pytest
+        from fastapi import HTTPException
+
+        from dataplatform.core.api import _resolve_config_path
+
+        root = tmp_path / "pipes"
+        root.mkdir()
+        outside = tmp_path / "secrets.yaml"
+        outside.write_text("nope")
+        monkeypatch.setenv("PIPELINES_PATH", str(root))
+
+        with _pytest.raises(HTTPException):
+            _resolve_config_path(str(outside))
