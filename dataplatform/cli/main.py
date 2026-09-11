@@ -157,6 +157,78 @@ def worker(
 
 
 @app.command()
+def backfill(
+    config_path: str = typer.Argument(..., help="Pipeline YAML to backfill."),
+    start: str = typer.Option(..., help="Start of the range, ISO-8601 (inclusive)."),
+    end: str = typer.Option(..., help="End of the range, ISO-8601 (exclusive)."),
+    force: bool = typer.Option(
+        False, "--force", help="Re-run windows that already have a run. Means it."
+    ),
+    max_runs: int = typer.Option(500, help="Refuse to queue more runs than this."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show the plan and queue nothing."
+    ),
+    actor: str = typer.Option("cli", help="Who requested the backfill."),
+):
+    """Queue one run per schedule window across a past range.
+
+    The plan is printed before anything is queued, and windows that already
+    have a run are skipped unless --force: re-running a period that already
+    succeeded is how a backfill doubles a month of data.
+    """
+    from dataplatform.core.backfill import plan_backfill, submit_backfill
+    from dataplatform.core.config import load_config
+    from dataplatform.core.database import init_db
+
+    init_db()
+    config = load_config(config_path)
+
+    try:
+        plan = plan_backfill(config, start, end, force=force, max_runs=max_runs)
+    except ValueError as exc:
+        typer.echo(f"Cannot plan this backfill: {exc}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(plan.summary())
+
+    if dry_run:
+        typer.echo("\ndry run — nothing queued")
+        return
+    if not plan.to_run:
+        typer.echo("\nnothing to queue")
+        return
+
+    result = submit_backfill(plan, config_path=config_path, actor=actor)
+    typer.echo("")
+    typer.echo(result.summary())
+    typer.echo(f"watch it with: dataplatform backfill-status {result.backfill_id}")
+
+
+@app.command()
+def backfill_status(backfill_id: str = typer.Argument(..., help="Backfill id to inspect.")):
+    """Show the runs one backfill created, oldest window first."""
+    from dataplatform.core.database import get_backfill_runs, init_db
+
+    init_db()
+    runs = get_backfill_runs(backfill_id)
+    if not runs:
+        typer.echo(f"No runs found for {backfill_id}")
+        raise typer.Exit(1)
+
+    counts: dict = {}
+    for run in runs:
+        counts[run["status"]] = counts.get(run["status"], 0) + 1
+
+    typer.echo(f"{backfill_id}: {len(runs)} run(s) — " + ", ".join(
+        f"{status} {count}" for status, count in sorted(counts.items())
+    ))
+    for run in runs:
+        typer.echo("  {0:<12} {1:<26} {2}".format(
+            run["status"], run["logical_start"] or "-", run["run_id"]
+        ))
+
+
+@app.command()
 def collect_metrics(
     range_hours: int = typer.Option(24, help="Lookback window for metric collection."),
     evaluate: bool = typer.Option(True, help="Evaluate enabled alert rules after collecting."),

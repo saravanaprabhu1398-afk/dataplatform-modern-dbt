@@ -23,7 +23,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dataplatform.core.config import load_config
 from dataplatform.core.database import (
@@ -143,6 +143,21 @@ class LeaseHeartbeat:
         self.stop()
 
 
+def _interval_of(run: dict) -> Optional[Any]:
+    """The window a queued run owns, if it was queued with one.
+
+    Scheduled and backfilled runs carry it; an ad-hoc run does not, and gets
+    None rather than a fabricated window.
+    """
+    start, end = run.get("logical_start"), run.get("logical_end")
+    if not start or not end:
+        return None
+
+    from dataplatform.core.intervals import Interval
+
+    return Interval(start=str(start), end=str(end))
+
+
 def run_worker_once(
     worker_id: Optional[str] = None,
     lease_seconds: float = DEFAULT_LEASE_SECONDS,
@@ -180,7 +195,7 @@ def run_worker_once(
             from dataplatform.core.api import execute_pipeline_background
 
             config = load_config(config_path)
-            execute_pipeline_background(config, run_id)
+            execute_pipeline_background(config, run_id, interval=_interval_of(run))
     except Exception as exc:
         logger.error("Worker %s failed run_id=%s: %s", worker, run_id, exc, exc_info=True)
         if heartbeat.lost:
