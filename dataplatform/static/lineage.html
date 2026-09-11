@@ -53,7 +53,7 @@
         }
         .node-asset.is-selected,
         .node-task.is-selected {
-            filter: drop-shadow(0 0 6px oklch(54% 0.22 250 / 0.5));
+            filter: drop-shadow(0 0 6px color-mix(in oklab, var(--color-accent-fill) 50%, transparent));
         }
 
         /* Search match ring */
@@ -347,7 +347,7 @@
             <div class="flex rounded-lg overflow-hidden" style="border: 1px solid var(--color-border);">
                 <button id="btn-graph" onclick="switchView('graph')"
                         class="px-3 py-1.5 text-sm font-medium transition-colors"
-                        style="background: var(--color-accent); color: var(--color-accent-text);">
+                        style="background: var(--color-accent-fill); color: var(--color-accent-text);">
                     <i class="fas fa-diagram-project mr-1.5 text-xs"></i>Graph
                 </button>
                 <button id="btn-list" onclick="switchView('list')"
@@ -417,7 +417,7 @@
                     <!-- Radial gradient for SVG background -->
                     <radialGradient id="svgBg" cx="50%" cy="50%" r="60%"
                                     gradientUnits="objectBoundingBox">
-                        <stop offset="0%"   style="stop-color: oklch(97% 0.008 250);"/>
+                        <stop offset="0%"   style="stop-color: var(--color-paper);"/>
                         <stop offset="100%" style="stop-color: var(--color-surface, oklch(100% 0 0));"/>
                     </radialGradient>
                     <!-- Subtle drop shadow for nodes -->
@@ -461,7 +461,7 @@
                 </div>
                 <a href="/dashboard"
                    class="mt-2 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                   style="background: var(--color-accent); color: var(--color-accent-text);">
+                   style="background: var(--color-accent-fill); color: var(--color-accent-text);">
                     <i class="fas fa-wave-square text-xs"></i>Go to DP Flow
                 </a>
             </div>
@@ -530,12 +530,12 @@ function switchView(view) {
     const btnGraph = document.getElementById('btn-graph');
     const btnList  = document.getElementById('btn-list');
     if (view === 'graph') {
-        btnGraph.style.background = 'var(--color-accent)';
+        btnGraph.style.background = 'var(--color-accent-fill)';
         btnGraph.style.color = 'var(--color-accent-text)';
         btnList.style.background = 'var(--color-surface)';
         btnList.style.color = 'var(--color-ink-3)';
     } else {
-        btnList.style.background = 'var(--color-accent)';
+        btnList.style.background = 'var(--color-accent-fill)';
         btnList.style.color = 'var(--color-accent-text)';
         btnGraph.style.background = 'var(--color-surface)';
         btnGraph.style.color = 'var(--color-ink-3)';
@@ -765,8 +765,18 @@ function resetZoom() {
     if (!svgZoom || !_simNodes.length) return;
 
     const container = document.getElementById('graph-container');
-    const W = container.clientWidth;
-    const H = container.clientHeight - 44; // subtract legend bar height
+    // The container can still be unlaid-out here, reporting clientWidth 0,
+    // which produced viewBox="0 0 0 H" and a graph drawn into nothing. Fall
+    // back to the bounding rect, then to a sane floor, and re-measure below
+    // once the browser gives the element a real size.
+    const measure = () => {
+        const rect = container.getBoundingClientRect();
+        return {
+            W: Math.max(container.clientWidth || Math.round(rect.width) || 0, 480),
+            H: Math.max((container.clientHeight || Math.round(rect.height) || 0) - 44, 360),
+        };
+    };
+    const { W, H } = measure(); // subtract legend bar height
 
     const xs = _simNodes.map(d => d.x).filter(isFinite);
     const ys = _simNodes.map(d => d.y).filter(isFinite);
@@ -812,7 +822,15 @@ async function loadGraph() {
         edges = g.edges;
     } else {
         nodes = raw.nodes || [];
-        edges = raw.edges || [];
+        // /lineage keys its edges from/to. d3.forceLink resolves source/target
+        // and throws "node not found: undefined" when they are missing, which
+        // left this page permanently blank. Both key pairs are kept so the
+        // detail panel can read either.
+        edges = (raw.edges || []).map(e => ({
+            ...e,
+            source: e.source !== undefined ? e.source : e.from,
+            target: e.target !== undefined ? e.target : e.to,
+        }));
         _lineageRecords = [];
     }
 
@@ -863,6 +881,21 @@ async function loadGraph() {
         .force('charge',    d3.forceManyBody().strength(-350))
         .force('center',    d3.forceCenter(W / 2, H / 2))
         .force('collision', d3.forceCollide(44));
+
+    // Re-fit when the container gets its real size (or the window changes).
+    // Without this the first-paint fallback would be permanent.
+    if (window.ResizeObserver) {
+        let lastW = W, lastH = H;
+        new ResizeObserver(() => {
+            const next = measure();
+            if (next.W === lastW && next.H === lastH) return;
+            lastW = next.W; lastH = next.H;
+            svg.attr('viewBox', `0 0 ${next.W} ${next.H}`);
+            svg.select('#svg-bg-rect').attr('width', next.W).attr('height', next.H);
+            sim.force('center', d3.forceCenter(next.W / 2, next.H / 2));
+            sim.alpha(0.3).restart();
+        }).observe(container);
+    }
 
     // ── Links as curved arc paths ────────────────────────────────────────────
     _linkSel = g.append('g').attr('class', 'links')

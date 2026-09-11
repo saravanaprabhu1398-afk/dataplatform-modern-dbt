@@ -15,100 +15,110 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @keyframes pulse-glow { 0%,100%{box-shadow:0 0 4px oklch(61% 0.210 38 / .45);}50%{box-shadow:0 0 18px oklch(61% 0.210 38 / .74),0 0 28px oklch(76% 0.160 72 / .28);} }
+        @keyframes pulse-glow { 0%,100%{opacity:1;}50%{opacity:.5;} }
         @keyframes pulse-dot  { 0%,100%{opacity:1;}50%{opacity:.35;} }
         @keyframes fadeUp     { from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;} }
 
         /* DAG SVG node classes */
-        .task-s { fill:#10B981; stroke:#059669; stroke-width:2; }
-        .task-f { fill:#EF4444; stroke:#DC2626; stroke-width:2; }
-        .task-p { fill:#64748B; stroke:#475569; stroke-width:1.5; }
-        .task-r { fill:#3B82F6; stroke:#1D4ED8; stroke-width:2; animation:pulse-glow 2s ease-in-out infinite; }
+        .task-s { fill:var(--color-success-solid); stroke:var(--color-success); stroke-width:2; }
+        .task-f { fill:var(--color-danger-solid); stroke:var(--color-danger); stroke-width:2; }
+        .task-p { fill:var(--color-ink-3); stroke:var(--color-ink-2); stroke-width:1.5; }
+        .task-r { fill:var(--color-running-solid); stroke:var(--color-accent); stroke-width:2; animation:pulse-glow 2s ease-in-out infinite; }
 
         /* Toggle switch */
         .tog-wrap { position:relative; display:inline-block; width:32px; height:17px; flex-shrink:0; }
         .tog-wrap input { display:none; }
-        .tog-track { position:absolute; inset:0; background:#CBD5E1; border-radius:9px; transition:background .2s; cursor:pointer; }
+        .tog-track { position:absolute; inset:0; background:var(--color-border-2); border-radius:9px; transition:background .2s; cursor:pointer; }
         .tog-track::after { content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; background:white; border-radius:50%; transition:transform .2s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
-        .tog-wrap input:checked + .tog-track { background:oklch(61% 0.210 38); }
+        .tog-wrap input:checked + .tog-track { background:var(--color-accent-fill); }
         .tog-wrap input:checked + .tog-track::after { transform:translateX(15px); }
 
-        /* Mini run squares */
-        .rsq { width:12px; height:22px; border-radius:2px; flex-shrink:0; transition:transform .1s; cursor:default; }
-        .rsq:hover { transform:scaleY(1.25); }
-        .rsq-ok { background:#10B981; }
-        .rsq-er { background:#EF4444; }
-        .rsq-rn { background:#3B82F6; }
-        .rsq-sk { background:#E2E8F0; }
+        /* Mini run squares — a sparkline of the last N runs.
+           State is carried by HEIGHT and FILL PATTERN as well as hue, so the
+           strip is still readable in greyscale and for red/green colour
+           blindness: ok = full solid · failed = full hatched · running = half
+           height, solid · skipped = short flat bar. */
+        .rsq { width:12px; height:22px; border-radius:1px; flex-shrink:0; transition:transform .1s; cursor:default;
+               align-self:flex-end; box-shadow:inset 0 0 0 1px oklch(0% 0 0 / .10); }
+        .rsq:hover { transform:scaleY(1.15); }
+        .rsq-ok { background:var(--color-success-solid); }
+        .rsq-er { background:var(--color-danger-solid);
+                  background-image:repeating-linear-gradient(45deg,
+                      oklch(0% 0 0 / .30) 0 2px, transparent 2px 4px); }
+        .rsq-rn { background:var(--color-running-solid); height:13px; }
+        .rsq-sk { background:var(--color-idle); height:5px; }
 
-        /* Status dot */
-        .sdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .sdot-ok { background:#10B981; }
-        .sdot-er { background:#EF4444; }
-        .sdot-rn { background:#3B82F6; animation:pulse-dot 1.2s infinite; }
-        .sdot-idle { background:#CBD5E1; }
+        /* Status dot — SHAPE is the primary channel, colour reinforces it:
+           circle = healthy · square = failed · ring = running · bar = idle. */
+        .sdot { width:9px; height:9px; border-radius:50%; flex-shrink:0;
+                box-shadow:inset 0 0 0 1px oklch(0% 0 0 / .16); }
+        .sdot-ok { background:var(--color-success-solid); }
+        .sdot-er { background:var(--color-danger-solid); border-radius:1px; }
+        .sdot-rn { background:transparent; animation:pulse-dot 1.2s infinite;
+                   box-shadow:inset 0 0 0 3px var(--color-running-solid); }
+        .sdot-idle { background:var(--color-idle); border-radius:1px; height:3px; align-self:center; }
 
         /* DAG table */
         .dag-tbl { width:100%; border-collapse:collapse; }
-        .dag-tbl th { padding:9px 14px; text-align:left; white-space:nowrap; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#64748B; background:#F8FAFC; border-bottom:2px solid #E2E8F0; }
-        .dag-tbl td { padding:11px 14px; border-bottom:1px solid #F1F5F9; vertical-align:middle; }
+        .dag-tbl th { padding:9px 14px; text-align:left; white-space:nowrap; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--color-ink-3); background:var(--color-surface-2); border-bottom:2px solid var(--color-border); }
+        .dag-tbl td { padding:11px 14px; border-bottom:1px solid var(--color-muted); vertical-align:middle; }
         .dag-tbl tbody tr { transition:background .1s; cursor:pointer; }
-        .dag-tbl tbody tr:hover { background:#FFF8F1; }
-        .dag-tbl tbody tr.row-selected { background:oklch(96% 0.040 58); }
+        .dag-tbl tbody tr:hover { background:var(--color-accent-subtle); }
+        .dag-tbl tbody tr.row-selected { background:var(--color-accent-subtle); }
 
         /* Tag chip */
-        .tag-chip { display:inline-flex; align-items:center; padding:1px 7px; background:oklch(96% 0.040 58); color:oklch(40% 0.120 38); border-radius:3px; font-size:10px; font-weight:600; }
+        .tag-chip { display:inline-flex; align-items:center; padding:1px 7px; background:var(--color-accent-subtle); color:var(--color-accent); border-radius:3px; font-size:10px; font-weight:600; }
 
         /* Cron badge */
-        .cron-badge { font-family:ui-monospace,monospace; font-size:11px; background:#F1F5F9; color:#475569; padding:2px 7px; border-radius:4px; white-space:nowrap; }
+        .cron-badge { font-family:ui-monospace,monospace; font-size:11px; background:var(--color-muted); color:var(--color-ink-2); padding:2px 7px; border-radius:4px; white-space:nowrap; }
 
         /* Task side panel */
-        #taskPanel { position:absolute; right:12px; top:12px; width:240px; background:white; border:1px solid #E2E8F0; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.13); z-index:20; display:none; overflow:hidden; }
+        #taskPanel { position:absolute; right:12px; top:12px; width:240px; background:white; border:1px solid var(--color-border); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.13); z-index:20; display:none; overflow:hidden; }
         #taskPanel.open { display:block; animation:fadeUp .18s; }
 
         /* Wave SVG */
         .node-g { cursor:pointer; }
         .node-g:hover .node-body { opacity:.88; }
-        .wave-sep { stroke:#E2E8F0; stroke-width:1; stroke-dasharray:5,4; }
-        .wave-lbl { font-size:10px; font-weight:700; fill:#94A3B8; letter-spacing:.08em; text-transform:uppercase; }
-        .dag-edge { fill:none; stroke:#94A3B8; stroke-width:1.8; marker-end:url(#arr); }
-        .dag-edge-hi { fill:none; stroke:oklch(61% 0.210 38); stroke-width:2.2; marker-end:url(#arr-hi); }
+        .wave-sep { stroke:var(--color-border); stroke-width:1; stroke-dasharray:5,4; }
+        .wave-lbl { font-size:10px; font-weight:700; fill:var(--color-ink-3); letter-spacing:.08em; text-transform:uppercase; }
+        .dag-edge { fill:none; stroke:var(--color-ink-3); stroke-width:1.8; marker-end:url(#arr); }
+        .dag-edge-hi { fill:none; stroke:var(--color-accent-fill); stroke-width:2.2; marker-end:url(#arr-hi); }
 
-        #dagVisualization { overflow:auto; position:relative; background:#F8FAFC; border-radius:0 0 12px 12px; }
+        #dagVisualization { overflow:auto; position:relative; background:var(--color-surface-2); border-radius:0 0 12px 12px; }
 
         .dp-flow-primary {
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
-            color: white;
-            box-shadow: 0 8px 16px oklch(61% 0.210 38 / 0.18);
+            background: var(--color-accent-fill) !important;
+            color: var(--color-accent-text);
+            border: 1px solid var(--color-accent-fill);
         }
-        .dp-flow-primary:hover { filter: brightness(0.96); }
+        .dp-flow-primary:hover { background: var(--color-accent-hover) !important; border-color: var(--color-accent-hover); }
         .dp-flow-secondary {
-            background: white;
-            border: 1px solid #E2E8F0;
-            color: #334155;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            color: var(--color-ink-2);
         }
-        .dp-flow-secondary:hover { background:#F8FAFC; }
+        .dp-flow-secondary:hover { background:var(--color-surface-2); }
         .dp-focus-accent:focus {
-            border-color: oklch(61% 0.210 38) !important;
-            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / 0.24) !important;
+            border-color: var(--color-accent-fill) !important;
+            box-shadow: 0 0 0 3px var(--color-accent-subtle) !important;
         }
-        .dp-text-accent { color: oklch(48% 0.160 38) !important; }
-        .dp-icon-accent { color: oklch(61% 0.210 38) !important; }
-        .dp-running-dot { background: oklch(72% 0.170 65); }
+        .dp-text-accent { color: var(--color-accent) !important; }
+        .dp-icon-accent { color: var(--color-accent) !important; }
+        .dp-running-dot { background: var(--color-running-solid); }
         .dp-row-btn-accent {
-            background: oklch(61% 0.210 38);
-            color: white;
+            background: var(--color-accent-fill);
+            color: var(--color-accent-text);
         }
-        .dp-row-btn-accent:hover { background: oklch(54% 0.210 38); }
+        .dp-row-btn-accent:hover { background: var(--color-accent-hover); }
         .dp-row-btn-soft {
-            background: oklch(96% 0.040 58);
-            color: oklch(40% 0.120 38);
-            border: 1px solid oklch(88% 0.060 58);
+            background: var(--color-accent-subtle);
+            color: var(--color-accent);
+            border: 1px solid var(--color-accent);
         }
-        .dp-row-btn-soft:hover { background: oklch(92% 0.060 58); }
+        .dp-row-btn-soft:hover { background: var(--color-accent-subtle); }
         .dp-schedule-card {
-            background: oklch(97% 0.030 58);
-            border: 1px solid oklch(88% 0.060 58);
+            background: var(--color-accent-subtle);
+            border: 1px solid var(--color-accent);
         }
         .run-detail-hero {
             display: flex;
@@ -116,9 +126,9 @@
             justify-content: space-between;
             gap: 16px;
             padding: 18px;
-            border: 1px solid oklch(89% 0.035 58);
-            border-radius: 14px;
-            background: linear-gradient(135deg, oklch(98% 0.020 58), #fff);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-2xl);
+            background: var(--color-surface);
         }
         .run-detail-icon {
             width: 42px;
@@ -126,10 +136,9 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 10px;
-            color: white;
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
-            box-shadow: 0 10px 18px oklch(61% 0.210 38 / .18);
+            border-radius: var(--radius-lg);
+            color: var(--color-accent-text);
+            background: var(--color-accent-fill);
         }
         .run-detail-kpis {
             display: grid;
@@ -138,8 +147,8 @@
         }
         .run-detail-kpi,
         .run-detail-panel {
-            border: 1px solid #E2E8F0;
-            background: #fff;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
             border-radius: 12px;
         }
         .run-detail-kpi { padding: 14px; }
@@ -159,26 +168,26 @@
             font-weight: 700;
             white-space: nowrap;
         }
-        .run-detail-status.completed { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
-        .run-detail-status.failed { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+        .run-detail-status.completed { background: var(--color-success-subtle); color: var(--color-success); border: 1px solid var(--color-success); }
+        .run-detail-status.failed { background: var(--color-danger-subtle); color: var(--color-danger); border: 1px solid var(--color-danger); }
         .run-detail-status.running,
         .run-detail-status.started,
-        .run-detail-status.queued { background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; }
-        .run-detail-status.cancelled { background: #F8FAFC; color: #475569; border: 1px solid #CBD5E1; }
+        .run-detail-status.queued { background: var(--color-warning-subtle); color: var(--color-warning); border: 1px solid var(--color-warning); }
+        .run-detail-status.cancelled { background: var(--color-surface-2); color: var(--color-ink-2); border: 1px solid var(--color-border-2); }
         .run-detail-attempt {
             width: 100%;
             text-align: left;
-            border: 1px solid #E2E8F0;
-            background: #fff;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
             border-radius: 10px;
             padding: 10px;
             transition: background .15s, border-color .15s, transform .15s;
         }
-        .run-detail-attempt:hover { background: #FFF8F1; border-color: oklch(86% 0.070 58); }
+        .run-detail-attempt:hover { background: var(--color-accent-subtle); border-color: var(--color-accent); }
         .run-detail-attempt.is-selected {
-            background: oklch(97% 0.030 58);
-            border-color: oklch(70% 0.130 58);
-            box-shadow: inset 3px 0 0 oklch(61% 0.210 38);
+            background: var(--color-accent-subtle);
+            border-color: var(--color-accent);
+            box-shadow: inset 3px 0 0 var(--color-accent-fill);
         }
         .run-detail-task {
             display: flex;
@@ -186,9 +195,9 @@
             justify-content: space-between;
             gap: 10px;
             padding: 9px 10px;
-            border: 1px solid #E2E8F0;
+            border: 1px solid var(--color-border);
             border-radius: 10px;
-            background: #F8FAFC;
+            background: var(--color-surface-2);
         }
         .run-task-timeline {
             position: relative;
@@ -211,7 +220,7 @@
             top: 24px;
             bottom: -16px;
             width: 2px;
-            background: #E2E8F0;
+            background: var(--color-border);
         }
         .run-task-item:last-child .run-task-rail::after { display: none; }
         .run-task-dot {
@@ -223,20 +232,20 @@
             align-items: center;
             justify-content: center;
             border-radius: 999px;
-            background: #F8FAFC;
-            border: 2px solid #CBD5E1;
-            color: #64748B;
+            background: var(--color-surface-2);
+            border: 2px solid var(--color-border-2);
+            color: var(--color-ink-3);
             font-size: 9px;
         }
-        .run-task-dot.success { background: #ECFDF5; border-color: #10B981; color: #047857; }
-        .run-task-dot.failed { background: #FEF2F2; border-color: #EF4444; color: #B91C1C; }
-        .run-task-dot.running { background: #FFFBEB; border-color: #F59E0B; color: #B45309; }
+        .run-task-dot.success { background: var(--color-success-subtle); border-color: var(--color-success-solid); color: var(--color-success); }
+        .run-task-dot.failed { background: var(--color-danger-subtle); border-color: var(--color-danger-solid); color: var(--color-danger); }
+        .run-task-dot.running { background: var(--color-warning-subtle); border-color: var(--color-warning-solid); color: var(--color-warning); }
         .run-task-dot.pending,
-        .run-task-dot.skipped { background: #F8FAFC; border-color: #CBD5E1; color: #64748B; }
+        .run-task-dot.skipped { background: var(--color-surface-2); border-color: var(--color-border-2); color: var(--color-ink-3); }
         .run-task-card {
-            border: 1px solid #E2E8F0;
+            border: 1px solid var(--color-border);
             border-radius: 12px;
-            background: #F8FAFC;
+            background: var(--color-surface-2);
             padding: 11px;
         }
         .task-attempt-chip {
@@ -246,15 +255,15 @@
             min-height: 24px;
             padding: 4px 8px;
             border-radius: 999px;
-            border: 1px solid #E2E8F0;
-            background: #fff;
-            color: #475569;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-ink-2);
             font-size: 10px;
             font-weight: 700;
             white-space: nowrap;
         }
-        .task-attempt-chip.success { border-color: #A7F3D0; background: #ECFDF5; color: #047857; }
-        .task-attempt-chip.failed { border-color: #FECACA; background: #FEF2F2; color: #B91C1C; }
+        .task-attempt-chip.success { border-color: var(--color-success); background: var(--color-success-subtle); color: var(--color-success); }
+        .task-attempt-chip.failed { border-color: var(--color-danger); background: var(--color-danger-subtle); color: var(--color-danger); }
         .task-log-filter {
             display: inline-flex;
             align-items: center;
@@ -262,14 +271,14 @@
             width: 28px;
             height: 28px;
             border-radius: 8px;
-            border: 1px solid #E2E8F0;
-            background: #fff;
-            color: #475569;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-ink-2);
         }
         .task-log-filter:hover {
-            background: #FFF8F1;
-            border-color: oklch(86% 0.070 58);
-            color: oklch(48% 0.160 38);
+            background: var(--color-accent-subtle);
+            border-color: var(--color-accent);
+            color: var(--color-accent);
         }
         .task-repair-btn {
             display: inline-flex;
@@ -278,14 +287,14 @@
             min-height: 28px;
             padding: 5px 9px;
             border-radius: 8px;
-            border: 1px solid #FED7AA;
-            background: #FFF7ED;
-            color: #C2410C;
+            border: 1px solid var(--color-warning);
+            background: var(--color-warning-subtle);
+            color: var(--color-warning);
             font-size: 10px;
             font-weight: 800;
             white-space: nowrap;
         }
-        .task-repair-btn:hover { background: #FFEDD5; }
+        .task-repair-btn:hover { background: var(--color-warning-subtle); }
         .run-config-profile-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -294,16 +303,16 @@
         .run-config-profile {
             position: relative;
             display: block;
-            border: 1px solid #E2E8F0;
-            background: #fff;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
             border-radius: 12px;
             padding: 12px;
             cursor: pointer;
             transition: border-color .15s, background .15s, box-shadow .15s;
         }
         .run-config-profile:hover {
-            border-color: oklch(82% 0.080 58);
-            background: #FFF8F1;
+            border-color: var(--color-accent);
+            background: var(--color-accent-subtle);
         }
         .run-config-profile input {
             position: absolute;
@@ -311,9 +320,9 @@
             pointer-events: none;
         }
         .run-config-profile:has(input:checked) {
-            border-color: oklch(61% 0.210 38);
-            background: oklch(97% 0.030 58);
-            box-shadow: inset 3px 0 0 oklch(61% 0.210 38);
+            border-color: var(--color-accent-fill);
+            background: var(--color-accent-subtle);
+            box-shadow: inset 3px 0 0 var(--color-accent-fill);
         }
         .run-param-row {
             display: grid;
@@ -334,26 +343,26 @@
             min-height: 28px;
             padding: 5px 10px;
             border-radius: 999px;
-            border: 1px solid #E2E8F0;
-            background: #fff;
-            color: #475569;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-ink-2);
             font-size: 11px;
             font-weight: 700;
             white-space: nowrap;
         }
         .run-log-tab:hover,
         .run-log-tab.is-active {
-            background: #FFF8F1;
-            border-color: oklch(76% 0.110 58);
-            color: oklch(48% 0.160 38);
+            background: var(--color-accent-subtle);
+            border-color: var(--color-accent);
+            color: var(--color-accent);
         }
         .run-detail-context {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 12px;
-            border: 1px solid #E2E8F0;
+            border: 1px solid var(--color-border);
             border-radius: 12px;
-            background: #fff;
+            background: var(--color-surface);
             padding: 14px;
         }
         .run-param-chip {
@@ -363,9 +372,9 @@
             min-height: 24px;
             padding: 4px 8px;
             border-radius: 999px;
-            border: 1px solid #E2E8F0;
-            background: #F8FAFC;
-            color: #475569;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface-2);
+            color: var(--color-ink-2);
             font-size: 10px;
             font-weight: 700;
             max-width: 100%;
@@ -375,8 +384,8 @@
             max-height: 360px;
             overflow: auto;
             border-radius: 12px;
-            background: #0F172A;
-            color: #CBD5E1;
+            background: var(--color-console-bg);
+            color: var(--color-border-2);
             padding: 14px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 11px;
@@ -388,8 +397,8 @@
             max-height: 340px;
             overflow: auto;
             border-radius: 12px;
-            background: #0F172A;
-            color: #CBD5E1;
+            background: var(--color-console-bg);
+            color: var(--color-border-2);
             padding: 14px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 11px;
@@ -440,6 +449,14 @@
             .run-detail-layout { grid-template-columns: 1fr; }
         }
     </style>
+    <script>
+    /* Resolve a design token at call time so SVG/canvas colours follow the
+       active theme. D3 sets presentation attributes, which do not resolve
+       var(), so the value has to be read from the cascade here. */
+    window.dpToken = function (name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    };
+    </script>
 </head>
 <body class="min-h-screen" style="background: var(--color-paper); overflow-x: clip;">
 
@@ -991,24 +1008,35 @@ function updateConnectionStatus(ok, msg) {
 // ═══════════════════════════════════════════
 function renderOverviewStats() {
     const s = dashboardSummary.stats || {};
+    // tone: 'neutral' for inventory counts, a status tone only where the number
+    // actually reports health. Zero failures stays neutral so a clean board is
+    // visually quiet; it turns red only when there is something to see.
+    const TONE = {
+        neutral: ['var(--color-muted)',          'var(--color-ink-3)'],
+        running: ['var(--color-accent-subtle)',  'var(--color-accent)'],
+        ok:      ['var(--color-success-subtle)', 'var(--color-success)'],
+        fail:    ['var(--color-danger-subtle)',  'var(--color-danger)'],
+    };
     const cards = [
-        { label:'Total DAGs',     value:s.total_pipelines||0,     icon:'fa-diagram-project',       color:'orange'  },
-        { label:'Active Runs',    value:s.active_runs||0,          icon:'fa-bolt',                  color:'amber'   },
-        { label:'Scheduled',      value:s.scheduled_pipelines||0,  icon:'fa-clock',                 color:'cyan'    },
-        { label:'Healthy',        value:s.successful_pipelines||0, icon:'fa-circle-check',          color:'emerald' },
-        { label:'Failures',       value:s.failed_pipelines||0,     icon:'fa-triangle-exclamation',  color:'red'     },
-        { label:'Broken Configs', value:s.failed_configs||0,       icon:'fa-file-circle-xmark',     color:'slate'   },
+        { label:'Total DAGs',     value:s.total_pipelines||0,     icon:'fa-diagram-project',      tone:'neutral' },
+        { label:'Active Runs',    value:s.active_runs||0,         icon:'fa-bolt',                 tone:(s.active_runs||0) > 0 ? 'running' : 'neutral' },
+        { label:'Scheduled',      value:s.scheduled_pipelines||0, icon:'fa-clock',                tone:'neutral' },
+        { label:'Healthy',        value:s.successful_pipelines||0,icon:'fa-circle-check',         tone:(s.successful_pipelines||0) > 0 ? 'ok' : 'neutral' },
+        { label:'Failures',       value:s.failed_pipelines||0,    icon:'fa-triangle-exclamation', tone:(s.failed_pipelines||0) > 0 ? 'fail' : 'neutral' },
+        { label:'Broken Configs', value:s.failed_configs||0,      icon:'fa-file-circle-xmark',    tone:(s.failed_configs||0) > 0 ? 'fail' : 'neutral' },
     ];
-    document.getElementById('overviewStats').innerHTML = cards.map(c => `
+    document.getElementById('overviewStats').innerHTML = cards.map(c => {
+        const [tint, ink] = TONE[c.tone] || TONE.neutral;
+        return `
         <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div class="flex items-center justify-between mb-3">
                 <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">${c.label}</p>
-                <div class="w-8 h-8 rounded-lg bg-${c.color}-50 flex items-center justify-center">
-                    <i class="fas ${c.icon} text-${c.color}-500 text-sm"></i>
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:${tint}">
+                    <i class="fas ${c.icon} text-sm" style="color:${ink}"></i>
                 </div>
             </div>
             <p class="text-3xl font-bold text-slate-900">${c.value}</p>
-        </div>`).join('');
+        </div>`; }).join('');
 }
 
 // ═══════════════════════════════════════════
@@ -1390,8 +1418,8 @@ function renderDAGWaves(dagData) {
         .attr('id', id).attr('viewBox','0 -4 8 8')
         .attr('refX',7).attr('refY',0).attr('markerWidth',5).attr('markerHeight',5)
         .attr('orient','auto').append('path').attr('d','M0,-4L8,0L0,4').attr('fill', color);
-    addArrow('arr',    '#94A3B8');
-    addArrow('arr-hi', '#6366F1');
+    addArrow('arr',    dpToken('--color-ink-3'));
+    addArrow('arr-hi', dpToken('--color-accent'));
 
     // Wave separators + labels
     waves.forEach((wave, wi) => {
@@ -1430,7 +1458,7 @@ function renderDAGWaves(dagData) {
         else if (taskStatus[name] === false) st = 'failed';
 
         const clsMap = { success:'task-s', failed:'task-f', running:'task-r', pending:'task-p' };
-        const dotFill = { success:'#A7F3D0', failed:'#FCA5A5', running:'#BFDBFE', pending:'rgba(255,255,255,.35)' }[st];
+        const dotFill = { success:dpToken('--color-success-subtle'), failed:dpToken('--color-danger-subtle'), running:dpToken('--color-accent-subtle'), pending:'rgba(255,255,255,.35)' }[st];
         const stLabel  = { success:'✓ Success', failed:'✗ Failed', running:'⟳ Running', pending:'○ Pending' }[st];
 
         const g = svg.append('g').attr('class','node-g')
@@ -1484,7 +1512,7 @@ function showTaskPanel(taskName, status, ctx) {
     const err = ctx.taskErrors && ctx.taskErrors[taskName];
     const upstream   = (ctx.edges || []).filter(e => e.to   === taskName).map(e => e.from).join(', ') || 'None';
     const downstream = (ctx.edges || []).filter(e => e.from === taskName).map(e => e.to  ).join(', ') || 'None';
-    const iconColor  = { success:'#10B981', failed:'#EF4444', running:'#3B82F6', pending:'#64748B' }[status];
+    const iconColor  = { success:dpToken('--color-success'), failed:dpToken('--color-danger'), running:dpToken('--color-running-solid'), pending:dpToken('--color-ink-3') }[status];
     const stIcon     = { success:'✓', failed:'✗', running:'⟳', pending:'○' }[status] || '○';
 
     panel.className = 'open';

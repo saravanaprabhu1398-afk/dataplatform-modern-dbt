@@ -31,15 +31,15 @@
             font-weight: 700;
             white-space: nowrap;
         }
-        .status-deployed { background: oklch(95% 0.045 155); color: oklch(36% 0.115 155); border: 1px solid oklch(82% 0.085 155); }
-        .status-failed { background: oklch(96% 0.035 25); color: oklch(42% 0.160 25); border: 1px solid oklch(84% 0.090 25); }
-        .status-rolled_back { background: oklch(96% 0.022 255); color: oklch(36% 0.080 255); border: 1px solid oklch(84% 0.050 255); }
-        .status-validating { background: oklch(96% 0.050 75); color: oklch(40% 0.100 65); border: 1px solid oklch(84% 0.075 75); }
+        .status-deployed { background: var(--color-success-subtle); color: var(--color-success); border: 1px solid var(--color-success); }
+        .status-failed { background: var(--color-danger-subtle); color: var(--color-danger); border: 1px solid var(--color-danger); }
+        .status-rolled_back { background: var(--color-accent-subtle); color: var(--color-accent); border: 1px solid var(--color-accent); }
+        .status-validating { background: var(--color-warning-subtle); color: var(--color-warning); border: 1px solid var(--color-warning); }
         .active-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); animation: pulse-dot 1.5s ease-in-out infinite; }
         .dp-primary {
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
+            background: var(--color-accent-fill);
             color: var(--color-accent-text);
-            box-shadow: 0 8px 16px oklch(61% 0.210 38 / .18);
+            box-shadow: 0 8px 16px color-mix(in oklab, var(--color-accent-fill) 18%, transparent);
         }
         .dp-primary:hover { filter: brightness(.97); }
         .dp-secondary {
@@ -60,7 +60,7 @@
         }
         .dp-field:focus {
             border-color: var(--color-accent);
-            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / .20);
+            box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent-fill) 20%, transparent);
         }
         .deployment-row {
             transition: background .15s, border-color .15s;
@@ -206,7 +206,10 @@
     </header>
 
     <main class="flex-1 p-6">
-        <section class="grid grid-cols-4 gap-4 mb-5">
+        <!-- grid-cols-4 has no base rule in the pre-compiled Tailwind (only
+         lg:grid-cols-4 exists), so the unprefixed class silently did nothing
+         and these four cards stacked full-width. Two up, four on wide. -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
             <div class="panel-card p-4">
                 <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--color-ink-3);">Active</p>
                 <p id="activeDeploymentsCount" class="text-2xl font-black mt-1" style="color: var(--color-ink);">0</p>
@@ -502,8 +505,8 @@ function renderValidation(payload) {
     taskCount.textContent = `${validation.task_count || 0} tasks`;
 
     const rows = [];
-    (validation.errors || []).forEach(e => rows.push(`<div class="p-2 rounded-lg" style="background: oklch(96% 0.035 25); color: oklch(42% 0.160 25); border: 1px solid oklch(84% 0.090 25);"><i class="fas fa-triangle-exclamation mr-1"></i>${esc(e)}</div>`));
-    (validation.warnings || []).forEach(w => rows.push(`<div class="p-2 rounded-lg" style="background: oklch(96% 0.050 75); color: oklch(40% 0.100 65); border: 1px solid oklch(84% 0.075 75);"><i class="fas fa-circle-info mr-1"></i>${esc(w)}</div>`));
+    (validation.errors || []).forEach(e => rows.push(`<div class="p-2 rounded-lg" style="background: var(--color-danger-subtle); color: var(--color-danger); border: 1px solid var(--color-danger);"><i class="fas fa-triangle-exclamation mr-1"></i>${esc(e)}</div>`));
+    (validation.warnings || []).forEach(w => rows.push(`<div class="p-2 rounded-lg" style="background: var(--color-warning-subtle); color: var(--color-warning); border: 1px solid var(--color-warning);"><i class="fas fa-circle-info mr-1"></i>${esc(w)}</div>`));
     if (!rows.length) rows.push('<div class="p-2 rounded-lg" style="background: var(--color-paper-2); color: var(--color-ink-3); border: 1px solid var(--color-border);">Clean validation</div>');
     messages.innerHTML = rows.join('');
 

@@ -1,13 +1,46 @@
-/* Hallmark · redesign · modern-minimal · Ember Graphite · Space Grotesk + Inter · oklch(61% 0.210 38) */
-/* pre-emit critique: P5 H5 E5 S5 R5 V4 */
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Data Platform — visual identity: "INSTRUMENT"
+ *
+ * Genre .......... operator control plane (not a marketing site)
+ * Palette ........ Instrument Graphite — achromatic cool-graphite chrome
+ *                  (hue 250, chroma <= 0.012) + ONE signal colour:
+ *                  Azure oklch(50% 0.14 248).
+ * Type ........... IBM Plex superfamily — Plex Sans (UI + display, weight-
+ *                  differentiated) with Plex Mono for machine text
+ *                  (identifiers, cron, durations, IDs). Tabular numerals on.
+ * Density ........ "hairline over shadow". Cards are defined by 1px borders
+ *                  on a grey ground, not by drop shadows. Radius 4-10px.
+ *                  Shadows are reserved for true overlays (modals, popovers).
+ *
+ * COLOUR DISCIPLINE — the rule that makes status scannable under load:
+ *   chrome is neutral; colour means status, and nothing else.
+ *   green = healthy · amber = degraded · red = failed · azure = running/brand
+ *   Azure doubles as the brand because "running" is the primary active state
+ *   of an orchestrator. The previous ember/orange accent collided with the
+ *   warning colour, so a primary CTA read as a degraded state.
+ *
+ * TOKEN ROLES — read before changing a value:
+ *   --color-accent        foreground. Text, icons, borders. AA on surface.
+ *   --color-accent-fill   background. Always pair with --color-accent-text.
+ *   --color-<s>           status foreground. Text/icons. AA on surface.
+ *   --color-<s>-subtle    status tint background. Pair with --color-<s>.
+ *   --color-<s>-solid     status FILL for dots, bars, chart marks. Not for
+ *                         text backgrounds — some solids are too light to
+ *                         carry white text (success-solid is 3.7:1).
+ *   --color-on-dark / --color-on-light  theme-invariant text for coloured
+ *                         fills. These never flip; that is the point.
+ *
+ * Every foreground/background pair below was checked to WCAG AA (4.5:1) in
+ * both themes; UI-component pairs to 3:1. Decorative-only tokens are marked.
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   /* ── Fonts ─────────────────────────────────────────────────────────── */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body:    'Inter', system-ui, sans-serif;
-  --font-mono:    ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
+  --font-display: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-body:    'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
 
   /* ── Text scale ─────────────────────────────────────────────────────── */
   --text-xs:      0.6875rem;  /* 11px */
@@ -15,11 +48,15 @@
   --text-base:    0.9375rem;  /* 15px */
   --text-md:      1rem;       /* 16px */
   --text-lg:      1.125rem;   /* 18px */
-  --text-xl:      1.375rem;   /* 22px */
-  --text-2xl:     1.75rem;    /* 28px */
-  --text-3xl:     2.25rem;    /* 36px */
-  --text-4xl:     3rem;       /* 48px */
-  --text-display: 3.75rem;    /* 60px */
+  --text-xl:      1.3125rem;  /* 21px */
+  --text-2xl:     1.625rem;   /* 26px */
+  --text-3xl:     2.125rem;   /* 34px */
+  --text-4xl:     2.75rem;    /* 44px */
+  --text-display: 3.5rem;     /* 56px */
+
+  /* Display tracking — Plex Sans needs a touch of negative tracking at size */
+  --track-display: -0.018em;
+  --track-label:    0.06em;
 
   /* ── Spacing (4 pt base) ─────────────────────────────────────────── */
   --space-1:    4px;
@@ -32,11 +69,12 @@
   --space-16:  64px;
   --space-24:  96px;
 
-  /* ── Radius ─────────────────────────────────────────────────────────── */
-  --radius-sm:   4px;
-  --radius-md:   8px;
-  --radius-lg:  12px;
-  --radius-xl:  16px;
+  /* ── Radius — instrument, not pillow ────────────────────────────────── */
+  --radius-sm:   3px;
+  --radius-md:   5px;
+  --radius-lg:   6px;
+  --radius-xl:   8px;
+  --radius-2xl: 10px;
   --radius-full: 9999px;
 
   /* ── Easing ─────────────────────────────────────────────────────────── */
@@ -45,108 +83,430 @@
   --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
 
   /* ── Duration ───────────────────────────────────────────────────────── */
-  --dur-fast:  100ms;
-  --dur-base:  180ms;
-  --dur-slow:  320ms;
+  --dur-fast:  90ms;
+  --dur-base:  160ms;
+  --dur-slow:  280ms;
 
-  /* ── Shadows ────────────────────────────────────────────────────────── */
-  --shadow-sm: 0 1px 2px oklch(15% 0.015 250 / 0.06);
-  --shadow-md: 0 2px 8px oklch(15% 0.015 250 / 0.10), 0 1px 2px oklch(15% 0.015 250 / 0.06);
-  --shadow-lg: 0 4px 20px oklch(15% 0.015 250 / 0.13), 0 2px 6px oklch(15% 0.015 250 / 0.08);
-  --shadow-xl: 0 8px 32px oklch(15% 0.015 250 / 0.18), 0 4px 12px oklch(15% 0.015 250 / 0.10);
+  /* ── Elevation — overlays only. Resting surfaces use borders. ───────── */
+  --shadow-sm: 0 1px 1px oklch(20% 0.010 250 / 0.04);
+  --shadow-md: 0 1px 2px oklch(20% 0.010 250 / 0.06), 0 2px 6px oklch(20% 0.010 250 / 0.05);
+  --shadow-lg: 0 8px 24px oklch(20% 0.010 250 / 0.12), 0 2px 6px oklch(20% 0.010 250 / 0.08);
+  --shadow-xl: 0 16px 48px oklch(20% 0.010 250 / 0.18), 0 4px 12px oklch(20% 0.010 250 / 0.10);
 
-  /* ── Light-mode colour palette ───────────────────────────────────── */
-  --color-paper:           oklch(99% 0.005 240);
-  --color-paper-2:         oklch(97% 0.008 240);
-  --color-paper-3:         oklch(94% 0.010 240);
-  --color-ink:             oklch(15% 0.015 250);
-  --color-ink-2:           oklch(32% 0.020 250);
-  --color-ink-3:           oklch(52% 0.015 250);
-  --color-accent:          oklch(61% 0.210 38);
-  --color-accent-hover:    oklch(54% 0.210 38);
-  --color-accent-subtle:   oklch(96% 0.040 58);
-  --color-accent-text:     oklch(99% 0.004 240);
-  --color-surface:         oklch(100% 0 0);
-  --color-border:          oklch(88% 0.010 250);
-  --color-border-2:        oklch(82% 0.012 250);
-  --color-muted:           oklch(92% 0.010 250);
-  --color-danger:          oklch(54% 0.22 25);
-  --color-danger-subtle:   oklch(96% 0.04 25);
-  --color-warning:         oklch(72% 0.17 65);
-  --color-warning-subtle:  oklch(97% 0.04 65);
-  --color-success:         oklch(55% 0.18 150);
-  --color-success-subtle:  oklch(96% 0.04 150);
-  --color-focus:           oklch(61% 0.210 38);
+  /* ── Theme-invariant text for coloured fills (never flips) ──────────── */
+  --color-on-dark:  oklch(98% 0.004 250);
+  --color-on-light: oklch(20% 0.015 250);
 
-  /* ── Sidebar tokens (dark — same in both colour schemes) ──────────── */
-  --color-sidebar-bg:          oklch(18% 0.022 250);
-  --color-sidebar-bg-2:        oklch(22% 0.022 250);
-  --color-sidebar-border:      oklch(30% 0.022 250);
-  --color-sidebar-text:        oklch(58% 0.015 250);
-  --color-sidebar-text-active: oklch(97% 0.005 250);
-  --color-sidebar-item-hover:  oklch(25% 0.022 250);
-  --color-sidebar-item-active: oklch(54% 0.22 250);
-  --color-sidebar-group-label: oklch(42% 0.015 250);
-  --color-sidebar-avatar-bg:   oklch(54% 0.22 250 / 0.20);
-  --color-sidebar-avatar-ring: oklch(62% 0.20 250 / 0.30);
+  /* ── Console / log surfaces — dark in BOTH themes, as operators expect.
+   *    Log output is machine text; it keeps its terminal ground. ───────── */
+  --color-console-bg:     oklch(19% 0.012 250);
+  --color-console-ink:    oklch(86% 0.010 250);   /* 11.9:1 */
+  --color-console-border: oklch(30% 0.014 250);
 
-  /* ── Sidebar dimension ───────────────────────────────────────────── */
+  /* ══ LIGHT THEME ═══════════════════════════════════════════════════════ */
+  /* Ground + surfaces */
+  --color-paper:           oklch(97.5% 0.003 250);  /* page ground  #F5F7F9 */
+  --color-paper-2:         oklch(95.5% 0.004 250);
+  --color-paper-3:         oklch(93%   0.005 250);
+  --color-surface:         oklch(100%  0     0);    /* cards        #FFFFFF */
+  --color-surface-2:       oklch(98.4% 0.003 250);  /* table heads, wells   */
+
+  /* Text — ink on surface: 17.3 / 8.4 / 5.0 : 1 */
+  --color-ink:             oklch(22% 0.012 250);
+  --color-ink-2:           oklch(42% 0.012 250);
+  --color-ink-3:           oklch(51% 0.010 250);
+  --color-ink-faint:       oklch(66% 0.010 250);    /* 3.1:1 — DECORATIVE
+                                                       glyphs only, never text */
+
+  /* Lines */
+  --color-border:          oklch(88% 0.006 250);
+  --color-border-2:        oklch(80% 0.008 250);
+  --color-muted:           oklch(94.5% 0.004 250);
+
+  /* Signal — azure */
+  --color-accent:          oklch(48% 0.14 248);     /* fg  6.5:1 on white   */
+  --color-accent-fill:     oklch(50% 0.14 248);     /* bg  5.6:1 w/ on-dark */
+  --color-accent-hover:    oklch(42% 0.14 248);
+  --color-accent-subtle:   oklch(96% 0.030 248);
+  --color-accent-text:     var(--color-on-dark);    /* text ON accent-fill  */
+  --color-focus:           oklch(50% 0.16 248);
+
+  /* Status — foreground / tint / fill */
+  --color-success:         oklch(45% 0.13 152);     /* 6.9:1 */
+  --color-success-subtle:  oklch(95.5% 0.035 152);
+  --color-success-solid:   oklch(58% 0.16 152);
+  --color-success-fill:    oklch(45% 0.15 152);     /* white text 6.4:1 */
+  --color-warning:         oklch(50% 0.13 75);      /* 6.1:1 */
+  --color-warning-subtle:  oklch(96% 0.045 80);
+  --color-warning-solid:   oklch(68% 0.16 78);
+  --color-danger:          oklch(50% 0.19 27);      /* 6.6:1 */
+  --color-danger-subtle:   oklch(96% 0.030 27);
+  --color-danger-solid:    oklch(57% 0.21 27);
+  --color-danger-fill:     oklch(50% 0.19 27);      /* white text 6.3:1 */
+  --color-idle:            oklch(84% 0.006 250);    /* skipped / never-run   */
+
+  /* Running == accent, deliberately. See COLOUR DISCIPLINE above. */
+  --color-running:         var(--color-accent);
+  --color-running-solid:   oklch(58% 0.15 248);
+
+  /* ── Sidebar — always dark, in both themes ───────────────────────────── */
+  --color-sidebar-bg:          oklch(17% 0.008 250);
+  --color-sidebar-bg-2:        oklch(21% 0.009 250);
+  --color-sidebar-border:      oklch(27% 0.010 250);
+  --color-sidebar-text:        oklch(68% 0.010 250);
+  --color-sidebar-text-active: oklch(98% 0.004 250);
+  --color-sidebar-item-hover:  oklch(24% 0.010 250);
+  --color-sidebar-item-active: oklch(30% 0.045 248);
+  --color-sidebar-rail:        oklch(66% 0.145 248);
+  --color-sidebar-group-label: oklch(64% 0.012 250);
+  --color-sidebar-avatar-bg:   oklch(26% 0.030 248);
+  --color-sidebar-avatar-ring: oklch(40% 0.045 248);
+
+  /* ── Dimensions ──────────────────────────────────────────────────────── */
   --sidebar-width: 224px;
 }
 
-/* ── Forced dark mode (class-based, overrides media query) ─────────── */
+/* ══ DARK THEME ════════════════════════════════════════════════════════════
+ * Defined once, applied by both the forced class and the media query. */
 html.dp-dark {
-  --color-paper:          oklch(15% 0.015 250);
-  --color-paper-2:        oklch(18% 0.018 250);
-  --color-paper-3:        oklch(21% 0.020 250);
-  --color-ink:            oklch(96% 0.005 250);
-  --color-ink-2:          oklch(78% 0.012 250);
-  --color-ink-3:          oklch(58% 0.012 250);
-  --color-surface:        oklch(20% 0.020 250);
-  --color-border:         oklch(28% 0.018 250);
-  --color-border-2:       oklch(32% 0.020 250);
-  --color-muted:          oklch(22% 0.018 250);
-  --color-accent-subtle:  oklch(25% 0.050 38);
-  --color-danger-subtle:  oklch(22% 0.040 25);
-  --color-warning-subtle: oklch(22% 0.030 65);
-  --color-success-subtle: oklch(22% 0.030 150);
+  --color-paper:           oklch(16%   0.006 250);
+  --color-paper-2:         oklch(19%   0.007 250);
+  --color-paper-3:         oklch(23%   0.008 250);
+  --color-surface:         oklch(21%   0.008 250);
+  --color-surface-2:       oklch(24.5% 0.008 250);
+
+  --color-ink:             oklch(95% 0.004 250);    /* 15.3:1 */
+  --color-ink-2:           oklch(78% 0.010 250);    /*  8.9:1 */
+  --color-ink-3:           oklch(64% 0.012 250);    /*  5.3:1 — was 4.2:1 (AA fail) */
+  --color-ink-faint:       oklch(50% 0.012 250);    /* DECORATIVE only */
+
+  --color-border:          oklch(32% 0.010 250);
+  --color-border-2:        oklch(40% 0.012 250);
+  --color-muted:           oklch(25% 0.008 250);
+
+  /* Rail is recessed below the page ground in dark, and its edge is crisper,
+   * so the chrome still separates from content (it measured 1.02:1 before). */
+  --color-sidebar-bg:          oklch(11% 0.007 250);
+  --color-sidebar-bg-2:        oklch(15% 0.008 250);
+  --color-sidebar-border:      oklch(30% 0.011 250);
+  --color-sidebar-item-hover:  oklch(18% 0.010 250);
+
+  --color-accent:          oklch(74% 0.12 248);     /* fg  7.7:1 on surface */
+  --color-accent-fill:     oklch(52% 0.15 248);     /* bg  5.2:1 w/ on-dark */
+  --color-accent-hover:    oklch(60% 0.15 248);
+  --color-accent-subtle:   oklch(28% 0.055 248);
+  --color-focus:           oklch(72% 0.14 248);
+
+  --color-success:         oklch(64% 0.16 152);     /* 5.6:1 */
+  --color-success-subtle:  oklch(27% 0.050 152);
+  --color-success-solid:   oklch(64% 0.16 152);
+  --color-success-fill:    oklch(52% 0.15 152);     /* white text 4.8:1 */
+  --color-warning:         oklch(72% 0.15 78);      /* 7.0:1 */
+  --color-warning-subtle:  oklch(27% 0.050 80);
+  --color-warning-solid:   oklch(72% 0.15 78);
+  --color-danger:          oklch(68% 0.18 25);      /* 5.7:1 */
+  --color-danger-subtle:   oklch(27% 0.055 25);
+  --color-danger-solid:    oklch(62% 0.20 25);
+  --color-danger-fill:     oklch(54% 0.19 25);      /* white text 5.3:1 */
+  --color-idle:            oklch(36% 0.008 250);
+
+  --color-running-solid:   oklch(66% 0.14 248);
+
+  /* Overlay shadows need to be blacker on a dark ground */
+  --shadow-sm: 0 1px 1px oklch(0% 0 0 / 0.20);
+  --shadow-md: 0 1px 2px oklch(0% 0 0 / 0.30), 0 2px 6px oklch(0% 0 0 / 0.24);
+  --shadow-lg: 0 8px 24px oklch(0% 0 0 / 0.44), 0 2px 6px oklch(0% 0 0 / 0.30);
+  --shadow-xl: 0 16px 48px oklch(0% 0 0 / 0.56), 0 4px 12px oklch(0% 0 0 / 0.36);
 }
 
-/* ── Forced light mode (class-based, wins over dark media query) ────── */
+/* Forced light wins over the dark media query (higher specificity). */
 html.dp-light {
-  --color-paper:           oklch(99% 0.005 240);
-  --color-paper-2:         oklch(97% 0.008 240);
-  --color-paper-3:         oklch(94% 0.010 240);
-  --color-ink:             oklch(15% 0.015 250);
-  --color-ink-2:           oklch(32% 0.020 250);
-  --color-ink-3:           oklch(52% 0.015 250);
-  --color-surface:         oklch(100% 0 0);
-  --color-border:          oklch(88% 0.010 250);
-  --color-border-2:        oklch(82% 0.012 250);
-  --color-muted:           oklch(92% 0.010 250);
-  --color-accent-subtle:   oklch(96% 0.040 58);
-  --color-danger-subtle:   oklch(96% 0.04 25);
-  --color-warning-subtle:  oklch(97% 0.04 65);
-  --color-success-subtle:  oklch(96% 0.04 150);
+  --color-paper:           oklch(97.5% 0.003 250);
+  --color-paper-2:         oklch(95.5% 0.004 250);
+  --color-paper-3:         oklch(93%   0.005 250);
+  --color-surface:         oklch(100%  0     0);
+  --color-surface-2:       oklch(98.4% 0.003 250);
+
+  --color-ink:             oklch(22% 0.012 250);
+  --color-ink-2:           oklch(42% 0.012 250);
+  --color-ink-3:           oklch(51% 0.010 250);
+  --color-ink-faint:       oklch(66% 0.010 250);
+
+  --color-border:          oklch(88% 0.006 250);
+  --color-border-2:        oklch(80% 0.008 250);
+  --color-muted:           oklch(94.5% 0.004 250);
+
+  --color-accent:          oklch(48% 0.14 248);
+  --color-accent-fill:     oklch(50% 0.14 248);
+  --color-accent-hover:    oklch(42% 0.14 248);
+  --color-accent-subtle:   oklch(96% 0.030 248);
+  --color-focus:           oklch(50% 0.16 248);
+
+  --color-success:         oklch(45% 0.13 152);
+  --color-success-subtle:  oklch(95.5% 0.035 152);
+  --color-success-solid:   oklch(58% 0.16 152);
+  --color-success-fill:    oklch(45% 0.15 152);
+  --color-warning:         oklch(50% 0.13 75);
+  --color-warning-subtle:  oklch(96% 0.045 80);
+  --color-warning-solid:   oklch(68% 0.16 78);
+  --color-danger:          oklch(50% 0.19 27);
+  --color-danger-subtle:   oklch(96% 0.030 27);
+  --color-danger-solid:    oklch(57% 0.21 27);
+  --color-danger-fill:     oklch(50% 0.19 27);
+  --color-idle:            oklch(84% 0.006 250);
+
+  --color-running-solid:   oklch(58% 0.15 248);
 }
 
-/* ── Dark-mode overrides (main content area only) ──────────────────── */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-paper:          oklch(15% 0.015 250);
-    --color-paper-2:        oklch(18% 0.018 250);
-    --color-paper-3:        oklch(21% 0.020 250);
-    --color-ink:            oklch(96% 0.005 250);
-    --color-ink-2:          oklch(78% 0.012 250);
-    --color-ink-3:          oklch(58% 0.012 250);
-    --color-surface:        oklch(20% 0.020 250);
-    --color-border:         oklch(28% 0.018 250);
-    --color-border-2:       oklch(32% 0.020 250);
-    --color-muted:          oklch(22% 0.018 250);
-    --color-accent-subtle:  oklch(25% 0.050 38);
-    --color-danger-subtle:  oklch(22% 0.040 25);
-    --color-warning-subtle: oklch(22% 0.030 65);
-    --color-success-subtle: oklch(22% 0.030 150);
-    /* Sidebar tokens are dark already — no change needed */
+  :root:not(.dp-light) {
+    --color-paper:           oklch(16%   0.006 250);
+    --color-paper-2:         oklch(19%   0.007 250);
+    --color-paper-3:         oklch(23%   0.008 250);
+    --color-surface:         oklch(21%   0.008 250);
+    --color-surface-2:       oklch(24.5% 0.008 250);
+
+    --color-ink:             oklch(95% 0.004 250);
+    --color-ink-2:           oklch(78% 0.010 250);
+    --color-ink-3:           oklch(64% 0.012 250);
+    --color-ink-faint:       oklch(50% 0.012 250);
+
+    --color-border:          oklch(32% 0.010 250);
+    --color-border-2:        oklch(40% 0.012 250);
+    --color-muted:           oklch(25% 0.008 250);
+
+    --color-sidebar-bg:          oklch(11% 0.007 250);
+    --color-sidebar-bg-2:        oklch(15% 0.008 250);
+    --color-sidebar-border:      oklch(30% 0.011 250);
+    --color-sidebar-item-hover:  oklch(18% 0.010 250);
+
+    --color-accent:          oklch(74% 0.12 248);
+    --color-accent-fill:     oklch(52% 0.15 248);
+    --color-accent-hover:    oklch(60% 0.15 248);
+    --color-accent-subtle:   oklch(28% 0.055 248);
+    --color-focus:           oklch(72% 0.14 248);
+
+    --color-success:         oklch(64% 0.16 152);
+    --color-success-subtle:  oklch(27% 0.050 152);
+    --color-success-solid:   oklch(64% 0.16 152);
+    --color-success-fill:    oklch(52% 0.15 152);
+    --color-warning:         oklch(72% 0.15 78);
+    --color-warning-subtle:  oklch(27% 0.050 80);
+    --color-warning-solid:   oklch(72% 0.15 78);
+    --color-danger:          oklch(68% 0.18 25);
+    --color-danger-subtle:   oklch(27% 0.055 25);
+    --color-danger-solid:    oklch(62% 0.20 25);
+    --color-danger-fill:     oklch(54% 0.19 25);
+    --color-idle:            oklch(36% 0.008 250);
+
+    --color-running-solid:   oklch(66% 0.14 248);
+
+    --shadow-sm: 0 1px 1px oklch(0% 0 0 / 0.20);
+    --shadow-md: 0 1px 2px oklch(0% 0 0 / 0.30), 0 2px 6px oklch(0% 0 0 / 0.24);
+    --shadow-lg: 0 8px 24px oklch(0% 0 0 / 0.44), 0 2px 6px oklch(0% 0 0 / 0.30);
+    --shadow-xl: 0 16px 48px oklch(0% 0 0 / 0.56), 0 4px 12px oklch(0% 0 0 / 0.36);
   }
+}
+
+/* Let form controls, scrollbars and the like follow the theme. */
+:root            { color-scheme: light; }
+html.dp-dark     { color-scheme: dark; }
+html.dp-light    { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not(.dp-light) { color-scheme: dark; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * BASE
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  /* Numbers must align down a column: this is a table-heavy operator tool. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Machine text — identifiers, cron, durations, hashes, log lines. */
+code, kbd, samp, pre, .font-mono, [class*="cron"], .dp-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 1;   /* slashed zero: 0 vs O in pipeline IDs */
+}
+
+table { font-variant-numeric: tabular-nums; }
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: var(--track-display);
+}
+
+::selection {
+  background: var(--color-accent-subtle);
+  color: var(--color-ink);
+}
+
+/* ── Focus: always visible. Non-negotiable. ──────────────────────────────
+ * 23 elements across the app carry Tailwind's `focus:outline-none`, which
+ * removed the indicator outright. These rules restore it at a specificity
+ * that beats both tailwind-static.css and that utility. */
+:root a:focus-visible,
+:root button:focus-visible,
+:root input:focus-visible,
+:root select:focus-visible,
+:root textarea:focus-visible,
+:root summary:focus-visible,
+:root [tabindex]:focus-visible,
+:root .focus\:outline-none:focus-visible {
+  outline: 2px solid var(--color-focus) !important;
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── App scrollbars — quiet, but present ─────────────────────────────── */
+* { scrollbar-color: var(--color-border-2) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border-2);
+  border-radius: var(--radius-full);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-clip: content-box; background-color: var(--color-ink-faint); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * TAILWIND COMPATIBILITY LAYER
+ *
+ * tailwind-static.css is PRE-COMPILED — there is no build in the loop, and it
+ * ships no `dark:` variants and no CSS variables. Its slate/white utilities
+ * are literal RGB, so half the app (index.html, job_builder.html, admin.html …)
+ * ignored the token system entirely and its dark mode did nothing at all.
+ *
+ * This layer re-points the *values* of utilities that already exist in that
+ * file onto the tokens above. It introduces NO new class names, so it needs
+ * no Tailwind build. `:root ` prefixes raise specificity to (0,2,0) so these
+ * win over tailwind-static.css, which is linked last.
+ *
+ * Consequence: dark mode now works on every page, and text-slate-400 — the
+ * single most used text colour in the app, at 2.56:1 on white — becomes AA.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Surfaces ────────────────────────────────────────────────────────── */
+:root .bg-white      { background-color: var(--color-surface); }
+:root .bg-slate-50   { background-color: var(--color-paper); }
+:root .bg-slate-100  { background-color: var(--color-muted); }
+:root .bg-slate-200  { background-color: var(--color-paper-3); }
+:root .bg-slate-500  { background-color: var(--color-ink-3); }
+:root .bg-slate-600  { background-color: var(--color-ink-2); }
+/* bg-slate-900/950 and bg-black are only used as modal scrims (with an
+ * opacity suffix, a different class) — deliberately left alone. */
+
+/* ── Text ────────────────────────────────────────────────────────────── */
+:root .text-slate-900 { color: var(--color-ink); }
+:root .text-slate-800 { color: var(--color-ink); }
+:root .text-slate-700 { color: var(--color-ink-2); }
+:root .text-slate-600 { color: var(--color-ink-2); }
+:root .text-slate-500 { color: var(--color-ink-3); }
+:root .text-slate-400 { color: var(--color-ink-3); }   /* was 2.56:1 — AA fail */
+:root .text-slate-300 { color: var(--color-ink-faint); } /* decorative glyphs */
+
+/* ── Lines ───────────────────────────────────────────────────────────── */
+:root .border-slate-100 { border-color: var(--color-border); }
+:root .border-slate-200 { border-color: var(--color-border); }
+:root .border-slate-300 { border-color: var(--color-border-2); }
+:root .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--color-border); }
+:root .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--color-border); }
+
+/* ── Status tints — so they invert instead of glowing white in dark ──── */
+:root .bg-red-50      { background-color: var(--color-danger-subtle); }
+:root .bg-red-100     { background-color: var(--color-danger-subtle); }
+:root .bg-emerald-50  { background-color: var(--color-success-subtle); }
+:root .bg-amber-50    { background-color: var(--color-warning-subtle); }
+:root .bg-amber-100   { background-color: var(--color-warning-subtle); }
+:root .bg-orange-50   { background-color: var(--color-warning-subtle); }
+
+:root .border-red-100, :root .border-red-200, :root .border-red-300 { border-color: var(--color-danger); }
+:root .border-emerald-100, :root .border-emerald-200 { border-color: var(--color-success); }
+:root .border-amber-100, :root .border-amber-200 { border-color: var(--color-warning); }
+:root .border-orange-200 { border-color: var(--color-warning); }
+
+:root .text-red-900, :root .text-red-800, :root .text-red-700,
+:root .text-red-600, :root .text-red-500, :root .text-red-400 { color: var(--color-danger); }
+:root .text-emerald-700, :root .text-emerald-600, :root .text-emerald-500 { color: var(--color-success); }
+:root .text-amber-800, :root .text-amber-700, :root .text-amber-500,
+:root .text-amber-400, :root .text-orange-600, :root .text-orange-500 { color: var(--color-warning); }
+
+/* Solid status button fills. These carry white text, so they use the *-fill
+ * tokens (dark enough for on-dark text in BOTH themes) and pin that text
+ * colour explicitly — otherwise `.text-white` on a dark-mode emerald measured
+ * 3.12:1. */
+:root .bg-red-500, :root .bg-red-600, :root .bg-red-700 { background-color: var(--color-danger-fill); }
+:root .bg-emerald-500, :root .bg-emerald-600, :root .bg-emerald-700 { background-color: var(--color-success-fill); }
+:root .bg-red-500.text-white, :root .bg-red-600.text-white, :root .bg-red-700.text-white,
+:root .bg-emerald-500.text-white, :root .bg-emerald-600.text-white, :root .bg-emerald-700.text-white,
+:root .bg-slate-500.text-white, :root .bg-slate-600.text-white { color: var(--color-on-dark); }
+
+/* ── Radius: 12–16px pillows down to 6–10px instrument corners ───────── */
+:root .rounded-md   { border-radius: var(--radius-md); }
+:root .rounded-lg   { border-radius: var(--radius-lg); }
+:root .rounded-xl   { border-radius: var(--radius-xl); }
+:root .rounded-2xl  { border-radius: var(--radius-2xl); }
+:root .rounded-t-xl { border-top-left-radius: var(--radius-xl); border-top-right-radius: var(--radius-xl); }
+:root .rounded-b-2xl{ border-bottom-left-radius: var(--radius-2xl); border-bottom-right-radius: var(--radius-2xl); }
+/* .rounded-full and .rounded-sm are intentional (pills, avatars, chips). */
+
+/* ── Elevation: resting cards get a hairline, not a shadow ───────────── */
+:root .shadow-sm { box-shadow: var(--shadow-sm); }
+:root .shadow-lg { box-shadow: var(--shadow-lg); }
+:root .shadow-xl { box-shadow: var(--shadow-xl); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * SHARED COMPONENTS
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Status pills ─────────────────────────────────────────────────────
+ * Colour is never the only channel: every pill carries its label, and the
+ * leading marker differs in SHAPE per state (see the marker rules below). */
+.dp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.dp-pill--ok      { background: var(--color-success-subtle); color: var(--color-success); border-color: var(--color-success); }
+.dp-pill--warn    { background: var(--color-warning-subtle); color: var(--color-warning); border-color: var(--color-warning); }
+.dp-pill--fail    { background: var(--color-danger-subtle);  color: var(--color-danger);  border-color: var(--color-danger); }
+.dp-pill--running { background: var(--color-accent-subtle);  color: var(--color-accent);  border-color: var(--color-accent); }
+.dp-pill--idle    { background: var(--color-muted);          color: var(--color-ink-3);   border-color: var(--color-border-2); }
+
+/* ── Status markers — SHAPE carries the state, colour reinforces it ────
+ * circle = healthy · square = failed · ring = running · bar = idle
+ * A monochrome screenshot, or a red/green-blind operator, still reads these. */
+.dp-mark {
+  width: 9px; height: 9px;
+  flex-shrink: 0;
+  display: inline-block;
+  box-shadow: inset 0 0 0 1px oklch(0% 0 0 / 0.16);
+}
+.dp-mark--ok      { background: var(--color-success-solid); border-radius: var(--radius-full); }
+.dp-mark--fail    { background: var(--color-danger-solid);  border-radius: 1px; }
+.dp-mark--running { background: transparent; border-radius: var(--radius-full);
+                    box-shadow: inset 0 0 0 3px var(--color-running-solid); }
+.dp-mark--warn    { background: var(--color-warning-solid); border-radius: 1px; transform: rotate(45deg); }
+.dp-mark--idle    { background: var(--color-idle); border-radius: 1px; height: 3px; align-self: center; }
+
+/* ── Section label — the small uppercase eyebrow used across pages ───── */
+.dp-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-ink-3);
 }

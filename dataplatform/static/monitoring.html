@@ -215,10 +215,10 @@
             <div class="panel-card">
                 <div class="flex items-start justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-widest" style="color: var(--color-ink-3);">Success Rate</p>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style="background: var(--color-success-subtle); border: 1px solid var(--color-success); color: var(--color-success);">HEALTHY</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" id="pillSuccess"
+                          style="background: var(--color-paper-3); border: 1px solid var(--color-border); color: var(--color-ink-3);">NO DATA</span>
                 </div>
-                <p class="text-2xl font-bold mb-0.5" style="color: var(--color-success);" id="metSuccessRate">—</p>
+                <p class="text-2xl font-bold mb-0.5" style="color: var(--color-ink);" id="metSuccessRate">—</p>
                 <p class="text-xs mb-3" style="color: var(--color-ink-3);" id="metSuccessDetail">— succeeded · — failed</p>
                 <div class="flex items-center justify-center" style="height:120px;">
                     <canvas id="chartSuccessRate"></canvas>
@@ -229,8 +229,8 @@
             <div class="panel-card">
                 <div class="flex items-start justify-between mb-1">
                     <p class="text-[11px] font-bold uppercase tracking-widest" style="color: var(--color-ink-3);">Error Rate Trend</p>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style="background: var(--color-warning-subtle); border: 1px solid var(--color-warning); color: var(--color-warning);">WATCH</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" id="pillError"
+                          style="background: var(--color-paper-3); border: 1px solid var(--color-border); color: var(--color-ink-3);">NO DATA</span>
                 </div>
                 <p class="text-2xl font-bold mb-0.5" style="color: var(--color-danger);" id="metErrorRate">—</p>
                 <p class="text-xs mb-3" style="color: var(--color-ink-3);">Failed runs per hour · 24 h trend</p>
@@ -328,21 +328,76 @@ let charts          = {};
 let obsData         = null;
 
 // ── CSS token colours for Chart.js ───────────────────────────────────────────
+// Canvas does NOT resolve var() or color-mix(), so every chart colour has to be
+// flattened to a concrete value first. dpColor() does that through the cascade,
+// which means the charts follow the active theme instead of being hardcoded.
 let C = {};
+function dpColor(css) {
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none';
+    probe.style.color = css;
+    document.body.appendChild(probe);
+    const out = getComputedStyle(probe).color;
+    probe.remove();
+    return out;
+}
 function initColors() {
-    const v = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-    C.success     = v('--color-success')      || 'oklch(55% 0.18 150)';
-    C.danger      = 'oklch(54% 0.22 25)';
-    C.accent      = v('--color-accent')       || 'oklch(54% 0.22 250)';
-    C.warning     = v('--color-warning')      || 'oklch(72% 0.17 65)';
-    C.grid        = 'oklch(94% 0.010 240)';
-    C.tick        = 'oklch(52% 0.015 250)';
-    C.successFill = 'oklch(55% 0.18 150 / 0.15)';
-    C.dangerFill  = 'oklch(54% 0.22 25 / 0.10)';
-    C.accentFill  = 'oklch(54% 0.22 250 / 0.12)';
-    C.successBar  = 'oklch(55% 0.18 150 / 0.75)';
-    C.dangerBar   = 'oklch(54% 0.22 25 / 0.70)';
-    C.warnBar     = 'oklch(72% 0.17 65 / 0.75)';
+    C.success     = dpColor('var(--color-success)');
+    C.danger      = dpColor('var(--color-danger)');
+    C.accent      = dpColor('var(--color-accent)');
+    C.warning     = dpColor('var(--color-warning)');
+    C.grid        = dpColor('var(--color-muted)');
+    C.tick        = dpColor('var(--color-ink-3)');
+    C.successFill = dpColor('color-mix(in oklab, var(--color-success) 15%, transparent)');
+    C.dangerFill  = dpColor('color-mix(in oklab, var(--color-danger) 10%, transparent)');
+    C.accentFill  = dpColor('color-mix(in oklab, var(--color-accent) 12%, transparent)');
+    C.successBar  = dpColor('color-mix(in oklab, var(--color-success) 75%, transparent)');
+    C.dangerBar   = dpColor('color-mix(in oklab, var(--color-danger) 70%, transparent)');
+    C.warnBar     = dpColor('color-mix(in oklab, var(--color-warning-solid) 75%, transparent)');
+}
+
+// ── Health state ──────────────────────────────────────────────────────────────
+// Thresholds mirror default:failure-rate-high in core/observability.py, which
+// fires above 25% failures. One definition of "healthy", so the dashboard and
+// the alerting cannot disagree; if that rule moves, move this with it.
+const FAILURE_CRITICAL_PCT = 25;
+const FAILURE_WATCH_PCT = 5;
+
+const HEALTH_STATES = {
+    none:     { label: 'NO DATA',  fg: 'var(--color-ink-3)',   bg: 'var(--color-paper-3)',        bd: 'var(--color-border)' },
+    healthy:  { label: 'HEALTHY',  fg: 'var(--color-success)', bg: 'var(--color-success-subtle)', bd: 'var(--color-success)' },
+    watch:    { label: 'WATCH',    fg: 'var(--color-warning)', bg: 'var(--color-warning-subtle)', bd: 'var(--color-warning)' },
+    critical: { label: 'CRITICAL', fg: 'var(--color-danger)',  bg: 'var(--color-danger-subtle)',  bd: 'var(--color-danger)' },
+};
+
+function healthStateFor(total, failures) {
+    if (!total) return 'none';
+    const failurePct = (failures / total) * 100;
+    if (failurePct > FAILURE_CRITICAL_PCT) return 'critical';
+    if (failurePct > FAILURE_WATCH_PCT) return 'watch';
+    return 'healthy';
+}
+
+function paintPill(el, stateName) {
+    if (!el) return;
+    const state = HEALTH_STATES[stateName] || HEALTH_STATES.none;
+    el.textContent = state.label;
+    el.style.color = state.fg;
+    el.style.background = state.bg;
+    el.style.border = '1px solid ' + state.bd;
+}
+
+function applyHealthPills(total, failures) {
+    const state = healthStateFor(total, failures);
+    paintPill(document.getElementById('pillSuccess'), state);
+    paintPill(document.getElementById('pillError'), state);
+
+    const rateEl = document.getElementById('metSuccessRate');
+    if (rateEl) {
+        rateEl.style.color = state === 'none'
+            ? 'var(--color-ink-3)'
+            : HEALTH_STATES[state].fg;
+    }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -512,10 +567,7 @@ function buildCharts() {
         charts.success = new Chart(document.getElementById('chartSuccessRate'), {
             type:'doughnut',
             data:{labels:['Success','Failed'], datasets:[{data:[liveSuccessCount || 1, liveFailCount || 0],
-                backgroundColor:[
-                    getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || 'oklch(55% 0.18 150)',
-                    'oklch(54% 0.22 25)'
-                ], borderWidth:0}]},
+                backgroundColor:[C.success, C.danger], borderWidth:0}]},
             options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
         });
     }
@@ -602,6 +654,10 @@ async function loadLiveStats() {
             document.getElementById('metSuccessDetail').textContent = `${liveSuccessCount} succeeded · ${liveFailCount} failed`;
             const errRate = liveTotal > 0 ? ((liveFailCount / liveTotal) * 100).toFixed(1) + '%' : '—';
             document.getElementById('metErrorRate').textContent = errRate;
+
+            // These pills used to be static markup reading HEALTHY whatever the
+            // data said, so 12.5% success still showed green.
+            applyHealthPills(liveTotal, liveFailCount);
 
             // Active runs badge in header
             if (active > 0) {

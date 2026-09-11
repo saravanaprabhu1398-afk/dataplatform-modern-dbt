@@ -28,27 +28,27 @@ html, body { overflow-x: clip; }
     }
 }
 .dp-admin-primary {
-    background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
+    background: var(--color-accent-fill) !important;
     color: white;
-    box-shadow: 0 8px 16px oklch(61% 0.210 38 / 0.18);
+    box-shadow: 0 8px 16px color-mix(in oklab, var(--color-accent-fill) 18%, transparent);
 }
 .dp-admin-primary:hover { filter: brightness(0.96); }
 .dp-admin-iconbox {
-    background: oklch(96% 0.040 58) !important;
-    border: 1px solid oklch(88% 0.060 58);
+    background: var(--color-accent-subtle) !important;
+    border: 1px solid var(--color-accent);
 }
 .dp-admin-icon,
 .dp-admin-accent-text {
-    color: oklch(55% 0.180 38) !important;
+    color: var(--color-accent-fill) !important;
 }
 .dp-admin-field:focus {
-    border-color: oklch(61% 0.210 38) !important;
-    box-shadow: 0 0 0 2px oklch(61% 0.210 38 / 0.22) !important;
+    border-color: var(--color-accent-fill) !important;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent-fill) 22%, transparent) !important;
 }
 .dp-role-editor {
-    background: oklch(96% 0.040 58) !important;
-    color: oklch(40% 0.120 38) !important;
-    border: 1px solid oklch(88% 0.060 58) !important;
+    background: var(--color-accent-subtle) !important;
+    color: var(--color-accent) !important;
+    border: 1px solid var(--color-accent) !important;
 }
 </style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">

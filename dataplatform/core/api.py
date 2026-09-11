@@ -301,10 +301,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class RevalidatingStaticFiles(StaticFiles):
+    """Serve the dashboard's assets with revalidation instead of blind reuse.
+
+    None of the CSS, JS or HTML filenames carry a content hash, so a browser
+    that caches them keeps showing the previous deploy's interface until
+    something forces a reload. That has already cost real debugging time: a
+    changed stylesheet looks like it never landed, and the obvious conclusion
+    is that the change is broken rather than stale.
+
+    ``no-cache`` does not mean "do not store" -- it means "ask before reusing".
+    Starlette already sends ETag and Last-Modified, so an unchanged file costs
+    a 304 with no body rather than a fresh download. Correctness for the price
+    of one conditional request.
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
+
 # Mount static files
 static_path = Path(__file__).resolve().parent.parent / "static"
 if static_path.exists():
-    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+    app.mount("/static", RevalidatingStaticFiles(directory=str(static_path)), name="static")
     logger.info(f"Mounted static files from: {static_path}")
 else:
     logger.warning(f"Static directory not found at: {static_path}")
