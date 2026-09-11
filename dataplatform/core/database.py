@@ -235,6 +235,14 @@ _pipeline_queue = Table(
     Column("lease_expires_at", String),
     Column("heartbeat_at", String),
     Column("attempt", Integer, nullable=False, server_default="0"),
+    # The window of data this run is responsible for, as distinct from when it
+    # ran. Null for a run that is not tied to a period; set for scheduled and
+    # backfilled runs. Half-open: [logical_start, logical_end).
+    Column("logical_start", String),
+    Column("logical_end", String),
+    # Groups the runs one backfill created, so it can be watched or stopped as
+    # a unit rather than as N unrelated rows.
+    Column("backfill_id", String),
 )
 
 _stream_state = Table(
@@ -457,6 +465,9 @@ Index("idx_audit_actor", _audit_log.c.actor, _audit_log.c.occurred_at)
 Index("idx_queue_status", _pipeline_queue.c.status, _pipeline_queue.c.queued_at)
 Index("idx_queue_pipeline", _pipeline_queue.c.pipeline_name, _pipeline_queue.c.queued_at)
 Index("idx_queue_lease", _pipeline_queue.c.status, _pipeline_queue.c.lease_expires_at)
+# A backfill must not re-queue a window it already covered.
+Index("idx_queue_window", _pipeline_queue.c.pipeline_name, _pipeline_queue.c.logical_start)
+Index("idx_queue_backfill", _pipeline_queue.c.backfill_id)
 Index("idx_column_lineage_target", _column_lineage.c.target_asset, _column_lineage.c.target_column)
 Index("idx_column_lineage_source", _column_lineage.c.source_asset, _column_lineage.c.source_column)
 Index("idx_late_events_stream", _late_events.c.stream, _late_events.c.window_start)
@@ -562,6 +573,9 @@ def _ensure_schema_migrations(engine: Any) -> None:
             "lease_expires_at": "VARCHAR",
             "heartbeat_at": "VARCHAR",
             "attempt": "INTEGER DEFAULT 0",
+            "logical_start": "VARCHAR",
+            "logical_end": "VARCHAR",
+            "backfill_id": "VARCHAR",
         }
         with engine.begin() as conn:
             for column_name, column_type in lease_columns.items():
@@ -2841,16 +2855,26 @@ def enqueue_run(
     pipeline_name: str,
     config_path: str,
     actor: Optional[str] = None,
+    logical_start: Optional[str] = None,
+    logical_end: Optional[str] = None,
+    backfill_id: Optional[str] = None,
 ) -> None:
-    """Record a new pipeline run as 'queued' in the persistent queue."""
+    """Record a new pipeline run as 'queued' in the persistent queue.
+
+    ``logical_start``/``logical_end`` are the window of data the run owns, which
+    is what makes it repeatable for an earlier period. They stay null for an
+    ad-hoc run that is not tied to one.
+    """
     now = datetime.utcnow().isoformat() + "Z"
     with _get_conn() as conn:
         conn.execute(
             text(
                 """
                 INSERT INTO pipeline_queue
-                    (run_id, pipeline_name, config_path, status, actor, queued_at)
-                VALUES (:run_id, :pipeline_name, :config_path, :status, :actor, :queued_at)
+                    (run_id, pipeline_name, config_path, status, actor, queued_at,
+                     logical_start, logical_end, backfill_id)
+                VALUES (:run_id, :pipeline_name, :config_path, :status, :actor, :queued_at,
+                        :logical_start, :logical_end, :backfill_id)
                 """
             ),
             {
@@ -2860,9 +2884,45 @@ def enqueue_run(
                 "status": "queued",
                 "actor": actor,
                 "queued_at": now,
+                "logical_start": logical_start,
+                "logical_end": logical_end,
+                "backfill_id": backfill_id,
             },
         )
         conn.commit()
+
+
+def covered_windows(pipeline_name: str) -> Dict[str, str]:
+    """Windows this pipeline already has a run for, mapped to that run's status.
+
+    A backfill consults this so it re-queues a window only when asked to. A
+    period that already succeeded is the common case, and silently running it
+    again is how a backfill doubles a month of revenue.
+    """
+    with _get_conn() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT logical_start, status FROM pipeline_queue "
+                "WHERE pipeline_name = :p AND logical_start IS NOT NULL "
+                "ORDER BY queued_at"
+            ),
+            {"p": pipeline_name},
+        ).fetchall()
+    return {str(r._mapping["logical_start"]): str(r._mapping["status"]) for r in rows}
+
+
+def get_backfill_runs(backfill_id: str) -> List[Dict[str, Any]]:
+    """Every run one backfill created, oldest window first."""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT run_id, pipeline_name, status, logical_start, logical_end, "
+                "backfill_id, queued_at, started_at, completed_at, error, attempt "
+                "FROM pipeline_queue WHERE backfill_id = :b ORDER BY logical_start"
+            ),
+            {"b": backfill_id},
+        ).fetchall()
+    return [dict(row._mapping) for row in rows]
 
 
 def set_run_status_in_queue(

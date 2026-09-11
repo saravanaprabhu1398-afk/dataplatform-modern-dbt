@@ -135,6 +135,7 @@ from dataplatform.core.auth import (
     has_permission,
     ROLES,
 )
+from dataplatform.core.parameters import RUN_PARAMETERS_KEY, available_parameters
 from dataplatform.core.runtime_guardrails import normalize_execution_mode, validate_runtime_settings
 from dataplatform.core.observability import (
     build_observability_dashboard,
@@ -834,6 +835,8 @@ def _runtime_context(
     config: PipelineConfig,
     parameters: Optional[Dict[str, Any]] = None,
     environment_profile: Optional[str] = None,
+    interval: Optional[Any] = None,
+    run_id: str = "",
 ) -> Dict[str, Any]:
     profile = _select_environment_profile(config, environment_profile)
     fabric = build_execution_fabric(config, profile["id"])
@@ -841,6 +844,15 @@ def _runtime_context(
         "file_path": config.file_path,
         "runtime_parameters": parameters or {},
         "parameters": parameters or {},
+        # Flattened for substitution into config values. The dict above is only
+        # readable by a plugin that goes looking for it; this is what lets a
+        # task write {{ ds }} inside a SQL string.
+        RUN_PARAMETERS_KEY: available_parameters(
+            interval=interval,
+            runtime_parameters=parameters,
+            run_id=run_id,
+            pipeline_name=config.pipeline_name,
+        ),
         "environment_profile": profile["id"],
         "environment": profile,
         "deployment_target": fabric["deployment_target"],
@@ -2416,8 +2428,14 @@ def execute_pipeline_background(
     parent_run_id: Optional[str] = None,
     runtime_parameters: Optional[Dict[str, Any]] = None,
     environment_profile: str = "local",
+    interval: Optional[Any] = None,
 ) -> None:
-    """Run a pipeline synchronously inside a worker thread."""
+    """Run a pipeline synchronously inside a worker thread.
+
+    ``interval`` is the window of data this run owns. It reaches the tasks as
+    substitutable parameters, which is what makes a backfilled run process its
+    own period instead of repeating the present one.
+    """
     # ------------------------------------------------------------------
     # Per-run log file setup
     # ------------------------------------------------------------------
@@ -2484,6 +2502,8 @@ def execute_pipeline_background(
                 config=config,
                 parameters=runtime_parameters,
                 environment_profile=environment_profile,
+                run_id=run_id,
+                interval=interval,
             ),
             pipeline_name=config.pipeline_name,
             run_id=run_id,

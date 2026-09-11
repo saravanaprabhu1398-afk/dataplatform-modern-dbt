@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from dataplatform.core.config import Task
+from dataplatform.core.parameters import RUN_PARAMETERS_KEY, render_task_config
 from dataplatform.plugins.base import Plugin
 from dataplatform.core.logging_config import log_task_start, log_task_success, log_task_failure
 from dataplatform.core.secrets import resolve_secrets
@@ -127,6 +128,13 @@ class TaskExecutor:
         task_config = {**config}
         if task.config:
             task_config.update(task.config)
+
+        # Substitute the run's parameters into the task's config. Until this
+        # existed, runtime_parameters were recorded on the run and read by
+        # nothing, so a task could not know which period it was running for.
+        run_parameters = task_config.pop(RUN_PARAMETERS_KEY, None)
+        if run_parameters:
+            task_config = render_task_config(task_config, run_parameters)
         
         # Pass task name for logging and context
         task_config["task_name"] = task.name
