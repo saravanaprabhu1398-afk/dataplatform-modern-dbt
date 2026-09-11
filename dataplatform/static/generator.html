@@ -20,11 +20,10 @@
         }
         .animate-fadeIn { animation: fadeIn 0.25s ease-out; }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .nlp-badge { background: linear-gradient(135deg, oklch(61% 0.210 38) 0%, oklch(70% 0.160 66) 100%); }
+        .nlp-badge { background: var(--color-accent-fill); }
         .generator-shell {
             background:
-                radial-gradient(circle at 18% 0%, oklch(88% 0.060 48 / 0.46), transparent 28%),
-                linear-gradient(180deg, var(--color-paper) 0%, var(--color-paper-2) 100%);
+                var(--color-paper);
             color: var(--color-ink);
         }
         .generator-topbar {
@@ -39,9 +38,8 @@
             box-shadow: var(--shadow-sm);
         }
         .generator-hero {
-            background:
-                linear-gradient(135deg, oklch(100% 0 0 / 0.96), oklch(98% 0.010 70 / 0.9)),
-                radial-gradient(circle at 96% 0%, oklch(82% 0.120 58 / 0.30), transparent 30%);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
         }
         .generator-section-title i {
             width: 28px;
@@ -50,20 +48,20 @@
             align-items: center;
             justify-content: center;
             border-radius: var(--radius-md);
-            background: oklch(96% 0.040 58);
-            color: oklch(58% 0.180 42);
+            background: var(--color-accent-subtle);
+            color: var(--color-accent-fill);
         }
         .generator-field {
             background: oklch(100% 0 0 / 0.92);
             border-color: var(--color-border);
         }
         .generator-field:focus {
-            border-color: oklch(61% 0.210 38);
-            box-shadow: 0 0 0 3px oklch(61% 0.210 38 / 0.14);
+            border-color: var(--color-accent-fill);
+            box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent-fill) 14%, transparent);
         }
         .generator-primary {
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
-            box-shadow: 0 10px 18px oklch(61% 0.210 38 / 0.20);
+            background: var(--color-accent-fill) !important;
+            box-shadow: 0 10px 18px color-mix(in oklab, var(--color-accent-fill) 20%, transparent);
         }
         .generator-primary:hover {
             filter: brightness(0.97);
@@ -83,23 +81,21 @@
             border-radius: var(--radius-lg);
             border: 1px solid oklch(28% 0.028 250);
             background:
-                radial-gradient(circle at 18% 0%, oklch(32% 0.060 190 / 0.32), transparent 34%),
-                linear-gradient(180deg, oklch(16% 0.024 250), oklch(12% 0.026 250));
+                var(--color-paper);
             box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.06);
         }
         .generator-yaml-textarea {
             min-height: 520px;
             background: transparent !important;
-            color: oklch(84% 0.110 150);
-            caret-color: oklch(76% 0.160 72);
+            color: var(--color-success-solid);
+            caret-color: var(--color-accent-fill);
         }
         .generator-yaml-textarea:focus {
-            box-shadow: inset 0 0 0 2px oklch(61% 0.210 38 / 0.70);
+            box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--color-accent-fill) 70%, transparent);
         }
         .generator-empty-state {
             background:
-                radial-gradient(circle at 50% 28%, oklch(42% 0.090 190 / 0.30), transparent 24%),
-                linear-gradient(180deg, oklch(15% 0.025 250 / 0.98), oklch(11% 0.026 250 / 0.98));
+                var(--color-surface);
         }
         .generator-empty-icon {
             width: 56px;
@@ -109,7 +105,7 @@
             align-items: center;
             justify-content: center;
             background: oklch(25% 0.050 230);
-            color: oklch(76% 0.160 72);
+            color: var(--color-accent-fill);
             box-shadow: 0 14px 30px oklch(0% 0 0 / 0.22);
         }
         .generator-empty-lines {
@@ -124,14 +120,14 @@
             border-radius: 999px;
             background: oklch(100% 0 0 / 0.08);
         }
-        .generator-accent-text { color: oklch(55% 0.180 38) !important; }
+        .generator-accent-text { color: var(--color-accent-fill) !important; }
         .generator-accent-soft {
-            background: oklch(96% 0.040 58) !important;
-            color: oklch(40% 0.120 38) !important;
-            border-color: oklch(88% 0.060 58) !important;
+            background: var(--color-accent-subtle) !important;
+            color: var(--color-accent) !important;
+            border-color: var(--color-accent) !important;
         }
         .generator-step-index {
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66)) !important;
+            background: var(--color-accent-fill) !important;
         }
         @media (max-width: 767px) {
             .generator-content { padding: 16px; }
@@ -270,10 +266,10 @@
                                 <span class="text-xs text-slate-500 font-medium">Engine:</span>
                                 <span id="generatorDetectedLanguage" class="text-xs text-slate-700 font-semibold">-</span>
                             </div>
-                            <div class="flex items-center gap-1.5 rounded-lg px-3 py-1.5" style="background:oklch(96% 0.040 58);border:1px solid oklch(88% 0.060 58);">
-                                <i class="fas fa-sitemap text-xs" style="color:oklch(58% 0.180 42);"></i>
-                                <span class="text-xs font-medium" style="color:oklch(48% 0.120 42);">Pipeline:</span>
-                                <span id="generatorPipelineName" class="text-xs font-semibold" style="color:oklch(34% 0.080 42);">-</span>
+                            <div class="flex items-center gap-1.5 rounded-lg px-3 py-1.5" style="background:var(--color-accent-subtle);border:1px solid var(--color-accent);">
+                                <i class="fas fa-sitemap text-xs" style="color:var(--color-accent-fill);"></i>
+                                <span class="text-xs font-medium" style="color:var(--color-accent-fill);">Pipeline:</span>
+                                <span id="generatorPipelineName" class="text-xs font-semibold" style="color:var(--color-accent);">-</span>
                             </div>
                             <!-- Task count badge -->
                             <div id="taskCountBadge" class="hidden items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">

@@ -328,21 +328,32 @@ let charts          = {};
 let obsData         = null;
 
 // ── CSS token colours for Chart.js ───────────────────────────────────────────
+// Canvas does NOT resolve var() or color-mix(), so every chart colour has to be
+// flattened to a concrete value first. dpColor() does that through the cascade,
+// which means the charts follow the active theme instead of being hardcoded.
 let C = {};
+function dpColor(css) {
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none';
+    probe.style.color = css;
+    document.body.appendChild(probe);
+    const out = getComputedStyle(probe).color;
+    probe.remove();
+    return out;
+}
 function initColors() {
-    const v = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-    C.success     = v('--color-success')      || 'oklch(55% 0.18 150)';
-    C.danger      = 'oklch(54% 0.22 25)';
-    C.accent      = v('--color-accent')       || 'oklch(54% 0.22 250)';
-    C.warning     = v('--color-warning')      || 'oklch(72% 0.17 65)';
-    C.grid        = 'oklch(94% 0.010 240)';
-    C.tick        = 'oklch(52% 0.015 250)';
-    C.successFill = 'oklch(55% 0.18 150 / 0.15)';
-    C.dangerFill  = 'oklch(54% 0.22 25 / 0.10)';
-    C.accentFill  = 'oklch(54% 0.22 250 / 0.12)';
-    C.successBar  = 'oklch(55% 0.18 150 / 0.75)';
-    C.dangerBar   = 'oklch(54% 0.22 25 / 0.70)';
-    C.warnBar     = 'oklch(72% 0.17 65 / 0.75)';
+    C.success     = dpColor('var(--color-success)');
+    C.danger      = dpColor('var(--color-danger)');
+    C.accent      = dpColor('var(--color-accent)');
+    C.warning     = dpColor('var(--color-warning)');
+    C.grid        = dpColor('var(--color-muted)');
+    C.tick        = dpColor('var(--color-ink-3)');
+    C.successFill = dpColor('color-mix(in oklab, var(--color-success) 15%, transparent)');
+    C.dangerFill  = dpColor('color-mix(in oklab, var(--color-danger) 10%, transparent)');
+    C.accentFill  = dpColor('color-mix(in oklab, var(--color-accent) 12%, transparent)');
+    C.successBar  = dpColor('color-mix(in oklab, var(--color-success) 75%, transparent)');
+    C.dangerBar   = dpColor('color-mix(in oklab, var(--color-danger) 70%, transparent)');
+    C.warnBar     = dpColor('color-mix(in oklab, var(--color-warning-solid) 75%, transparent)');
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -512,10 +523,7 @@ function buildCharts() {
         charts.success = new Chart(document.getElementById('chartSuccessRate'), {
             type:'doughnut',
             data:{labels:['Success','Failed'], datasets:[{data:[liveSuccessCount || 1, liveFailCount || 0],
-                backgroundColor:[
-                    getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || 'oklch(55% 0.18 150)',
-                    'oklch(54% 0.22 25)'
-                ], borderWidth:0}]},
+                backgroundColor:[C.success, C.danger], borderWidth:0}]},
             options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{duration:700},plugins:{legend:{display:false}}}
         });
     }

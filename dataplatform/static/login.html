@@ -22,34 +22,18 @@
             justify-content: center;
             min-height: 100vh;
             padding: var(--space-4);
-            background:
-                radial-gradient(circle at 14% 10%, oklch(62% 0.220 35 / 0.22), transparent 32%),
-                radial-gradient(circle at 86% 88%, oklch(60% 0.140 185 / 0.12), transparent 34%),
-                linear-gradient(135deg, oklch(19% 0.045 34) 0%, oklch(16% 0.034 250) 58%, oklch(13% 0.026 250) 100%);
-        }
-
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0 0 auto 0;
-            height: 4px;
-            background: linear-gradient(90deg, oklch(65% 0.230 32), oklch(76% 0.160 72), oklch(60% 0.140 185));
-            pointer-events: none;
+            background: var(--color-sidebar-bg);
         }
 
         /* ── Card ────────────────────────────────────────────────── */
         .lc {
             width: 100%;
             max-width: 392px;
-            background:
-                linear-gradient(180deg, oklch(24% 0.060 38 / 0.82), oklch(16% 0.030 250 / 0.90)),
-                oklch(17% 0.030 250 / 0.88);
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            border: 1px solid oklch(36% 0.060 42);
+            background: var(--color-sidebar-bg-2);
+            border: 1px solid var(--color-sidebar-border);
             border-radius: var(--radius-xl);
             padding: var(--space-8);
-            box-shadow: 0 24px 70px oklch(8% 0.020 250 / 0.38), 0 0 0 1px oklch(80% 0.100 55 / 0.04) inset;
+            box-shadow: 0 24px 70px oklch(0% 0 0 / 0.45);
         }
 
         /* ── Logo ────────────────────────────────────────────────── */
@@ -60,9 +44,8 @@
             width: 52px;
             height: 52px;
             border-radius: var(--radius-lg);
-            background: linear-gradient(135deg, oklch(65% 0.230 32), oklch(72% 0.160 68));
+            background: var(--color-accent-fill);
             margin: 0 auto var(--space-4);
-            box-shadow: 0 12px 28px oklch(61% 0.210 38 / 0.30);
         }
         .lc__logo i { color: var(--color-sidebar-text-active); font-size: 1.25rem; }
 
@@ -83,7 +66,7 @@
         }
         .lc__rule {
             height: 1px;
-            background: linear-gradient(90deg, transparent, oklch(58% 0.090 48 / 0.48), transparent);
+            background: var(--color-sidebar-border);
             margin-bottom: var(--space-6);
         }
 
@@ -110,8 +93,8 @@
         input[type="text"],
         input[type="password"] {
             width: 100%;
-            background: oklch(13% 0.026 250 / 0.86);
-            border: 1px solid oklch(34% 0.060 42);
+            background: var(--color-sidebar-bg);
+            border: 1px solid var(--color-sidebar-border);
             border-radius: var(--radius-md);
             padding: 10px var(--space-4) 10px 2.5rem;
             font-family: var(--font-body);
@@ -123,8 +106,8 @@
         }
         input::placeholder { color: var(--color-sidebar-group-label); }
         input:focus {
-            border-color: var(--color-sidebar-item-active);
-            box-shadow: 0 0 0 3px oklch(61% 0.210 38 / 0.20), 0 8px 22px oklch(8% 0.020 250 / 0.20);
+            border-color: var(--color-sidebar-rail);
+            box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-sidebar-rail) 30%, transparent);
         }
 
         /* ── Error ───────────────────────────────────────────────── */
@@ -132,20 +115,20 @@
             display: none;
             align-items: flex-start;
             gap: var(--space-2);
-            background: oklch(22% 0.04 25);
-            border: 1px solid oklch(54% 0.22 25 / 0.45);
+            background: color-mix(in oklab, var(--color-danger-solid) 18%, var(--color-sidebar-bg));
+            border: 1px solid color-mix(in oklab, var(--color-danger-solid) 55%, transparent);
             border-radius: var(--radius-md);
             padding: var(--space-3) var(--space-4);
             margin-bottom: var(--space-4);
         }
-        .lc__error i { color: var(--color-danger); font-size: var(--text-sm); margin-top: 2px; flex-shrink: 0; }
-        .lc__error p { font-size: var(--text-sm); color: oklch(80% 0.12 25); line-height: 1.4; }
+        .lc__error i { color: var(--color-danger-solid); font-size: var(--text-sm); margin-top: 2px; flex-shrink: 0; }
+        .lc__error p { font-size: var(--text-sm); color: oklch(84% 0.10 25); line-height: 1.4; }
 
         /* ── Button ──────────────────────────────────────────────── */
         .lc__btn {
             width: 100%;
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
-            color: var(--color-sidebar-text-active);
+            background: var(--color-accent-fill);
+            color: var(--color-on-dark);
             border: none;
             border-radius: var(--radius-md);
             padding: 11px var(--space-4);
@@ -160,9 +143,8 @@
             transition: opacity var(--dur-base) var(--ease-out),
                         transform  var(--dur-fast) var(--ease-out);
             margin-top: var(--space-2);
-            box-shadow: 0 10px 24px oklch(61% 0.210 38 / 0.28);
         }
-        .lc__btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+        .lc__btn:hover:not(:disabled) { background: var(--color-accent-hover); }
         .lc__btn:active:not(:disabled) { transform: translateY(0); }
         .lc__btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
@@ -175,7 +157,7 @@
             line-height: 1.65;
         }
         .lc__foot code {
-            background: oklch(25% 0.055 38);
+            background: var(--color-sidebar-item-hover);
             color: var(--color-sidebar-text);
             padding: 1px 5px;
             border-radius: var(--radius-sm);

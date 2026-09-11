@@ -53,7 +53,7 @@
         }
         .node-asset.is-selected,
         .node-task.is-selected {
-            filter: drop-shadow(0 0 6px oklch(54% 0.22 250 / 0.5));
+            filter: drop-shadow(0 0 6px color-mix(in oklab, var(--color-accent-fill) 50%, transparent));
         }
 
         /* Search match ring */
@@ -347,7 +347,7 @@
             <div class="flex rounded-lg overflow-hidden" style="border: 1px solid var(--color-border);">
                 <button id="btn-graph" onclick="switchView('graph')"
                         class="px-3 py-1.5 text-sm font-medium transition-colors"
-                        style="background: var(--color-accent); color: var(--color-accent-text);">
+                        style="background: var(--color-accent-fill); color: var(--color-accent-text);">
                     <i class="fas fa-diagram-project mr-1.5 text-xs"></i>Graph
                 </button>
                 <button id="btn-list" onclick="switchView('list')"
@@ -417,7 +417,7 @@
                     <!-- Radial gradient for SVG background -->
                     <radialGradient id="svgBg" cx="50%" cy="50%" r="60%"
                                     gradientUnits="objectBoundingBox">
-                        <stop offset="0%"   style="stop-color: oklch(97% 0.008 250);"/>
+                        <stop offset="0%"   style="stop-color: var(--color-paper);"/>
                         <stop offset="100%" style="stop-color: var(--color-surface, oklch(100% 0 0));"/>
                     </radialGradient>
                     <!-- Subtle drop shadow for nodes -->
@@ -461,7 +461,7 @@
                 </div>
                 <a href="/dashboard"
                    class="mt-2 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                   style="background: var(--color-accent); color: var(--color-accent-text);">
+                   style="background: var(--color-accent-fill); color: var(--color-accent-text);">
                     <i class="fas fa-wave-square text-xs"></i>Go to DP Flow
                 </a>
             </div>
@@ -530,12 +530,12 @@ function switchView(view) {
     const btnGraph = document.getElementById('btn-graph');
     const btnList  = document.getElementById('btn-list');
     if (view === 'graph') {
-        btnGraph.style.background = 'var(--color-accent)';
+        btnGraph.style.background = 'var(--color-accent-fill)';
         btnGraph.style.color = 'var(--color-accent-text)';
         btnList.style.background = 'var(--color-surface)';
         btnList.style.color = 'var(--color-ink-3)';
     } else {
-        btnList.style.background = 'var(--color-accent)';
+        btnList.style.background = 'var(--color-accent-fill)';
         btnList.style.color = 'var(--color-accent-text)';
         btnGraph.style.background = 'var(--color-surface)';
         btnGraph.style.color = 'var(--color-ink-3)';

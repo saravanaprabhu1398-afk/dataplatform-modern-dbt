@@ -16,7 +16,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; }
         .git-shell {
-            background: linear-gradient(180deg, oklch(15% 0.026 250), oklch(11% 0.026 250));
+            background: var(--color-sidebar-bg);
             color: oklch(94% 0.008 250);
         }
         .git-panel {
@@ -26,17 +26,16 @@
         .git-muted { color: oklch(72% 0.018 250); }
         .git-subtle { color: oklch(58% 0.020 250); }
         .git-primary {
-            background: linear-gradient(135deg, oklch(61% 0.210 38), oklch(70% 0.160 66));
-            color: white;
-            box-shadow: 0 10px 18px oklch(61% 0.210 38 / .18);
+            background: var(--color-accent-fill);
+            color: var(--color-on-dark);
         }
-        .git-primary:hover { filter: brightness(.97); }
+        .git-primary:hover { background: var(--color-accent-hover); }
         .git-button {
             border: 1px solid oklch(33% 0.030 250);
             background: oklch(21% 0.030 250);
             color: oklch(88% 0.012 250);
         }
-        .git-button:hover { border-color: oklch(61% 0.210 38); background: oklch(24% 0.032 250); }
+        .git-button:hover { border-color: var(--color-accent-fill); background: oklch(24% 0.032 250); }
         .git-input {
             background: oklch(14% 0.024 250);
             border: 1px solid oklch(32% 0.030 250);
@@ -45,8 +44,8 @@
             outline: none;
         }
         .git-input:focus {
-            border-color: oklch(61% 0.210 38);
-            box-shadow: 0 0 0 2px oklch(61% 0.210 38 / .20);
+            border-color: var(--color-accent-fill);
+            box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent-fill) 20%, transparent);
         }
         .remote-row,
         .file-row,
@@ -58,7 +57,7 @@
         .change-row:hover { background: oklch(22% 0.030 250); }
         .is-selected {
             background: oklch(24% 0.034 250);
-            box-shadow: inset 3px 0 0 oklch(61% 0.210 38);
+            box-shadow: inset 3px 0 0 var(--color-accent-fill);
         }
         .status-pill {
             display: inline-flex;
@@ -179,7 +178,7 @@
 
 <div class="git-shell pl-56 h-screen flex flex-col overflow-hidden">
     <header class="h-14 shrink-0 px-5 flex items-center gap-3" style="border-bottom: 1px solid oklch(30% 0.030 250); background: oklch(14% 0.030 250);">
-        <i class="fas fa-code-branch" style="color: oklch(76% 0.160 72);"></i>
+        <i class="fas fa-code-branch" style="color: var(--color-accent-fill);"></i>
         <h1 class="text-sm font-black text-white">Git Workspace</h1>
         <span id="workspaceBadge" class="status-pill status-clean ml-2">No repo</span>
         <div class="ml-auto flex items-center gap-2">
@@ -366,7 +365,7 @@ function renderRemotes() {
     list.innerHTML = remotes.map(remote => `
         <button data-remote-id="${esc(remote.id)}" class="remote-select remote-row w-full text-left p-3 rounded-lg ${remote.id === selectedRemoteId ? 'is-selected' : ''}">
             <div class="flex items-center gap-2 min-w-0">
-                <i class="fas fa-code-branch" style="color: oklch(76% 0.160 72);"></i>
+                <i class="fas fa-code-branch" style="color: var(--color-accent-fill);"></i>
                 <span class="text-sm font-bold text-white truncate">${esc(remote.name)}</span>
             </div>
             <p class="text-xs git-subtle truncate mt-1">${esc(remote.remote_url)}</p>

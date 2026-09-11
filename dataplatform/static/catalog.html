@@ -55,7 +55,7 @@
         }
         .catalog-search:focus {
             border-color: var(--color-accent);
-            box-shadow: 0 0 0 3px oklch(61% 0.210 38 / 0.12);
+            box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent-fill) 12%, transparent);
         }
         .catalog-search::placeholder { color: var(--color-ink-3); }
         #toastContainer {
@@ -352,7 +352,7 @@ function renderAssetGrid(assets) {
                     <p style="color:var(--color-ink-3);font-size:var(--text-sm);margin-top:4px;max-width:320px;">Run pipelines with lineage declarations to populate the catalog.</p>
                 </div>
                 <a href="/dashboard"
-                   style="background:var(--color-accent);color:var(--color-accent-text);border-radius:var(--radius-md);padding:8px 16px;font-size:var(--text-sm);font-weight:600;text-decoration:none;transition:opacity var(--dur-base);"
+                   style="background:var(--color-accent-fill);color:var(--color-accent-text);border-radius:var(--radius-md);padding:8px 16px;font-size:var(--text-sm);font-weight:600;text-decoration:none;transition:opacity var(--dur-base);"
                    onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">
                     Go to DP Flow
                 </a>
@@ -490,7 +490,7 @@ async function loadPipelines() {
                     <p style="color:var(--color-ink-3);font-size:var(--text-sm);margin-top:4px;max-width:320px;">Run pipelines with lineage declarations to see connections here</p>
                 </div>
                 <a href="/dashboard"
-                   style="background:var(--color-accent);color:var(--color-accent-text);border-radius:var(--radius-md);padding:8px 16px;font-size:var(--text-sm);font-weight:600;text-decoration:none;"
+                   style="background:var(--color-accent-fill);color:var(--color-accent-text);border-radius:var(--radius-md);padding:8px 16px;font-size:var(--text-sm);font-weight:600;text-decoration:none;"
                    onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">
                     Go to DP Flow
                 </a>
