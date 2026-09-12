@@ -146,3 +146,6 @@ package-lock.json
 # Local agent tooling, not part of the platform. Scoped to skills/ so real
 # CI workflows under .github/workflows/ are still tracked.
 .github/skills/
+
+# macOS Finder metadata
+.DS_Store
