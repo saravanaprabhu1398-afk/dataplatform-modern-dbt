@@ -66,6 +66,9 @@ dev = [
     # FOR UPDATE SKIP LOCKED claim path. Skipped unless
     # DATAPLATFORM_TEST_POSTGRES_URL is set.
     "psycopg2-binary",
+    # Drives the dashboard in tests/test_browser.py. Needs `playwright install
+    # chromium` as well; the tests skip when the browser is absent.
+    "playwright",
 ]
 ui = [
     "react",
@@ -74,6 +77,13 @@ ui = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "browser: drives the dashboard in a real browser; needs playwright and runs in its own process",
+]
+# Browser tests are deselected by default: Playwright's sync API holds an event
+# loop that breaks later tests calling asyncio.run(). CI runs them separately
+# with -m browser.
+addopts = "-m 'not browser'"
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

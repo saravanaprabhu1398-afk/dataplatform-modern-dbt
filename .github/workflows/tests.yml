@@ -104,3 +104,30 @@ jobs:
             --schema demo/fixtures/catalog.json \
             --git-ref "$BASE" \
             --annotate
+
+  browser:
+    # Nothing else in CI touches the UI. Three shipped bugs were found by hand
+    # -- a lineage graph that never rendered, a health pill hardcoded to
+    # HEALTHY, and stat cards collapsed by a Tailwind class with no base rule
+    # -- and each is one assertion here.
+    name: browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Install the browser
+        run: python -m playwright install --with-deps chromium
+      - name: The browser tests must actually run
+        # They skip themselves when playwright or the browser is missing, so a
+        # broken install would leave this job green having checked nothing.
+        run: |
+          pytest -m browser -q | tee browser-tests.log
+          if grep -qE "no tests ran|[0-9]+ skipped" browser-tests.log; then
+            echo "::error::browser tests did not run - playwright or chromium is missing"
+            exit 1
+          fi
